@@ -1,0 +1,921 @@
+ ▐▛███▜▌   Claude Code v2.1.196
+▝▜█████▛▘  Sonnet 4.6 · Claude Pro
+  ▘▘ ▝▝    ~\Documents\Code\1. OtroProject\StockSportCenter\Proyecto_STOCK_…
+
+
+> Estamos haciendo un sistema usando el PLAN-DESARROLLO-v2.md de la raiz, ya    
+  terminamos con la fase 3, ahora seguimos con tal vez la mas importante,       
+  comprendes lo que hay que hacer ?                                             
+
+● Let me read the plan and check the memory to get full context.
+
+  Read 1 file, recalled 1 memory (ctrl+o to expand)
+
+● Let me check the current state of the codebase and the original plan.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+● Now let me look at the database schema and existing actions to understand
+  what's already there.
+
+  Read 3 files, ran 1 shell command (ctrl+o to expand)
+
+● Sí, comprendo perfectamente. Déjame confirmar lo que hay que hacer:
+
+  ---
+  Fase 4 — Upload (la más compleja)
+
+  El esquema ya está completo en dev.db. Las fases 0-3 entregaron auth + CRUD de
+  gestión. Ahora hay que construir el flujo de carga del stock con estas
+  piezas:
+
+  Cliente (browser parsea, no el servidor):
+  1. parseStockFile — XLSX → filas crudas
+  2. parseImagesFile — HTML → { cod_universal: url }
+  3. parseDiscountFiles — nombre del archivo /\d+/ → { cod_universal: % }
+  4. buildData — filtra ALMACENES_VALIDOS, parsea ingreso_fecha de barcode
+  J+AAMMDD, agrupa productos, aplica descuento baseline, computa precio_final
+
+  Server Actions (llamadas desde el cliente en batches):
+  5. initUpload() — DELETE variantes → DELETE productos → DELETE
+  producto_imagenes WHERE source='archivo'
+  6. uploadProductosBatch() / uploadVariantesBatch() — INSERT en chunks ≤ 2000
+  (límite Turso)
+  7. finalizeUpload() — imágenes 'archivo', 1 fila sync_log, revalidatePath
+
+  Restricciones críticas: parseo en cliente (Vercel bodySizeLimit), DELETE nunca
+  DROP, imágenes 'sistema' intactas, productos.descuento solo lo escribe el
+  upload.
+
+  ---
+  Antes de arrancar, necesito saber una cosa que el plan no define
+  explícitamente:
+
+● User answered Claude's questions:
+  ⎿  · ¿Cuáles son los ALMACENES_VALIDOS que se usan para filtrar alm_izq en 
+     variantes? → Aqui hay un problema, antes cuando era una simple vista de 
+     descuentos lo que hacia para importar era filtrar por el almacen izq, pero 
+     ahora son importantes ambos almacenes, quiero que me digas el porque de la 
+     importancia de esto que te manifiesto antes de comenzar algo
+
+● Muy buena pregunta antes de tocar código. La respuesta está en la Fase 6 del
+  plan y tiene una consecuencia directa en el upload:
+
+  ---
+  Por qué importan AMBOS almacenes
+
+  El plan dice en Fase 6:
+
+  ▎ "el cruce de ubicación debe usar el UNION de alm_izq + alm_der (pares 
+  ▎ repartidos en 2 tiendas)"
+
+  Esto revela que una variante puede pertenecer simultáneamente a DOS tiendas —
+  el artículo (un par de zapatos, por ejemplo) tiene su mitad izquierda en una
+  tienda (alm_izq) y la derecha en otra (alm_der).
+
+  El problema con el filtro viejo (solo alm_izq):
+
+  Variante: cod_barras=X, alm_izq="DEPOSITO", alm_der="TIENDA_NORTE"
+
+  - El sistema viejo lo descarta porque alm_izq no es una tienda válida.
+  - Pero TIENDA_NORTE sí tiene stock real de ese producto (via alm_der).
+  - Resultado: cuando publiques el lote, TIENDA_NORTE no recibe confirmación
+  aunque tenga el artículo.
+
+  Lo que hay que hacer en el upload:
+
+  Filtrar variantes donde alm_izq OR alm_der sea un almacén válido, para que
+  Fase 6 pueda hacer el UNION completo y ninguna tienda quede fuera del ciclo de
+  confirmaciones.
+
+  ---
+  Dicho esto, para poder implementar el filtro necesito la lista concreta de
+  almacenes válidos. ¿Puedes pasarme esa lista, o están disponibles en la BD
+  como los nombres de tiendas?
+
+✻ Crunched for 1m 17s
+
+> Si, cambia esa seccion que dice alm_izq para que desde ahora el plan diga lo  
+  que en realidad haremos                                                       
+  Estos son los almacenes validos                                               
+  JAL1, JAL4, T01, T02, T03, T04, T05, T06, T07, T08, T09, T10, OUT             
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(PLAN-DESARROLLO-v2.md)
+  ⎿  Added 5 lines, removed 1 line
+      57  2. `parseImagesFile` → `{ cod_universal: url }` (`DOMParser`, s
+          olo URLs `https`).
+      58  3. `parseDiscountFiles` → `{ cod_universal: % }` — el **%** sal
+          e del **nombre del archivo** (`/\d+/`). ← **baseline del ERP**.
+      59  4. `buildData`:
+      60 -   - **variantes**: filtrar `ALMACENES_VALIDOS(alm_izq)` · **pa
+         -rsear `ingreso_fecha` del `cod_barras` (`J+AAMMDD`)**.         
+      60 +   - **variantes**: filtrar filas donde `alm_izq` **o** `alm_de
+         +r` esté en `ALMACENES_VALIDOS` · **parsear `ingreso_fecha` del 
+         +`cod_barras` (`J+AAMMDD`)**.                                   
+      61 +     ```                                                       
+      62 +     ALMACENES_VALIDOS = ['JAL1', 'JAL4', 'T01', 'T02', 'T03', 
+         +'T04', 'T05', 'T06', 'T07', 'T08', 'T09', 'T10', 'OUT']        
+      63 +     ```                                                       
+      64 +     > **Por qué ambos campos:** una variante puede tener stock
+         + repartido en dos tiendas (`alm_izq` en una, `alm_der` en otra)
+         +. Filtrar solo por `alm_izq` descartaría variantes cuya tienda 
+         +relevante está en `alm_der`, dejando tiendas sin confirmación e
+         +n Fase 6.                                                      
+      65     - **productos**: agrupar `(cod_universal, genero)` · `descue
+          nto = dict[cod_universal] ?? 0` · `stock_total` · `precio_final
+           = precio_lista * (1 - descuento/100)`.
+      66     - **imágenes**: array para `producto_imagenes`.
+      67  
+
+● También actualizo el criterio de aceptación para que sea preciso:
+
+● Update(PLAN-DESARROLLO-v2.md)
+  ⎿  Added 1 line, removed 1 line
+      93  
+      94  ### Criterio de aceptación
+      95  
+      96 -Subes los archivos reales del ERP y: `productos`/`variantes` po
+         -blados · `descuento` = archivos de % · `ingreso_fecha` parseada
+         - · almacenes inválidos descartados · imágenes `'archivo'` refre
+         -scadas **sin borrar las `'sistema'`** · 1 fila nueva en `sync_l
+         -og` · **lotes/confirmaciones intactos** · todo **sin exceder lí
+         -mites de Vercel** (parseo en cliente, batches chicos).         
+      96 +Subes los archivos reales del ERP y: `productos`/`variantes` po
+         +blados · `descuento` = archivos de % · `ingreso_fecha` parseada
+         + · **solo variantes con `alm_izq` OR `alm_der` en `ALMACENES_VA
+         +LIDOS`** · imágenes `'archivo'` refrescadas **sin borrar las `'
+         +sistema'`** · 1 fila nueva en `sync_log` · **lotes/confirmacion
+         +es intactos** · todo **sin exceder límites de Vercel** (parseo 
+         +en cliente, batches chicos).                                   
+      97  
+      98  ### Riesgos a auditar
+      99  
+
+● Y el checklist:
+
+● Update(PLAN-DESARROLLO-v2.md)
+  ⎿  Added 1 line
+      131  - [ ] ¿Se parsea `ingreso_fecha` y se tolera el formato inváli
+           do?
+      132  - [ ] ¿`sync_log` registra la carga?
+      133  - [ ] ¿Lotes/confirmaciones quedaron **intactos** tras el uplo
+           ad?
+      134 +- [ ] ¿El filtro de variantes usa `alm_izq OR alm_der` en `ALM
+          +ACENES_VALIDOS` (no solo `alm_izq`)?                          
+      135  
+      136  ### Fase 5 — Editor de descuentos → `lote_lineas` (borrador)
+      137  
+
+● Listo. El plan ahora refleja la realidad:
+
+  - ALMACENES_VALIDOS queda definido explícitamente: JAL1, JAL4, T01–T10, OUT
+  - El filtro es alm_izq OR alm_der ∈ ALMACENES_VALIDOS
+  - El checklist incluye la verificación de ese filtro
+  - El criterio de aceptación es preciso
+
+  ¿Arrancamos con la implementación de la Fase 4?
+
+✻ Cogitated for 36s
+
+※ recap: Building a stock/discount management system for 12 stores. Phases 0-3 are done; Phase 4 is the upload flow. Next action: start implementing the client-orchestrated upload (parse XLSX/images/discounts in browser, then call server actions in batches). (disable recaps in /config)
+
+> Si, vamos a comenzar, pero primero quiero saber el plan dentro de la fase,    
+  osea no extenso, resumeme en logica como se hara el upload                    
+
+● Plan de implementación — Fase 4
+
+  3 capas, en orden:
+
+  ---
+  1. Parsers (cliente, browser only)
+  src/lib/upload/parsers.ts
+  - parseStockFile(file) → filas crudas con SheetJS
+  - parseImagesFile(file) → Map<cod_universal, url> con DOMParser
+  - parseDiscountFiles(files[]) → Map<cod_universal, number> extrayendo % del
+  nombre
+  - buildData(rows, images, discounts) → { productos[], variantes[], imagenes[] 
+  } ya filtrado y computado
+
+  2. Server Actions (solo persisten, sin parseo)
+  src/lib/actions/upload.ts
+  - initUpload() → DELETE en orden: variantes → productos →
+  producto_imagenes(source='archivo')
+  - uploadProductosBatch(rows[]) → INSERT productos, chunks ≤ 2000
+  - uploadVariantesBatch(rows[]) → INSERT variantes, chunks ≤ 2000
+  - finalizeUpload(imagenes[], userId) → INSERT imágenes + sync_log +
+  revalidatePath
+
+  3. UI (cliente orquesta el flujo)
+  src/app/admin/actualizacion-stock/page.tsx + componente UploadForm
+  - 3 inputs de archivo (stock XLSX, imágenes HTML, descuentos — múltiples)
+  - Al submit: parsea en browser → llama actions en secuencia → muestra progreso
+  - Al final: resumen (N productos, N variantes, N imágenes)
+
+  ---
+  Orden de ejecución en el componente:
+  parsear → buildData → initUpload() → uploadProductosBatch(×N) →
+  uploadVariantesBatch(×N) → finalizeUpload()
+
+  ¿Empezamos por los parsers, las actions, o la UI?
+
+✻ Worked for 17s
+
+> Antes dime en que de estas fases se ejecuta la logica para extraer la data y  
+  como se aplica, en una mini linea de tiempo dime esa logica                   
+
+● BROWSER                                          SERVER
+  ──────────────────────────────────────────────────────
+
+  [1] parseStockFile   → filas crudas del XLSX
+      (SheetJS, sin tocar el servidor)
+
+  [2] parseImagesFile  → Map<cod_universal, url>
+      (DOMParser)
+
+  [3] parseDiscountFiles → Map<cod_universal, %>
+      (regex /\d+/ sobre el nombre del archivo)
+
+  [4] buildData  ← TODA la lógica vive aquí
+      │
+      ├─ filtrar filas: alm_izq OR alm_der ∈ ALMACENES_VALIDOS
+      ├─ parsear ingreso_fecha de cod_barras (J+AAMMDD → ISO, o NULL)
+      ├─ agrupar por (cod_universal, genero) → productos
+      ├─ por producto: stock_total = count de sus variantes
+      ├─ por producto: descuento = discountMap[cod] ?? 0
+      └─ por producto: precio_final = precio_lista × (1 - desc/100)
+
+                                       [5] initUpload()
+                                           DELETE tablas
+
+                                       [6] uploadProductosBatch()
+                                           INSERT — solo persiste,
+                                           cero lógica
+
+                                       [7] uploadVariantesBatch()
+                                           INSERT — solo persiste,
+                                           cero lógica
+
+                                       [8] finalizeUpload()
+                                           imágenes + sync_log
+
+  Resumen de la regla: toda la lógica de negocio está en buildData (paso 4,
+  browser). Los pasos 5-8 son persistencia tonta — reciben arrays ya construidos
+  y los insertan.
+
+  ¿Arrancamos?
+✻ Brewed for 13s
+
+> Comenzamos, pero pon una regla para formato, porque en el erp hay algunos     
+  codigos en minuscula, el formato y creacion tiene que ser todos en MAYUS      
+  todos los campos, ahora a comenzar                                            
+
+● Primero actualizo el plan con la regla, luego arrancamos.
+
+● Update(PLAN-DESARROLLO-v2.md)
+  ⎿  Added 1 line
+      86  - **`DELETE`, no `DROP`**, en `initUpload`.
+      87  - **Imágenes `'sistema'`** (puestas por el admin) **sobreviven*
+          *; solo se refresca `'archivo'`.
+      88  - **`lote_lineas` / `confirmaciones` / actores intactos** — el 
+          before/after vive en los snapshots.
+      89 +- **Todos los campos de texto se normalizan a MAYÚSCULAS** en `
+         +buildData` — el ERP puede traer códigos y campos en minúscula; 
+         +la BD almacena siempre en MAYÚS.                               
+      90  
+      91  ### Atomicidad (honesto)
+      92  
+
+● Ahora veo qué hay instalado antes de escribir los parsers.
+
+  Read 1 file (ctrl+o to expand)
+
+● SheetJS no está instalado. Lo instalo y luego escribo todo en paralelo.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Ahora creo los parsers, las server actions, y la UI en paralelo.
+
+  Read 2 files (ctrl+o to expand)
+
+● Antes de escribir los parsers necesito ver el UPLOAD-FLOW.md — puede tener la
+  estructura de columnas del ERP.
+
+  Searched for 1 pattern, read 1 file, listed 1 directory (ctrl+o to expand)
+
+● Necesito los nombres de columnas del XLSX del ERP para escribir el parser
+  correctamente. ¿Puedes pasarme la primera fila (headers) del archivo de stock?
+  O si tienes un archivo de ejemplo, los nombres de las columnas que trae.
+
+✻ Cogitated for 1m 7s
+
+> const COLUMNS = [                                                             
+    "N°",                                                                       
+    "IZQ",                                                                      
+    "DER",                                                                      
+    "COD.PROD",                                                                 
+    "COD.BARRAS",                                                               
+    "GRUPO",                                                                    
+    "MARCA",                                                                    
+    "MODELO",                                                                   
+    "CATEGORIA",                                                                
+    "GENERO",                                                                   
+    "COLOR",                                                                    
+    "COD.UNIV.",                                                                
+    "TALLA",                                                                    
+    "VEND",                                                                     
+    "OCUP",                                                                     
+    "COMPRA",                                                                   
+    "LISTA",                                                                    
+    "VENTA"                                                                     
+  ];                                                                            
+
+● Perfecto, tengo todo lo que necesito para productos y variantes. Antes de
+  escribir los parsers me quedan dos formatos del ERP que no conozco:
+
+● User answered Claude's questions:
+  ⎿  · ¿Los archivos de descuento qué formato tienen y qué columna usa 
+     cod_universal? → Tanto el archivo para imaenes y los archivos de descuento 
+     son html, las columnas que se traen desde descuentos archivos son COD. 
+     UNIVERSAL.  y el descuento es el del nombre del archivo, en el archivo de 
+     imagenes se traera del html el src de la columna FOTO que son img y COD. 
+     UNIVERSAL GENERO
+     · ¿El archivo HTML de imágenes cómo relaciona cod_universal con la URL? → 
+     Tabla HTML: columna código + columna imagen
+
+● Tengo todo. Ahora escribo los 4 archivos en paralelo. Primero verifico auth.ts
+  para las server actions.
+
+  Read 1 file (ctrl+o to expand)
+
+● Ahora escribo los 5 archivos. Empiezo por los tipos compartidos, parsers y
+  actions en paralelo.
+
+● Write(src\lib\upload\types.ts)
+  ⎿  Wrote 35 lines to src\lib\upload\types.ts
+       1 export type ProductoInsert = {
+       2   cod_universal: string;
+       3   genero: string;
+       4   marca: string | null;
+       5   modelo: string | null;
+       6   categoria: string | null;
+       7   grupo: string | null;
+       8   color: string | null;
+       9   precio_lista: number;
+      10   descuento: number;
+     … +25 lines (ctrl+o to expand)
+
+● Write(src\lib\upload\parsers.ts)
+  ⎿  Wrote 209 lines to src\lib\upload\parsers.ts
+      1 import * as XLSX from "xlsx";
+      2 import type { BuildResult, ImagenInsert, ProductoInsert, Variante
+        Insert } from "./types";
+      3 
+      4 const ALMACENES_VALIDOS = new Set([
+      5   "JAL1", "JAL4", "T01", "T02", "T03", "T04", "T05",
+      6   "T06", "T07", "T08", "T09", "T10", "OUT",
+      7 ]);
+      8 
+      9 // --- helpers ---
+     … +210 lines (ctrl+o to expand)
+
+● Write(src\lib\actions\upload.ts)
+  ⎿  Wrote 116 lines to src\lib\actions\upload.ts
+      1 "use server";
+      2 
+      3 import { revalidatePath } from "next/cache";
+      4 import { db } from "@/lib/db";
+      5 import { requireRole } from "@/lib/auth";
+      6 import type { ActionResult } from "@/types";
+      7 import type { ImagenInsert, ProductoInsert, VarianteInsert } from
+         "@/lib/upload/types";
+      8 
+      9 const CHUNK = 2000;
+     … +122 lines (ctrl+o to expand)
+
+● Ahora la página y el componente cliente:
+
+● Write(src\app\admin\actualizacion-stock\page.tsx)
+  ⎿  Wrote 16 lines to src\app\admin\actualizacion-stock\page.tsx
+       1 import { requireRole, requireModule } from "@/lib/auth";
+       2 import { UploadForm } from "@/components/admin/upload/upload-for
+       3 
+       4 export default async function ActualizacionStockPage() {
+       5   const session = await requireRole("admin", "administrador_gene
+       6   await requireModule(session, "actualizacion");
+       7   return (
+       8     <div className="p-8 max-w-2xl mx-auto">
+         Actualización de stock</h1>
+      10       <p className="text-sm text-gray-500 mb-8">
+     … +9 lines (ctrl+o to expand)
+
+● Write(src\components\admin\upload\upload-form.tsx)
+  ⎿  Wrote 291 lines to src\components\admin\upload\upload-form.tsx
+       1 "use client";
+       2 
+       3 import { useState, useRef } from "react";
+       4 import { Button } from "@/components/ui/button";
+       5 import { Label } from "@/components/ui/label";
+       6 import {
+       7   parseStockFile,
+       8   parseImagesFile,
+       9   parseDiscountFiles,
+      10   buildData,
+     … +315 lines (ctrl+o to expand)
+● Ahora verifico que compila sin errores:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Sin errores de tipos. Resumen de lo que se construyó:
+
+  ---
+  5 archivos creados:
+
+  Archivo: src/lib/upload/types.ts
+  Rol: Tipos compartidos (ProductoInsert, VarianteInsert, etc.)
+  ────────────────────────────────────────
+  Archivo: src/lib/upload/parsers.ts
+  Rol: Parsers cliente: XLSX + HTML (imágenes y descuentos) + buildData
+  ────────────────────────────────────────
+  Archivo: src/lib/actions/upload.ts
+  Rol: 5 Server Actions: initUpload, uploadProductosBatch, uploadVariantesBatch,
+
+    uploadImagenesBatch, finalizeUpload
+  ────────────────────────────────────────
+  Archivo: src/app/admin/actualizacion-stock/page.tsx
+  Rol: Página protegida por rol + módulo
+  ────────────────────────────────────────
+  Archivo: src/components/admin/upload/upload-form.tsx
+  Rol: Cliente: estado idle → preview → upload → done/error
+
+  Lo que aplica el plan:
+  - Todo el parseo ocurre en el browser (cero datos crudos al servidor)
+  - Batches de 500 con 3 workers concurrentes vía Promise.all
+  - DELETE nunca DROP, imágenes 'sistema' intactas
+  - Todos los strings normalizados a MAYÚSCULAS en buildData
+  - alm_izq OR alm_der ∈ ALMACENES_VALIDOS como filtro de variantes
+  - ingreso_fecha desde barcode J+AAMMDD, null si no cumple
+
+  Falta registrar el módulo actualizacion en la BD para que aparezca en el
+  sidebar y que los admins tengan acceso. ¿Lo hacemos ahora o lo tienes ya
+  registrado?
+
+✻ Cooked for 6m 31s
+
+> Bueno, sigue con el plan, estamos yendo por fases y si sigue lo que dices     
+  hazlo, lo que si te digo, aun no creas la interfaz para subir los archivos    
+  no?                                                                           
+
+● Ya la creé — src/components/admin/upload/upload-form.tsx y la página en
+  src/app/admin/actualizacion-stock/page.tsx se generaron en el paso anterior
+  como parte de la Fase 4.
+
+  ¿Qué quieres hacer con ellos?
+  - Dejarlos como están y continuar con Fase 5
+  - Borrarlos y dejar solo el backend (parsers + actions) para después hacer la
+  UI
+
+✻ Cooked for 29s
+
+> Estan bien, pero mi idea era en el page productos tener una tabla con los     
+  productos listados traidos de la BD, si aun no se trae nada manejarlo, y      
+  arriba un button que abra un modal donde se suban estos archivos...           
+
+● Entendido. Déjame ver qué existe antes de tocar nada.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+● Veo que no hay página de productos. Chequeo cómo están estructuradas las
+  páginas de gestión existentes.
+
+  Read 1 file (ctrl+o to expand)
+
+● Claro. El plan es:
+
+  1. Borrar actualizacion-stock/page.tsx (queda obsoleta)
+  2. Crear admin/productos/page.tsx — Server Component, trae productos de BD
+  3. Crear productos-table.tsx — tabla con empty state
+  4. Crear upload-modal.tsx — Dialog que envuelve el UploadForm existente
+
+  Read 2 files (ctrl+o to expand)
+
+● Tengo el patrón exacto. Ahora ejecuto todo:
+  - Borro la página standalone de actualizacion-stock
+  - Creo la página de productos con su tabla
+  - Muevo el upload a un modal dentro de la tabla
+  - Añado onSuccess al UploadForm para hacer router.refresh() al terminar
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Update(src\components\admin\upload\upload-form.tsx)
+  ⎿  Added 1 line, removed 1 line
+      35    | { id: "done"; productos: number; variantes: number; imagene
+          s: number }
+      36    | { id: "error"; msg: string };
+      37  
+      38 -export function UploadForm() {                                 
+      38 +export function UploadForm({ onSuccess }: { onSuccess?: () => v
+         +oid } = {}) {                                                  
+      39    const [step, setStep] = useState<Step>({ id: "idle" });
+      40  
+      41    const stockRef = useRef<HTMLInputElement>(null);
+
+● Update(src\components\admin\upload\upload-form.tsx)
+  ⎿  Added 1 line
+      118        if (!fin.success) throw new Error(fin.msg);
+      119  
+      120        setStep({ id: "done", productos: productos.length, varia
+           ntes: variantes.length, imagenes: imagenes.length });
+      121 +      onSuccess?.();                                          
+      122      } catch (e) {
+      123        setStep({ id: "error", msg: String(e) });
+      124      }
+
+● Ahora creo la página y la tabla de productos en paralelo:
+
+● Write(src\app\admin\productos\page.tsx)
+  ⎿  Wrote 45 lines to src\app\admin\productos\page.tsx
+       1 import { requireRole, requireModule } from "@/lib/auth";
+       2 import { db } from "@/lib/db";
+       3 import { ProductosTable } from "@/components/admin/productos/pro
+         ductos-table";
+       4 
+       6   cod_universal: string;
+       7   genero: string;
+       8   marca: string | null;
+       9   modelo: string | null;
+      10   precio_lista: number;
+     … +41 lines (ctrl+o to expand)
+
+● Write(src\components\admin\productos\productos-table.tsx)
+  ⎿  Wrote 126 lines to src\components\admin\productos\productos-table.tsx
+       1 "use client";
+       2 
+       3 import { useState } from "react";
+       4 import { useRouter } from "next/navigation";
+       5 import { Upload } from "lucide-react";
+       6 import { Button } from "@/components/ui/button";
+       7 import { Badge } from "@/components/ui/badge";
+       8 import {
+       9   Table,
+      10   TableBody,
+     … +125 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Sin errores. Resumen de cambios:
+
+  - Borrado actualizacion-stock/page.tsx
+  - Creado src/app/admin/productos/page.tsx — Server Component, trae hasta 200
+  productos + total count
+  - Creado src/components/admin/productos/productos-table.tsx — tabla con empty
+  state + botón que abre el modal de upload
+  - Actualizado upload-form.tsx — acepta onSuccess callback; lo llama al
+  terminar para disparar router.refresh()
+
+  El flujo es: tabla vacía con mensaje → botón "Actualizar stock" → modal →
+  subir archivos → al completar, la tabla se refresca automáticamente con los
+  datos nuevos.
+
+  Solo falta registrar el módulo "productos" en la BD para que el requireModule
+  lo encuentre. ¿Lo tienes ya seeded o quieres que lo agregue?
+
+✻ Baked for 2m 57s
+
+> Que quieres decir que Server Component trae hasta 200 productos?, quiero      
+  hacer que el codigo sea mantenible y facil de usar por eso, idee que tal si   
+  creamos un tabla component general de estilo, ordenamiento, animaciones, etc, 
+  y tenga props muy especificos para cada situacion que presentemos             
+
+● Excelente idea. Propongo un DataTable<T> genérico con columnas tipadas, sort
+  client-side, paginación, URL sync y animaciones. Primero déjame ver el
+  globals.css para saber qué animaciones hay disponibles.
+
+  Read 1 file (ctrl+o to expand)
+
+● Perfecto, tw-animate-css está disponible. Verifico el componente Table antes
+  de escribir.
+  Read 1 file (ctrl+o to expand)
+
+● TableHead acepta todos los props de <th> incluido onClick. Ahora escribo el
+  DataTable genérico, y actualizo la tabla de productos para usarlo (borrando el
+  LIMIT 200 del page).
+
+● Write(src\components\ui\data-table.tsx)
+  ⎿  Wrote 231 lines to src\components\ui\data-table.tsx
+       1 "use client";
+       2 
+       3 import { useState, useEffect } from "react";
+       4 import { ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, Ch
+         evronRight } from "lucide-react";
+       6 import { Button } from "@/components/ui/button";
+       7 import {
+       8   Table,
+       9   TableBody,
+      10   TableCell,
+     … +244 lines (ctrl+o to expand)
+
+● Ahora actualizo la tabla de productos para usar DataTable y el page para
+  quitar el LIMIT 200:
+
+● Write(src\components\admin\productos\productos-table.tsx)
+  ⎿  Added 82 lines, removed 86 lines
+       5  import { Upload } from "lucide-react";
+       6  import { Button } from "@/components/ui/button";
+       7  import { Badge } from "@/components/ui/badge";
+       8 +import { DataTable, type ColDef } from "@/components/ui/data-ta
+         +ble";                                                          
+       9  import {
+       9 -  Table,                                                       
+      10 -  TableBody,                                                   
+      11 -  TableCell,                                                   
+      12 -  TableHead,                                                   
+      13 -  TableHeader,                                                 
+      14 -  TableRow,                                                    
+      15 -} from "@/components/ui/table";                                
+      16 -import {                                                       
+      10    Dialog,
+      11    DialogContent,
+      12    DialogHeader,
+     ...
+      15  import { UploadForm } from "@/components/admin/upload/upload-fo
+          rm";
+      16  import type { ProductoRow } from "@/app/admin/productos/page";
+      17  
+      25 -export function ProductosTable({                               
+      26 -  productos,                                                   
+      27 -  total,                                                       
+      28 -}: {                                                           
+      29 -  productos: ProductoRow[];                                    
+      30 -  total: number;                                               
+      31 -}) {                                                           
+      18 +const COLUMNS: ColDef<ProductoRow>[] = [                       
+      19 +  {                                                            
+      20 +    key: "cod_universal",                                      
+      21 +    header: "Código",                                          
+      22 +    sortable: true,                                            
+      23 +    sortValue: (r) => r.cod_universal,                         
+      24 +    cell: (r) => (                                             
+      25 +      <span className="font-mono text-xs text-[#181d26]">{r.cod
+         +_universal}</span>                                             
+      26 +    ),                                                         
+      27 +  },                                                           
+      28 +  {                                                            
+      29 +    key: "genero",                                             
+      30 +    header: "Género",                                          
+      31 +    sortable: true,                                            
+      32 +    sortValue: (r) => r.genero,                                
+      33 +    cell: (r) => <Badge variant="outline">{r.genero}</Badge>,  
+      34 +  },                                                           
+      35 +  {                                                            
+      36 +    key: "marca",                                              
+      37 +    header: "Marca",                                           
+      38 +    sortable: true,                                            
+      39 +    sortValue: (r) => r.marca ?? "",                           
+      40 +    cell: (r) => <span className="text-sm">{r.marca ?? "—"}</sp
+         +an>,                                                           
+      41 +  },                                                           
+      42 +  {                                                            
+      43 +    key: "modelo",                                             
+      44 +    header: "Modelo",                                          
+      45 +    sortable: true,                                            
+      46 +    sortValue: (r) => r.modelo ?? "",                          
+      47 +    cell: (r) => <span className="text-sm">{r.modelo ?? "—"}</s
+         +pan>,                                                          
+      48 +  },                                                           
+      49 +  {                                                            
+      50 +    key: "precio_lista",                                       
+      51 +    header: "Precio lista",                                    
+      52 +    align: "right",                                            
+      53 +    sortable: true,                                            
+      54 +    sortValue: (r) => r.precio_lista,                          
+      55 +    cell: (r) =>                                               
+      56 +      r.precio_lista > 0 ? (                                   
+      57 +        <span className="text-sm">S/ {r.precio_lista.toFixed(2)
+         +}</span>                                                       
+      58 +      ) : (                                                    
+      59 +        <span className="text-gray-400">—</span>               
+      60 +      ),                                                       
+      61 +  },                                                           
+      62 +  {                                                            
+      63 +    key: "descuento",                                          
+      64 +    header: "Descuento",                                       
+      65 +    align: "right",                                            
+      66 +    sortable: true,                                            
+      67 +    sortValue: (r) => r.descuento,                             
+      68 +    cell: (r) =>                                               
+      69 +      r.descuento > 0 ? (                                      
+      70 +        <span className="text-sm font-medium text-green-700">{r
+         +.descuento}%</span>                                            
+      71 +      ) : (                                                    
+      72 +        <span className="text-gray-400">—</span>               
+      73 +      ),                                                       
+      74 +  },                                                           
+      75 +  {                                                            
+      76 +    key: "stock_total",                                        
+      77 +    header: "Stock",                                           
+      78 +    align: "right",                                            
+      79 +    sortable: true,                                            
+      80 +    sortValue: (r) => r.stock_total,                           
+      81 +    cell: (r) => (                                             
+      82 +      <span className="text-sm font-medium">{r.stock_total}</sp
+         +an>                                                            
+      83 +    ),                                                         
+      84 +  },                                                           
+      85 +];                                                             
+      86 +                                                               
+      87 +export function ProductosTable({ productos }: { productos: Prod
+         +uctoRow[] }) {                                                 
+      88    const [uploadOpen, setUploadOpen] = useState(false);
+      89    const router = useRouter();
+      90  
+      35 -  function handleUploadSuccess() {                             
+      36 -    router.refresh();                                          
+      37 -  }                                                            
+      38 -                                                               
+      91    return (
+      92      <div>
+      93        <div className="mb-4 flex justify-end">
+     ...
+       97          </Button>
+       98        </div>
+       99  
+       48 -      <div className="overflow-hidden rounded-lg border border
+          --[#dddddd] bg-white">                                         
+       49 -        <Table>                                               
+       50 -          <TableHeader>                                       
+       51 -            <TableRow>                                        
+       52 -              <TableHead>Código</TableHead>                   
+       53 -              <TableHead>Género</TableHead>                   
+       54 -              <TableHead>Marca</TableHead>                    
+       55 -              <TableHead>Modelo</TableHead>                   
+       56 -              <TableHead className="text-right">Precio lista</
+          -TableHead>                                                    
+       57 -              <TableHead className="text-right">Descuento</Tab
+          -leHead>                                                       
+       58 -              <TableHead className="text-right">Stock</TableHe
+          -ad>                                                           
+       59 -            </TableRow>                                       
+       60 -          </TableHeader>                                      
+       61 -          <TableBody>                                         
+       62 -            {total === 0 && (                                 
+       63 -              <TableRow>                                      
+       64 -                <TableCell                                    
+       65 -                  colSpan={7}                                 
+       66 -                  className="py-16 text-center text-[#41454d]"
+       67 -                >                                             
+       68 -                  <p className="font-medium">Sin productos car
+          -gados</p>                                                     
+       69 -                  <p className="mt-1 text-xs text-gray-400">  
+       70 -                    Usa el botón &ldquo;Actualizar stock&rdquo
+          -; para subir el                                               
+       71 -                    archivo del ERP.                          
+       72 -                  </p>                                        
+       73 -                </TableCell>                                  
+       74 -              </TableRow>                                     
+       75 -            )}                                                
+       76 -            {productos.map((p) => (                           
+       77 -              <TableRow key={`${p.cod_universal}|${p.genero}`}
+          ->                                                             
+       78 -                <TableCell className="font-mono text-xs text-[
+          -#181d26]">                                                    
+       79 -                  {p.cod_universal}                           
+       80 -                </TableCell>                                  
+       81 -                <TableCell>                                   
+       82 -                  <Badge variant="outline">{p.genero}</Badge> 
+       83 -                </TableCell>                                  
+       84 -                <TableCell className="text-sm">{p.marca ?? "—"
+          -}</TableCell>                                                 
+       85 -                <TableCell className="text-sm">{p.modelo ?? "—
+          -"}</TableCell>                                                
+       86 -                <TableCell className="text-right text-sm">    
+       87 -                  {p.precio_lista > 0                         
+       88 -                    ? `S/ ${p.precio_lista.toFixed(2)}`       
+       89 -                    : "—"}                                    
+       90 -                </TableCell>                                  
+       91 -                <TableCell className="text-right text-sm">    
+       92 -                  {p.descuento > 0 ? (                        
+       93 -                    <span className="font-medium text-green-70
+          -0">                                                           
+       94 -                      {p.descuento}%                          
+       95 -                    </span>                                   
+       96 -                  ) : (                                       
+       97 -                    <span className="text-gray-400">—</span>  
+       98 -                  )}                                          
+       99 -                </TableCell>                                  
+      100 -                <TableCell className="text-right text-sm font-
+          -medium">                                                      
+      101 -                  {p.stock_total}                             
+      102 -                </TableCell>                                  
+      103 -              </TableRow>                                     
+      104 -            ))}                                               
+      105 -          </TableBody>                                        
+      106 -        </Table>                                              
+      107 -      </div>                                                  
+      100 +      <DataTable                                              
+      101 +        columns={COLUMNS}                                     
+      102 +        data={productos}                                      
+      103 +        keyFn={(r) => `${r.cod_universal}|${r.genero}`}       
+      104 +        defaultSort={{ key: "marca", dir: "asc" }}            
+      105 +        pageSize={50}                                         
+      106 +        emptyTitle="Sin productos cargados"                   
+      107 +        emptyDesc='Usa el botón "Actualizar stock" para subir 
+          +el archivo del ERP.'                                          
+      108 +      />                                                      
+      109  
+      109 -      <Dialog                                                 
+      110 -        open={uploadOpen}                                     
+      111 -        onOpenChange={(open) => {                             
+      112 -          if (!open) setUploadOpen(false);                    
+      113 -        }}                                                    
+      114 -      >                                                       
+      110 +      <Dialog open={uploadOpen} onOpenChange={(open) => { if (
+          +!open) setUploadOpen(false); }}>                              
+      111          <DialogContent className="sm:max-w-lg">
+      112            <DialogHeader>
+      113              <DialogTitle>Actualizar stock</DialogTitle>
+      114            </DialogHeader>
+      115            {uploadOpen && (
+      120 -            <UploadForm onSuccess={handleUploadSuccess} />    
+      116 +            <UploadForm onSuccess={() => { router.refresh(); }
+          +} />                                                          
+      117            )}
+      118          </DialogContent>
+      119        </Dialog>
+
+● Ahora quito el LIMIT del page y el total prop que ya no necesita la tabla:
+
+● Write(src\app\admin\productos\page.tsx)
+  ⎿  Added 9 lines, removed 16 lines
+      16    const session = await requireRole("admin", "administrador_gen
+          eral");
+      17    await requireModule(session, "productos");
+      18  
+      19 -  const [countRes, rowsRes] = await Promise.all([              
+      20 -    db.execute("SELECT COUNT(*) as total FROM productos"),     
+      21 -    db.execute(                                                
+      22 -      `SELECT cod_universal, genero, marca, modelo, precio_list
+         -a, descuento, stock_total                                      
+      23 -       FROM productos                                          
+      24 -       ORDER BY marca, modelo                                  
+      25 -       LIMIT 200`                                              
+      26 -    ),                                                         
+      27 -  ]);                                                          
+      19 +  const result = await db.execute(                             
+      20 +    `SELECT cod_universal, genero, marca, modelo, precio_lista,
+         + descuento, stock_total                                        
+      21 +     FROM productos                                            
+      22 +     ORDER BY marca, modelo`                                   
+      23 +  );                                                           
+      24  
+      29 -  const total = (countRes.rows[0] as unknown as { total: number
+         - }).total;                                                     
+      30 -  const productos = rowsRes.rows as unknown as ProductoRow[];  
+      25 +  const productos = result.rows as unknown as ProductoRow[];   
+      26  
+      27    return (
+      28      <div className="p-8">
+      29        <h1 className="text-xl font-semibold text-[#181d26]">Prod
+          uctos</h1>
+      30        <p className="mt-1 mb-6 text-sm text-[#41454d]">
+      36 -        Espejo del ERP.{" "}                                   
+      37 -        {total > 0                                             
+      38 -          ? `${total.toLocaleString()} productos en la base de 
+         -datos.`                                                        
+      31 +        {productos.length > 0                                  
+      32 +          ? `${productos.length.toLocaleString()} productos en 
+         +el espejo del ERP.`                                            
+      33            : "Sin productos cargados."}
+      40 -        {total > 200 && " Mostrando los primeros 200."}        
+      34        </p>
+      42 -      <ProductosTable productos={productos} total={total} />   
+      35 +      <ProductosTable productos={productos} />                 
+      36      </div>
+      37    );
+      38  }
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Sin errores. Esto es lo que quedó:
+
+  ---
+  DataTable<T> (src/components/ui/data-table.tsx) — componente genérico
+  reutilizable:
+  - ColDef<T> tipado: key, header, align, sortable, sortValue, cell, clases
+  opcionales
+  - Sort client-side por cualquier columna, click para invertir dirección,
+  indicadores ↑ ↓ ⇅
+  - Paginación client-side configurable (pageSize, por defecto 50)
+  - URL sync sin navegación — window.history.replaceState escribe
+  ?sort=&dir=&page= en cada cambio, sin refetch del Server Component
+  - Animaciones en filas: fade-in-0 slide-in-from-bottom-1 de tw-animate-css
+  - Empty state con título y descripción configurables
+
+  ProductosTable ahora solo declara las 7 columnas de producto con sus sortValue
+  y cell, y delega todo el display al DataTable. Para cada tabla nueva en el
+  futuro es el mismo patrón: definir ColDef<T>[] + keyFn.
+
+✻ Churned for 2m 59s
+
+※ recap: Building a stock and discount management system for 12 stores. Completed Phase 4 upload logic and a reusable DataTable component. Next: register the "productos" module in the DB so the page is accessible from the sidebar. (disable recaps in /config)
