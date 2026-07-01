@@ -42,10 +42,10 @@ function coberturaDot(cobertura: number | null): { dot: string; title: string } 
 // Color de "Vendidas 90d" en Rezagados, relativo a las unidades viejas atascadas:
 // vender poco teniendo muchas unidades viejas es grave (el stock viejo no se drena).
 function rezagoVentaColor(vendido90d: number, udsViejas: number): { cls: string; title: string } {
-  if (vendido90d > 10) return { cls: "bg-green-100 text-green-700", title: "Rota bien" };
+  if (vendido90d > 10) return { cls: "bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300", title: "Rota bien" };
   if (vendido90d >= udsViejas)
-    return { cls: "bg-amber-100 text-amber-700", title: "Rotación modesta — revisar las unidades viejas" };
-  return { cls: "bg-red-100 text-red-700", title: "Grave — vende menos de lo que tiene atascado" };
+    return { cls: "bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300", title: "Rotación modesta — revisar las unidades viejas" };
+  return { cls: "bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300", title: "Grave — vende menos de lo que tiene atascado" };
 }
 
 const BASE_FILTERS: SelectFilterDef<ProductoAnalisisRow>[] = [
@@ -115,8 +115,8 @@ export function AnalisisDashboard({ kpis, productos, tendencia, rankings, unicos
           {importarBtn}
         </div>
       ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-sm text-amber-800">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-500/25 bg-amber-50 dark:bg-amber-500/10 p-4">
+          <p className="text-sm text-amber-800 dark:text-amber-300">
             Aún no hay ventas cargadas — los tabs de ventas están vacíos. El tab <b>Únicos</b> funciona igual
             (es stock).
           </p>
@@ -168,7 +168,7 @@ export function AnalisisDashboard({ kpis, productos, tendencia, rankings, unicos
         {/* ── Rezagados ── */}
         <TabsContent value="rezagados">
           <TabInfo>
-            <span className="font-medium text-[#181d26]">{rezagados.length.toLocaleString("es-PE")} producto(s)</span>{" "}
+            <span className="font-medium text-foreground">{rezagados.length.toLocaleString("es-PE")} producto(s)</span>{" "}
             que tuvieron ventas en 90 días pero arrastran unidades en stock desde hace <b>≥ {DIAS_REZAGO} días</b>.
             El color de <b>Vendidas 90d</b> mide qué tan grave es respecto a lo atascado:{" "}
             <span className="font-medium text-green-600">verde</span> vende &gt;10 (rota bien);{" "}
@@ -201,7 +201,7 @@ export function AnalisisDashboard({ kpis, productos, tendencia, rankings, unicos
         {/* ── Stock muerto ── */}
         <TabsContent value="muerto">
           <TabInfo>
-            <span className="font-medium text-[#181d26]">{muertos.length.toLocaleString("es-PE")} producto(s)</span>{" "}
+            <span className="font-medium text-foreground">{muertos.length.toLocaleString("es-PE")} producto(s)</span>{" "}
             con stock, sin ventas en {DIAS_MUERTO} días y antiguos. El <b>diagnóstico</b> depende del descuento
             actual — de menos a más grave:{" "}
             <span className="text-amber-600 font-medium">amarillo</span> = sin descuento (aplicar uno);{" "}
@@ -275,7 +275,7 @@ export function AnalisisDashboard({ kpis, productos, tendencia, rankings, unicos
         {/* ── Únicos ── */}
         <TabsContent value="unicos">
           <TabInfo>
-            <span className="font-medium text-[#181d26]">{unicos.length.toLocaleString("es-PE")} producto(s)</span>{" "}
+            <span className="font-medium text-foreground">{unicos.length.toLocaleString("es-PE")} producto(s)</span>{" "}
             con <b>una sola unidad</b> en stock. <b>Filtra por tienda</b> para ver los únicos de cada local — útil
             para consolidar últimas unidades, liquidar o reponer. <b>Talla</b> suele ser el último resto de una
             curva; <b>antigüedad</b> alta = más difícil de vender.
@@ -297,7 +297,7 @@ const codigoCol: ColDef<ProductoAnalisisRow> = {
   width: 1,
   sortable: true,
   sortValue: (r) => r.cod_universal,
-  cell: (r) => <span className="font-mono text-xs text-[#181d26]">{r.cod_universal}</span>,
+  cell: (r) => <span className="font-mono text-xs text-foreground">{r.cod_universal}</span>,
 };
 
 const marcaCol: ColDef<ProductoAnalisisRow> = {
@@ -347,7 +347,7 @@ const rotacionColumns: ColDef<ProductoAnalisisRow>[] = [
     align: "center",
     sortable: true,
     sortValue: (r) => r.ultima_venta ?? "",
-    cell: (r) => <span className="text-xs text-[#41454d]">{r.ultima_venta ?? "—"}</span>,
+    cell: (r) => <span className="text-xs text-muted-foreground">{r.ultima_venta ?? "—"}</span>,
   },
   {
     key: "stock_total",
@@ -370,7 +370,7 @@ const rotacionColumns: ColDef<ProductoAnalisisRow>[] = [
       return (
         <div className="flex items-center justify-center gap-1.5" title={title}>
           <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />
-          <span className="text-xs text-[#41454d]">{r.cobertura_dias != null ? `${r.cobertura_dias}d` : "—"}</span>
+          <span className="text-xs text-muted-foreground">{r.cobertura_dias != null ? `${r.cobertura_dias}d` : "—"}</span>
         </div>
       );
     },
@@ -398,7 +398,7 @@ const rezagadoColumns: ColDef<ProductoAnalisisRow>[] = [
     sortable: true,
     sortValue: (r) => r.unidades_viejas,
     cell: (r) => (
-      <span className="rounded-md bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
+      <span className="rounded-md bg-orange-100 dark:bg-orange-500/15 px-2 py-0.5 text-xs font-semibold text-orange-700 dark:text-orange-300">
         {r.unidades_viejas}
       </span>
     ),
@@ -444,7 +444,7 @@ const rezagadoColumns: ColDef<ProductoAnalisisRow>[] = [
     align: "center",
     sortable: true,
     sortValue: (r) => r.ultima_venta ?? "",
-    cell: (r) => <span className="text-xs text-[#41454d]">{r.ultima_venta ?? "—"}</span>,
+    cell: (r) => <span className="text-xs text-muted-foreground">{r.ultima_venta ?? "—"}</span>,
   },
 ];
 
@@ -463,7 +463,7 @@ function muertoColumns(salud: Map<string, SaludInfo>): ColDef<ProductoAnalisisRo
         return (
           <div className="flex items-center gap-2" title={s.accion}>
             <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${s.dot}`} />
-            <span className="text-xs text-[#181d26]">{s.label}</span>
+            <span className="text-xs text-foreground">{s.label}</span>
           </div>
         );
       },
@@ -486,7 +486,7 @@ function muertoColumns(salud: Map<string, SaludInfo>): ColDef<ProductoAnalisisRo
       align: "center",
       sortable: true,
       sortValue: (r) => r.ultima_venta ?? "",
-      cell: (r) => <span className="text-xs text-[#41454d]">{r.ultima_venta ?? "nunca"}</span>,
+      cell: (r) => <span className="text-xs text-muted-foreground">{r.ultima_venta ?? "nunca"}</span>,
     },
     {
       key: "stock_total",
@@ -516,7 +516,7 @@ const tendenciaColumns: ColDef<MesRow>[] = [
     width: 1,
     sortable: true,
     sortValue: (r) => r.mes,
-    cell: (r) => <span className="text-sm font-medium text-[#181d26]">{r.mes}</span>,
+    cell: (r) => <span className="text-sm font-medium text-foreground">{r.mes}</span>,
   },
   {
     key: "unidades",
@@ -553,7 +553,7 @@ const rankingColumns: ColDef<ModeloRankingRow>[] = [
     width: 2,
     sortable: true,
     sortValue: (r) => r.modelo ?? "",
-    cell: (r) => <span className="text-sm font-medium text-[#181d26]">{r.modelo ?? "—"}</span>,
+    cell: (r) => <span className="text-sm font-medium text-foreground">{r.modelo ?? "—"}</span>,
   },
   {
     key: "genero",
@@ -579,7 +579,7 @@ const rankingColumns: ColDef<ModeloRankingRow>[] = [
     sortable: true,
     sortValue: (r) => r.unidades,
     cell: (r) => (
-      <span className="rounded-md bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700">
+      <span className="rounded-md bg-green-100 dark:bg-green-500/15 px-2 py-0.5 text-xs font-semibold text-green-700 dark:text-green-300">
         {r.unidades.toLocaleString("es-PE")}
       </span>
     ),
@@ -600,7 +600,7 @@ const rankingColumns: ColDef<ModeloRankingRow>[] = [
 // Banner de interpretación al inicio de cada tab.
 function TabInfo({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mb-3 flex gap-2 rounded-lg border border-blue-100 bg-blue-50/60 p-3 text-xs leading-relaxed text-[#41454d]">
+    <div className="mb-3 flex gap-2 rounded-lg border border-blue-100 dark:border-blue-500/20 bg-blue-50/60 dark:bg-blue-500/10 p-3 text-xs leading-relaxed text-muted-foreground">
       <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-500" />
       <div>{children}</div>
     </div>
@@ -609,8 +609,8 @@ function TabInfo({ children }: { children: React.ReactNode }) {
 
 function Kpi({ label, value, small }: { label: string; value: string; small?: boolean }) {
   return (
-    <div className="rounded-xl border bg-white p-4">
-      <p className={small ? "text-sm font-semibold text-[#181d26]" : "text-2xl font-bold text-[#181d26]"}>{value}</p>
+    <div className="rounded-xl border bg-card p-4">
+      <p className={small ? "text-sm font-semibold text-foreground" : "text-2xl font-bold text-foreground"}>{value}</p>
       <p className="mt-0.5 text-xs text-gray-500">{label}</p>
     </div>
   );

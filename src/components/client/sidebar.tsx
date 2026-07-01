@@ -2,6 +2,7 @@ import { Tags, Package } from "lucide-react";
 import type { SessionUser } from "@/lib/auth";
 import { SidebarLink } from "@/components/admin/sidebar-link";
 import { SidebarLogout } from "@/components/admin/sidebar-logout";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export function ClientSidebar({ session }: { session: SessionUser }) {
   return (
@@ -25,6 +26,7 @@ export function ClientSidebar({ session }: { session: SessionUser }) {
       </nav>
 
       <div className="border-t border-white/10 px-2 py-3">
+        <ThemeToggle />
         <SidebarLogout />
       </div>
     </aside>

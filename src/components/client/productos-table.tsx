@@ -32,7 +32,7 @@ const COLUMNS: ColDef<ClientProductoRow>[] = [
     sortable: true,
     sortValue: (r) => r.cod_universal,
     cell: (r) => (
-      <span className="font-mono text-xs text-[#181d26]">{r.cod_universal}</span>
+      <span className="font-mono text-xs text-foreground">{r.cod_universal}</span>
     ),
   },
   {
@@ -107,7 +107,7 @@ const COLUMNS: ColDef<ClientProductoRow>[] = [
     sortValue: (r) => precioConDescuento(r),
     cell: (r) =>
       r.precio_lista > 0 ? (
-        <span className="text-sm font-medium text-[#181d26]">
+        <span className="text-sm font-medium text-foreground">
           S/ {precioConDescuento(r).toFixed(2)}
         </span>
       ) : (

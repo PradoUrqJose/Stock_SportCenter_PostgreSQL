@@ -32,12 +32,12 @@ function StatCard({
   accent?: string;
 }) {
   return (
-    <div className="rounded-lg border border-[#dddddd] bg-white px-5 py-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-[#41454d]">{label}</p>
-      <p className={`mt-1 text-2xl font-bold ${accent ?? "text-[#181d26]"}`}>
+    <div className="rounded-lg border border-border bg-card px-5 py-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={`mt-1 text-2xl font-bold ${accent ?? "text-foreground"}`}>
         {typeof value === "number" ? value.toLocaleString("es-PE") : value}
       </p>
-      {sub && <p className="mt-0.5 text-xs text-[#41454d]">{sub}</p>}
+      {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
 }
@@ -108,11 +108,11 @@ export default async function AdminPage() {
   }
 
   return (
-    <div className="p-8 space-y-8">
+    <div className="p-4 md:p-8 space-y-6 md:space-y-8">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-[#181d26]">Dashboard</h1>
-          <p className="mt-1 text-sm text-[#41454d]">Bienvenido, {session?.nombre}</p>
+          <h1 className="text-xl font-semibold text-foreground">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Bienvenido, {session?.nombre}</p>
         </div>
         <PageHelp
           items={[
@@ -126,7 +126,7 @@ export default async function AdminPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Productos" value={kpi.n_productos} sub={`${kpi.n_marcas} marcas`} />
         <StatCard label="Variantes" value={n_variantes} />
         <StatCard
@@ -138,28 +138,28 @@ export default async function AdminPage() {
           label="Con descuento ERP"
           value={kpi.con_descuento}
           sub={sinDescuento > 0 ? `${sinDescuento} sin descuento` : "todos con descuento"}
-          accent="text-green-700"
+          accent="text-green-700 dark:text-green-400"
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Lote activo */}
-        <div className="rounded-lg border border-[#dddddd] bg-white p-5">
-          <h2 className="text-sm font-semibold text-[#181d26]">Lote activo</h2>
+        <div className="rounded-lg border border-border bg-card p-5">
+          <h2 className="text-sm font-semibold text-foreground">Lote activo</h2>
           {!lote && !publicado ? (
-            <p className="mt-3 text-sm text-[#41454d]">Sin lote activo.</p>
+            <p className="mt-3 text-sm text-muted-foreground">Sin lote activo.</p>
           ) : (
             <div className="mt-3 space-y-4">
               {lote && (
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                    <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
                       borrador
                     </span>
-                    <span className="text-sm text-[#41454d]">Lote #{lote.id}</span>
-                    <span className="text-xs text-[#999]">creado {fmt(lote.created_at)}</span>
+                    <span className="text-sm text-muted-foreground">Lote #{lote.id}</span>
+                    <span className="text-xs text-muted-foreground">creado {fmt(lote.created_at)}</span>
                   </div>
-                  <p className="text-xs text-[#41454d]">
+                  <p className="text-xs text-muted-foreground">
                     En edición — publica el lote para habilitar confirmaciones.
                   </p>
                 </div>
@@ -168,20 +168,20 @@ export default async function AdminPage() {
               {publicado && (
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                    <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/15 dark:text-green-300">
                       publicado
                     </span>
-                    <span className="text-sm text-[#41454d]">Lote #{publicado.id}</span>
-                    <span className="text-xs text-[#999]">publicado {fmt(publicado.published_at)}</span>
+                    <span className="text-sm text-muted-foreground">Lote #{publicado.id}</span>
+                    <span className="text-xs text-muted-foreground">publicado {fmt(publicado.published_at)}</span>
                   </div>
 
                   {totalConf > 0 ? (
                     <div className="space-y-1.5">
-                      <p className="text-xs text-[#41454d]">
+                      <p className="text-xs text-muted-foreground">
                         Confirmaciones ({totalConf} tiendas × producto)
                       </p>
                       {/* Progress bar */}
-                      <div className="flex h-2 overflow-hidden rounded-full bg-[#f0f0f0]">
+                      <div className="flex h-2 overflow-hidden rounded-full bg-muted">
                         {confCounts.confirmado > 0 && (
                           <div
                             className="bg-green-500"
@@ -195,16 +195,16 @@ export default async function AdminPage() {
                           />
                         )}
                       </div>
-                      <div className="flex gap-4 text-xs text-[#41454d]">
-                        <span className="text-green-700">✓ {confCounts.confirmado} confirmadas</span>
-                        <span className="text-amber-600">⏱ {confCounts.pendiente} pendientes</span>
+                      <div className="flex gap-4 text-xs text-muted-foreground">
+                        <span className="text-green-700 dark:text-green-400">✓ {confCounts.confirmado} confirmadas</span>
+                        <span className="text-amber-600 dark:text-amber-400">⏱ {confCounts.pendiente} pendientes</span>
                         {confCounts.rechazado > 0 && (
-                          <span className="text-red-600">✗ {confCounts.rechazado} rechazadas</span>
+                          <span className="text-red-600 dark:text-red-400">✗ {confCounts.rechazado} rechazadas</span>
                         )}
                       </div>
                     </div>
                   ) : (
-                    <p className="text-xs text-[#41454d]">Sin confirmaciones generadas aún.</p>
+                    <p className="text-xs text-muted-foreground">Sin confirmaciones generadas aún.</p>
                   )}
                 </div>
               )}
@@ -213,19 +213,19 @@ export default async function AdminPage() {
         </div>
 
         {/* Últimos syncs */}
-        <div className="rounded-lg border border-[#dddddd] bg-white p-5">
-          <h2 className="text-sm font-semibold text-[#181d26]">Últimas cargas</h2>
+        <div className="rounded-lg border border-border bg-card p-5">
+          <h2 className="text-sm font-semibold text-foreground">Últimas cargas</h2>
           {syncs.length === 0 ? (
-            <p className="mt-3 text-sm text-[#41454d]">Sin cargas registradas.</p>
+            <p className="mt-3 text-sm text-muted-foreground">Sin cargas registradas.</p>
           ) : (
-            <ul className="mt-3 divide-y divide-[#f0f0f0]">
+            <ul className="mt-3 divide-y divide-border">
               {syncs.map((s, i) => (
                 <li key={i} className="flex items-center justify-between py-2 text-sm">
-                  <span className="font-medium text-[#181d26] capitalize">{s.tipo}</span>
-                  <span className="text-xs text-[#41454d]">
+                  <span className="font-medium text-foreground capitalize">{s.tipo}</span>
+                  <span className="text-xs text-muted-foreground">
                     {fmt(s.ejecutado_at)} {fmtHora(s.ejecutado_at)}
                     {s.filas != null && (
-                      <span className="ml-2 text-[#999]">({s.filas.toLocaleString("en-US")} filas)</span>
+                      <span className="ml-2 text-muted-foreground">({s.filas.toLocaleString("en-US")} filas)</span>
                     )}
                   </span>
                 </li>
@@ -237,8 +237,8 @@ export default async function AdminPage() {
 
       {/* Distribución de descuentos ERP */}
       {dist.length > 0 && (
-        <div className="rounded-lg border border-[#dddddd] bg-white p-5">
-          <h2 className="mb-4 text-sm font-semibold text-[#181d26]">
+        <div className="rounded-lg border border-border bg-card p-5">
+          <h2 className="mb-4 text-sm font-semibold text-foreground">
             Distribución de descuentos ERP
           </h2>
           <div className="space-y-2">
@@ -246,16 +246,16 @@ export default async function AdminPage() {
               const pct = kpi.n_productos > 0 ? (d.n / kpi.n_productos) * 100 : 0;
               return (
                 <div key={d.pct} className="flex items-center gap-3">
-                  <span className="w-10 shrink-0 text-right text-sm font-medium text-[#181d26]">
+                  <span className="w-10 shrink-0 text-right text-sm font-medium text-foreground">
                     {d.pct}%
                   </span>
-                  <div className="flex-1 overflow-hidden rounded-full bg-[#f0f0f0]">
+                  <div className="flex-1 overflow-hidden rounded-full bg-muted">
                     <div
                       className="h-2 rounded-full bg-blue-500"
                       style={{ width: `${Math.max(pct, 0.5)}%` }}
                     />
                   </div>
-                  <span className="w-24 shrink-0 text-right text-xs text-[#41454d]">
+                  <span className="w-24 shrink-0 text-right text-xs text-muted-foreground">
                     {d.n.toLocaleString("es-PE")} productos
                   </span>
                 </div>
@@ -263,18 +263,18 @@ export default async function AdminPage() {
             })}
             {sinDescuento > 0 && (
               <div className="flex items-center gap-3">
-                <span className="w-10 shrink-0 text-right text-sm font-medium text-[#999]">
+                <span className="w-10 shrink-0 text-right text-sm font-medium text-muted-foreground">
                   0%
                 </span>
-                <div className="flex-1 overflow-hidden rounded-full bg-[#f0f0f0]">
+                <div className="flex-1 overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-2 rounded-full bg-gray-300"
+                    className="h-2 rounded-full bg-gray-300 dark:bg-gray-600"
                     style={{
                       width: `${Math.max((sinDescuento / kpi.n_productos) * 100, 0.5)}%`,
                     }}
                   />
                 </div>
-                <span className="w-24 shrink-0 text-right text-xs text-[#999]">
+                <span className="w-24 shrink-0 text-right text-xs text-muted-foreground">
                   {sinDescuento.toLocaleString("es-PE")} sin dto.
                 </span>
               </div>

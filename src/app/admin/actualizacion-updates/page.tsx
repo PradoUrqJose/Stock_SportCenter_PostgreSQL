@@ -13,7 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 const HistorialLink = () => (
   <Link
     href="/admin/actualizacion-updates/historial"
-    className="inline-flex items-center gap-1.5 rounded-lg border border-[#dddddd] bg-white px-3 py-1.5 text-sm font-medium text-[#41454d] hover:bg-[#f8fafc] transition-colors"
+    className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
   >
     <History className="h-3.5 w-3.5" />
     Ver historial de lotes
@@ -57,12 +57,12 @@ export default async function ActualizacionUpdatesPage() {
     });
     if (cerradoResult.rows.length === 0) {
       return (
-        <div className="p-8">
+        <div className="p-4 md:p-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-xl font-semibold text-[#181d26]">Registro de cambios</h1>
+            <h1 className="text-xl font-semibold text-foreground">Registro de cambios</h1>
             <HistorialLink />
           </div>
-          <p className="mt-2 text-sm text-[#41454d]">
+          <p className="mt-2 text-sm text-muted-foreground">
             No hay ningún lote publicado ni cerrado aún.
           </p>
         </div>
@@ -71,7 +71,7 @@ export default async function ActualizacionUpdatesPage() {
     const cerrado = toPlain<LoteRow>(cerradoResult.rows)[0];
     const rows = await fetchConfirmaciones(cerrado.id);
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <ConfirmacionesPanel
           rows={rows}
           loteId={cerrado.id}
@@ -90,7 +90,7 @@ export default async function ActualizacionUpdatesPage() {
   // at the same time.
   if (showBorradorPanel && publicado) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <Tabs defaultValue="borrador">
           <TabsList>
             <TabsTrigger value="borrador">Borrador #{borrador!.id}</TabsTrigger>
@@ -120,7 +120,7 @@ export default async function ActualizacionUpdatesPage() {
 
   if (showBorradorPanel) {
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <BorradorReviewPanel
           loteId={borrador!.id}
           createdAt={borrador!.created_at}
@@ -132,7 +132,7 @@ export default async function ActualizacionUpdatesPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <ConfirmacionesPanel
         rows={confRows}
         loteId={publicado!.id}

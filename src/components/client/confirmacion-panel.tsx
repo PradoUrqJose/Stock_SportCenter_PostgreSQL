@@ -43,19 +43,19 @@ function precioFinal(precio: number | null, descuento: number) {
 
 const ESTADO_BADGE: Record<string, React.ReactNode> = {
   pendiente: (
-    <Badge className="border-amber-200 bg-amber-50 text-amber-700">
+    <Badge className="border-amber-200 dark:border-amber-500/25 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300">
       <Clock className="mr-1 h-3 w-3" />
       pendiente
     </Badge>
   ),
   confirmado: (
-    <Badge className="border-green-200 bg-green-50 text-green-700">
+    <Badge className="border-green-200 dark:border-green-500/25 bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-300">
       <CheckCircle className="mr-1 h-3 w-3" />
       confirmado
     </Badge>
   ),
   rechazado: (
-    <Badge className="border-red-200 bg-red-50 text-red-700">
+    <Badge className="border-red-200 dark:border-red-500/25 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300">
       <XCircle className="mr-1 h-3 w-3" />
       rechazado
     </Badge>
@@ -170,7 +170,7 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
       width: 1,
       sortable: true,
       sortValue: (c) => c.cod_universal,
-      cell: (c) => <span className="font-mono text-xs text-[#41454d]">{c.cod_universal}</span>,
+      cell: (c) => <span className="font-mono text-xs text-muted-foreground">{c.cod_universal}</span>,
     },
     {
       key: "grupo",
@@ -188,8 +188,8 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
       sortValue: (c) => c.snap_modelo ?? "",
       cell: (c) => (
         <div>
-          <div className="font-medium text-[#181d26]">{c.snap_modelo ?? "—"}</div>
-          <div className="text-xs text-[#999]">{c.snap_marca ?? ""}</div>
+          <div className="font-medium text-foreground">{c.snap_modelo ?? "—"}</div>
+          <div className="text-xs text-muted-foreground">{c.snap_marca ?? ""}</div>
         </div>
       ),
     },
@@ -245,7 +245,7 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
       sortValue: (c) => precioFinal(c.snap_precio_lista, c.descuento_nuevo) ?? 0,
       cell: (c) => {
         const pf = precioFinal(c.snap_precio_lista, c.descuento_nuevo);
-        return <span className="text-sm font-medium text-[#181d26]">{pf !== null ? `S/ ${pf.toFixed(2)}` : "—"}</span>;
+        return <span className="text-sm font-medium text-foreground">{pf !== null ? `S/ ${pf.toFixed(2)}` : "—"}</span>;
       },
     },
     {
@@ -258,7 +258,7 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
         <div>
           <div>{ESTADO_BADGE[c.estado]}</div>
           {c.estado === "rechazado" && c.motivo_rechazo && <div className="mt-1 text-xs text-red-600">{c.motivo_rechazo}</div>}
-          {c.estado !== "pendiente" && c.codigo_usado && <div className="mt-0.5 text-xs text-[#41454d]">Cód: {c.codigo_usado}</div>}
+          {c.estado !== "pendiente" && c.codigo_usado && <div className="mt-0.5 text-xs text-muted-foreground">Cód: {c.codigo_usado}</div>}
         </div>
       ),
     },
@@ -269,8 +269,8 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
     <div className="space-y-4">
       {/* Title + lote banner, same row */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-[#181d26]">Actualización de precios</h1>
-        <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm text-blue-800">
+        <h1 className="text-xl font-semibold text-foreground">Actualización de precios</h1>
+        <div className="flex items-center gap-2 rounded-lg border border-blue-200 dark:border-blue-500/25 bg-blue-50 dark:bg-blue-500/10 px-3 py-1.5 text-sm text-blue-800 dark:text-blue-300">
           <span className="font-medium">Lote #{loteId}</span> · Tienda {tiendaNombre} ·{" "}
           {new Date(publishedAt).toLocaleDateString("es-PE", {
             day: "2-digit",
@@ -286,22 +286,22 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
         searchPlaceholder="Buscar por código, marca o modelo…"
         getSearchText={(c) => `${c.cod_universal} ${c.snap_marca ?? ""} ${c.snap_modelo ?? ""}`}
         actions={
-          <div className="grid grid-cols-4 gap-2">
-            <div className="rounded-lg border border-[#dddddd] bg-white px-3 py-1.5 text-center">
-              <p className="text-lg font-bold text-[#181d26]">{confirmaciones.length}</p>
-              <p className="text-[11px] text-[#41454d]">Total</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="rounded-lg border border-border bg-card px-3 py-1.5 text-center">
+              <p className="text-lg font-bold text-foreground">{confirmaciones.length}</p>
+              <p className="text-[11px] text-muted-foreground">Total</p>
             </div>
-            <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-1.5 text-center">
-              <p className="text-lg font-bold text-amber-700">{pendientes.length}</p>
-              <p className="text-[11px] text-[#41454d]">Pendiente</p>
+            <div className="rounded-lg border border-amber-100 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 px-3 py-1.5 text-center">
+              <p className="text-lg font-bold text-amber-700 dark:text-amber-300">{pendientes.length}</p>
+              <p className="text-[11px] text-muted-foreground">Pendiente</p>
             </div>
-            <div className="rounded-lg border border-green-100 bg-green-50 px-3 py-1.5 text-center">
-              <p className="text-lg font-bold text-green-700">{confirmados.length}</p>
-              <p className="text-[11px] text-[#41454d]">Confirmado</p>
+            <div className="rounded-lg border border-green-100 dark:border-green-500/20 bg-green-50 dark:bg-green-500/10 px-3 py-1.5 text-center">
+              <p className="text-lg font-bold text-green-700 dark:text-green-300">{confirmados.length}</p>
+              <p className="text-[11px] text-muted-foreground">Confirmado</p>
             </div>
-            <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-1.5 text-center">
-              <p className="text-lg font-bold text-red-700">{rechazados.length}</p>
-              <p className="text-[11px] text-[#41454d]">Rechazado</p>
+            <div className="rounded-lg border border-red-100 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-3 py-1.5 text-center">
+              <p className="text-lg font-bold text-red-700 dark:text-red-300">{rechazados.length}</p>
+              <p className="text-[11px] text-muted-foreground">Rechazado</p>
             </div>
           </div>
         }
@@ -319,10 +319,10 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
       </FilterBar>
       {/* Action bar — only shown when there are pending items */}
       {pendientes.length > 0 && (
-        <div className="rounded-lg border border-[#dddddd] bg-white px-4 py-4 space-y-3">
+        <div className="rounded-lg border border-border bg-card px-4 py-4 space-y-3">
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-medium text-[#41454d]">Código de vendedor</label>
+              <label className="text-xs font-medium text-muted-foreground">Código de vendedor</label>
               <Input
                 placeholder="Ej: V001"
                 value={codigo}
@@ -336,7 +336,7 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
 
             {showRechazo && (
               <div className="flex-1 space-y-1 min-w-48">
-                <label className="text-xs font-medium text-[#41454d]">Motivo de rechazo</label>
+                <label className="text-xs font-medium text-muted-foreground">Motivo de rechazo</label>
                 <Input placeholder="Ej: Etiqueta ya aplicada" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
               </div>
             )}
@@ -352,7 +352,7 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
                 variant="outline"
                 onClick={handleRechazar}
                 disabled={!somePendientesSelected || submitting || (showRechazo && !motivo.trim())}
-                className="border-red-200 text-red-700 hover:bg-red-50"
+                className="border-red-200 dark:border-red-500/25 text-red-700 dark:text-red-300 hover:bg-red-50"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
                 {showRechazo ? `Enviar rechazo (${selectedPendientes.length})` : `Rechazar (${selectedPendientes.length})`}
@@ -366,7 +366,7 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
                     setShowRechazo(false);
                     setMotivo("");
                   }}
-                  className="text-[#41454d]"
+                  className="text-muted-foreground"
                 >
                   Cancelar
                 </Button>
@@ -374,7 +374,7 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
             </div>
           </div>
 
-          {msg && <p className={`text-xs ${msg.ok ? "text-green-700" : "text-red-600"}`}>{msg.text}</p>}
+          {msg && <p className={`text-xs ${msg.ok ? "text-green-700 dark:text-green-300" : "text-red-600"}`}>{msg.text}</p>}
         </div>
       )}
     </div>

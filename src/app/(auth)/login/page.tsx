@@ -34,14 +34,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f8fafc]">
-      <div className="w-full max-w-sm rounded-lg border border-[#dddddd] bg-white p-8 shadow-sm">
-        <h1 className="mb-1 text-lg font-semibold text-[#181d26]">Stock Sport Center</h1>
-        <p className="mb-6 text-sm text-[#41454d]">Ingresa con tu cuenta</p>
+    <div className="flex min-h-screen items-center justify-center bg-muted/50">
+      <div className="w-full max-w-sm rounded-lg border border-border bg-card p-8 shadow-sm">
+        <h1 className="mb-1 text-lg font-semibold text-foreground">Stock Sport Center</h1>
+        <p className="mb-6 text-sm text-muted-foreground">Ingresa con tu cuenta</p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="username" className="text-sm font-medium text-[#181d26]">
+            <label htmlFor="username" className="text-sm font-medium text-foreground">
               Usuario
             </label>
             <input
@@ -51,12 +51,12 @@ export default function LoginPage() {
               required
               autoComplete="username"
               autoFocus
-              className="rounded-md border border-[#dddddd] px-3 py-2 text-sm outline-none transition-colors focus:border-[#181d26]"
+              className="rounded-md border border-border px-3 py-2 text-sm outline-none transition-colors focus:border-ring"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="password" className="text-sm font-medium text-[#181d26]">
+            <label htmlFor="password" className="text-sm font-medium text-foreground">
               Contraseña
             </label>
             <input
@@ -65,12 +65,12 @@ export default function LoginPage() {
               type="password"
               required
               autoComplete="current-password"
-              className="rounded-md border border-[#dddddd] px-3 py-2 text-sm outline-none transition-colors focus:border-[#181d26]"
+              className="rounded-md border border-border px-3 py-2 text-sm outline-none transition-colors focus:border-ring"
             />
           </div>
 
           {error && (
-            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+            <p className="rounded-md bg-red-50 dark:bg-red-500/10 px-3 py-2 text-sm text-red-600">{error}</p>
           )}
 
           <button

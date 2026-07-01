@@ -39,10 +39,10 @@ function FilterBarSkeleton({ filters = 2 }: { filters?: number }) {
 
 function TableSkeleton({ rows = 8, cols = 6 }: { rows?: number; cols?: number }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-[#dddddd] bg-white">
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-[#ebebeb]">
+          <tr className="border-b border-border">
             {Array.from({ length: cols }).map((_, i) => (
               <th key={i} className="h-10 px-2 align-middle">
                 <Skeleton className="h-3.5 w-16" />
@@ -52,7 +52,7 @@ function TableSkeleton({ rows = 8, cols = 6 }: { rows?: number; cols?: number })
         </thead>
         <tbody>
           {Array.from({ length: rows }).map((_, r) => (
-            <tr key={r} className="border-b border-[#f0f0f0] last:border-0">
+            <tr key={r} className="border-b border-border last:border-0">
               {Array.from({ length: cols }).map((_, c) => (
                 <td key={c} className="p-2 align-middle">
                   <Skeleton className="h-4" style={{ width: rowWidth(r * cols + c + 1) }} />
@@ -68,9 +68,9 @@ function TableSkeleton({ rows = 8, cols = 6 }: { rows?: number; cols?: number })
 
 function CardGridSkeleton({ count = 4 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-lg border border-[#dddddd] bg-white px-5 py-4">
+        <div key={i} className="rounded-lg border border-border bg-card px-5 py-4">
           <Skeleton className="h-3 w-20" />
           <Skeleton className="mt-2 h-7 w-16" />
           <Skeleton className="mt-2 h-3 w-24" />
@@ -82,7 +82,7 @@ function CardGridSkeleton({ count = 4 }: { count?: number }) {
 
 function ExpandableListSkeleton({ rows = 6 }: { rows?: number }) {
   return (
-    <div className="divide-y divide-[#f0f0f0] overflow-hidden rounded-lg border border-[#dddddd] bg-white">
+    <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 px-4 py-3">
           <Skeleton className="h-4 w-4 shrink-0 rounded" />

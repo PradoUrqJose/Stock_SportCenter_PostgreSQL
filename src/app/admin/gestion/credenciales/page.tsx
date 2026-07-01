@@ -22,9 +22,9 @@ export default async function CredencialesPage() {
   const tiendas = toPlain<Tienda>(tiendasResult.rows);
 
   return (
-    <div className="p-8">
-      <h1 className="text-xl font-semibold text-[#181d26]">Credenciales de Vendedores</h1>
-      <p className="mt-1 mb-6 text-sm text-[#41454d]">
+    <div className="p-4 md:p-8">
+      <h1 className="text-xl font-semibold text-foreground">Credenciales de Vendedores</h1>
+      <p className="mt-1 mb-6 text-sm text-muted-foreground">
         Códigos que los vendedores usan para confirmar o rechazar actualizaciones de precios.
       </p>
       <CredencialesTable vendedores={vendedores} tiendas={tiendas} />

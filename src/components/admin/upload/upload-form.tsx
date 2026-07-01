@@ -136,8 +136,8 @@ export function UploadForm({ onSuccess }: { onSuccess?: () => void } = {}) {
 
   if (step.id === "done") {
     return (
-      <div className="rounded-xl border border-green-200 bg-green-50 p-6 space-y-4">
-        <p className="font-semibold text-green-800 text-lg">Upload completado</p>
+      <div className="rounded-xl border border-green-200 dark:border-green-500/25 bg-green-50 dark:bg-green-500/10 p-6 space-y-4">
+        <p className="font-semibold text-green-800 dark:text-green-300 text-lg">Upload completado</p>
         <div className="grid grid-cols-3 gap-4 text-center">
           <Stat label="Productos" value={step.productos} />
           <Stat label="Variantes" value={step.variantes} />
@@ -152,9 +152,9 @@ export function UploadForm({ onSuccess }: { onSuccess?: () => void } = {}) {
 
   if (step.id === "error") {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-6 space-y-3">
-        <p className="font-semibold text-red-800">Error durante el upload</p>
-        <p className="text-sm text-red-700 font-mono">{step.msg}</p>
+      <div className="rounded-xl border border-red-200 dark:border-red-500/25 bg-red-50 dark:bg-red-500/10 p-6 space-y-3">
+        <p className="font-semibold text-red-800 dark:text-red-300">Error durante el upload</p>
+        <p className="text-sm text-red-700 dark:text-red-300 font-mono">{step.msg}</p>
         <Button variant="outline" onClick={reset}>
           Reintentar
         </Button>
@@ -164,7 +164,7 @@ export function UploadForm({ onSuccess }: { onSuccess?: () => void } = {}) {
 
   if (step.id === "parsing") {
     return (
-      <div className="flex items-center justify-center gap-2 rounded-xl border bg-white p-6 text-center text-sm text-gray-500">
+      <div className="flex items-center justify-center gap-2 rounded-xl border bg-card p-6 text-center text-sm text-gray-500">
         <Loader2 className="h-4 w-4 animate-spin" />
         Leyendo archivos...
       </div>
@@ -175,7 +175,7 @@ export function UploadForm({ onSuccess }: { onSuccess?: () => void } = {}) {
     const pct =
       step.total > 0 ? Math.round((step.current / step.total) * 100) : null;
     return (
-      <div className="rounded-xl border bg-white p-6 space-y-4">
+      <div className="rounded-xl border bg-card p-6 space-y-4">
         <p className="text-sm font-medium text-gray-700">{step.label}</p>
         <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
           <div
@@ -196,7 +196,7 @@ export function UploadForm({ onSuccess }: { onSuccess?: () => void } = {}) {
     const { result } = step;
     return (
       <div className="space-y-6">
-        <div className="rounded-xl border bg-white p-6 space-y-4">
+        <div className="rounded-xl border bg-card p-6 space-y-4">
           <p className="font-medium text-gray-800">Archivos leídos correctamente</p>
           <div className="grid grid-cols-3 gap-4 text-center">
             <Stat label="Productos" value={result.productos.length} />
@@ -221,7 +221,7 @@ export function UploadForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   // idle
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border bg-white p-6 space-y-5">
+      <div className="rounded-xl border bg-card p-6 space-y-5">
         <FileField
           label="Stock (XLSX)"
           accept=".xlsx,.xls"
@@ -250,7 +250,7 @@ export function UploadForm({ onSuccess }: { onSuccess?: () => void } = {}) {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg bg-white border p-3">
+    <div className="rounded-lg bg-card border p-3">
       <p className="text-2xl font-bold text-gray-900">{value.toLocaleString()}</p>
       <p className="text-xs text-gray-500 mt-0.5">{label}</p>
     </div>

@@ -2,9 +2,9 @@ import { Skeleton, PageHeaderSkeleton } from "@/components/ui/skeleton";
 
 export default function Loading() {
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <PageHeaderSkeleton />
-      <div className="space-y-4 rounded-xl border bg-white p-6">
+      <div className="space-y-4 rounded-xl border bg-card p-6">
         <Skeleton className="h-4 w-40" />
         <Skeleton className="h-9 w-full max-w-md rounded-md" />
         <Skeleton className="h-3 w-56" />

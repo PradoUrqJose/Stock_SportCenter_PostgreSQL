@@ -1,5 +1,6 @@
 import { requireRole } from "@/lib/auth";
 import { ClientSidebar } from "@/components/client/sidebar";
+import { SidebarShell } from "@/components/ui/sidebar-shell";
 
 export default async function ClientLayout({
   children,
@@ -8,9 +9,8 @@ export default async function ClientLayout({
 }) {
   const session = await requireRole("client");
   return (
-    <div className="flex h-screen">
-      <ClientSidebar session={session} />
-      <main className="flex-1 overflow-auto bg-[#f8fafc]">{children}</main>
-    </div>
+    <SidebarShell sidebar={<ClientSidebar session={session} />}>
+      {children}
+    </SidebarShell>
   );
 }

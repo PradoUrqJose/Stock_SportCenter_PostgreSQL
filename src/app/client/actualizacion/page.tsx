@@ -21,8 +21,8 @@ export default async function ClientActualizacionPage() {
 
   if (!session.tienda_id) {
     return (
-      <div className="p-8">
-        <p className="text-sm text-[#41454d]">
+      <div className="p-4 md:p-8">
+        <p className="text-sm text-muted-foreground">
           Tu usuario no tiene tienda asignada. Contacta al administrador.
         </p>
       </div>
@@ -46,9 +46,9 @@ export default async function ClientActualizacionPage() {
 
   if (!lote) {
     return (
-      <div className="p-8">
-        <h1 className="text-xl font-semibold text-[#181d26]">Actualización de precios</h1>
-        <p className="mt-2 text-sm text-[#41454d]">
+      <div className="p-4 md:p-8">
+        <h1 className="text-xl font-semibold text-foreground">Actualización de precios</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
           No hay ninguna actualización publicada en este momento.
         </p>
       </div>
@@ -78,7 +78,7 @@ export default async function ClientActualizacionPage() {
   const confirmaciones = toPlain<ConfirmacionRow>(confResult.rows);
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <ConfirmacionPanel
         confirmaciones={confirmaciones}
         loteId={lote.id}

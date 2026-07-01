@@ -15,6 +15,7 @@ import { db } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth";
 import { SidebarLink } from "./sidebar-link";
 import { SidebarLogout } from "./sidebar-logout";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 type Module = { id: string; nombre: string; ruta: string; orden: number };
 
@@ -88,6 +89,7 @@ export async function AdminSidebar({ session }: { session: SessionUser }) {
       </nav>
 
       <div className="border-t border-white/10 px-2 py-3">
+        <ThemeToggle />
         <SidebarLogout />
       </div>
     </aside>

@@ -44,7 +44,7 @@ export function BorradorReviewPanel({ loteId, createdAt, lineas, headerExtra }: 
       sortable: true,
       width: 1,
       sortValue: (r) => r.cod_universal,
-      cell: (r) => <span className="font-mono text-xs text-[#181d26]">{r.cod_universal}</span>,
+      cell: (r) => <span className="font-mono text-xs text-foreground">{r.cod_universal}</span>,
     },
     {
       key: "genero",
@@ -108,7 +108,7 @@ export function BorradorReviewPanel({ loteId, createdAt, lineas, headerExtra }: 
       cell: (r) => (
         <div className="flex items-center justify-center gap-1.5">
           <DiscountBadge value={r.descuento_antes} />
-          <span className="text-[#bbb]">→</span>
+          <span className="text-muted-foreground">→</span>
           <DiscountBadge value={r.descuento_nuevo} />
         </div>
       ),
@@ -132,9 +132,9 @@ export function BorradorReviewPanel({ loteId, createdAt, lineas, headerExtra }: 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-[#181d26]">Registro de cambios</h1>
+        <h1 className="text-xl font-semibold text-foreground">Registro de cambios</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm text-amber-800">
+          <div className="flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-500/25 bg-amber-50 dark:bg-amber-500/10 px-3 py-1.5 text-sm text-amber-800 dark:text-amber-300">
             <span>
               {`Borrador #${loteId} — ${lineas.length} producto(s) para revisar · creado ${new Date(
                 createdAt
@@ -144,7 +144,7 @@ export function BorradorReviewPanel({ loteId, createdAt, lineas, headerExtra }: 
               size="xs"
               variant="outline"
               onClick={() => router.push("/admin/actualizacion")}
-              className="border-amber-300 text-amber-800 hover:bg-amber-100"
+              className="border-amber-300 dark:border-amber-500/30 text-amber-800 dark:text-amber-300 hover:bg-amber-100"
             >
               <Pencil className="h-3.5 w-3.5" />
               Editar borrador

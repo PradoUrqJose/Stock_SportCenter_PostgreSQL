@@ -141,7 +141,7 @@ export function DescuentosMasivoForm({ borrador, publicado }: Props) {
       sortable: true,
       width: 1,
       sortValue: (r) => r.cod_universal,
-      cell: (r) => <span className="font-mono text-xs text-[#181d26]">{r.cod_universal}</span>,
+      cell: (r) => <span className="font-mono text-xs text-foreground">{r.cod_universal}</span>,
     },
     {
       key: "genero",
@@ -175,7 +175,7 @@ export function DescuentosMasivoForm({ borrador, publicado }: Props) {
       cell: (r) => (
         <div className="flex items-center justify-center gap-1.5">
           <DiscountBadge value={r.descuento_actual} />
-          <span className="text-[#bbb]">→</span>
+          <span className="text-muted-foreground">→</span>
           <DiscountBadge value={r.descuento_nuevo} />
         </div>
       ),
@@ -184,9 +184,9 @@ export function DescuentosMasivoForm({ borrador, publicado }: Props) {
 
   if (step.id === "done") {
     return (
-      <div className="rounded-xl border border-green-200 bg-green-50 p-6 space-y-3">
-        <p className="font-semibold text-green-800">Descuentos aplicados</p>
-        <p className="text-sm text-green-700">{step.msg}</p>
+      <div className="rounded-xl border border-green-200 dark:border-green-500/25 bg-green-50 dark:bg-green-500/10 p-6 space-y-3">
+        <p className="font-semibold text-green-800 dark:text-green-300">Descuentos aplicados</p>
+        <p className="text-sm text-green-700 dark:text-green-300">{step.msg}</p>
         <Button variant="outline" size="sm" onClick={reset}>Nueva carga</Button>
       </div>
     );
@@ -194,9 +194,9 @@ export function DescuentosMasivoForm({ borrador, publicado }: Props) {
 
   if (step.id === "error") {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-6 space-y-3">
-        <p className="font-semibold text-red-800">Error</p>
-        <p className="text-sm font-mono text-red-700">{step.msg}</p>
+      <div className="rounded-xl border border-red-200 dark:border-red-500/25 bg-red-50 dark:bg-red-500/10 p-6 space-y-3">
+        <p className="font-semibold text-red-800 dark:text-red-300">Error</p>
+        <p className="text-sm font-mono text-red-700 dark:text-red-300">{step.msg}</p>
         <Button variant="outline" size="sm" onClick={reset}>Reintentar</Button>
       </div>
     );
@@ -204,7 +204,7 @@ export function DescuentosMasivoForm({ borrador, publicado }: Props) {
 
   if (step.id === "matching") {
     return (
-      <div className="flex items-center justify-center gap-2 rounded-xl border bg-white p-6 text-center text-sm text-gray-500">
+      <div className="flex items-center justify-center gap-2 rounded-xl border bg-card p-6 text-center text-sm text-gray-500">
         <Loader2 className="h-4 w-4 animate-spin" />
         Buscando productos...
       </div>
@@ -213,7 +213,7 @@ export function DescuentosMasivoForm({ borrador, publicado }: Props) {
 
   if (step.id === "applying") {
     return (
-      <div className="flex items-center justify-center gap-2 rounded-xl border bg-white p-6 text-center text-sm text-gray-500">
+      <div className="flex items-center justify-center gap-2 rounded-xl border bg-card p-6 text-center text-sm text-gray-500">
         <Loader2 className="h-4 w-4 animate-spin" />
         Aplicando descuentos...
       </div>
@@ -224,17 +224,17 @@ export function DescuentosMasivoForm({ borrador, publicado }: Props) {
     const { matches, noEncontrados, invalidos } = step;
     return (
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4">
           <div className="flex items-center gap-3">
             <Button size="sm" variant="outline" onClick={() => toggleAll(matches)}>
               {selected.size === matches.length ? "Deseleccionar todo" : "Seleccionar todo"}
             </Button>
-            <span className="text-sm text-[#41454d]">
+            <span className="text-sm text-muted-foreground">
               {selected.size} de {matches.length} seleccionado(s)
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-[#41454d]">Destino:</span>
+            <span className="text-xs text-muted-foreground">Destino:</span>
             <DestinoPicker value={destino} onChange={setDestino} publicado={publicado} />
             <Button size="sm" onClick={() => handleAplicar(matches)} disabled={selected.size === 0}>
               Aplicar descuentos
@@ -245,12 +245,12 @@ export function DescuentosMasivoForm({ borrador, publicado }: Props) {
         {(noEncontrados.length > 0 || invalidos.length > 0) && (
           <div className="space-y-1">
             {noEncontrados.length > 0 && (
-              <p className="text-xs text-amber-700">
+              <p className="text-xs text-amber-700 dark:text-amber-300">
                 {noEncontrados.length} código(s) no encontrados en productos: {noEncontrados.join(", ")}
               </p>
             )}
             {invalidos.length > 0 && (
-              <p className="text-xs text-red-700">
+              <p className="text-xs text-red-700 dark:text-red-300">
                 {invalidos.length} código(s) con descuento inválido (debe ser 0-100): {invalidos.join(", ")}
               </p>
             )}
@@ -273,7 +273,7 @@ export function DescuentosMasivoForm({ borrador, publicado }: Props) {
   // idle
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border bg-white p-6 space-y-4">
+      <div className="rounded-xl border bg-card p-6 space-y-4">
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-gray-700">Archivo de descuentos (XLSX)</label>
           <input

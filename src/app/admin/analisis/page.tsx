@@ -37,11 +37,11 @@ export default async function AnalisisPage() {
   ]);
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-[#181d26]">Análisis de ventas</h1>
-          <p className="mt-1 text-sm text-[#41454d]">
+          <h1 className="text-xl font-semibold text-foreground">Análisis de ventas</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Rotación, stock muerto, rezagados, tendencias y stock único.
           </p>
         </div>

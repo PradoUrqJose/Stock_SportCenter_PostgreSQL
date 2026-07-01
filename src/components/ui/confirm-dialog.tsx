@@ -111,7 +111,7 @@ export function ConfirmDialog({
           <div
             className={cn(
               "flex items-start gap-2 rounded-md px-3 py-2 text-sm",
-              result.success ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"
+              result.success ? "bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-300" : "bg-red-50 dark:bg-red-500/10 text-red-600"
             )}
           >
             {result.success ? (

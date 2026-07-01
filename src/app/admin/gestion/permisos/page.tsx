@@ -24,9 +24,9 @@ export default async function PermisosPage() {
   );
 
   return (
-    <div className="p-8">
-      <h1 className="text-xl font-semibold text-[#181d26]">Permisos de Módulos</h1>
-      <p className="mt-1 mb-6 text-sm text-[#41454d]">
+    <div className="p-4 md:p-8">
+      <h1 className="text-xl font-semibold text-foreground">Permisos de Módulos</h1>
+      <p className="mt-1 mb-6 text-sm text-muted-foreground">
         Controla qué módulos puede ver cada usuario con rol Admin. El Administrador General siempre tiene acceso total.
       </p>
       <PermisosTable admins={admins} modules={modules} grants={grants} />

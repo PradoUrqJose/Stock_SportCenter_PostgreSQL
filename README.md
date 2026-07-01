@@ -1,36 +1,76 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Stock Sport Center — Auxiliar de Descuentos
 
-## Getting Started
+App interna para gestionar stock, descuentos y confirmaciones de tienda. Next.js (App Router) + SQLite/Turso vía `@libsql/client`.
 
-First, run the development server:
+## Stack
+
+- Next.js 16 (App Router). **Ojo:** este repo corre sobre una versión de Next.js con convenciones que difieren de lo habitual (p. ej. `middleware.ts` fue renombrado a `proxy.ts`) — antes de tocar rutas, layouts o el archivo de proxy, revisar `node_modules/next/dist/docs/`.
+- Base de datos: SQLite local (`dev.db`, vía `@libsql/client` en modo archivo) en desarrollo, o [Turso](https://turso.tech/) en producción (mismo cliente, endpoint remoto).
+- Auth: JWT propio (`jose`) en cookie de sesión, contraseñas con `bcryptjs`. Ver `src/lib/auth.ts`.
+- UI: Tailwind v4 + `@base-ui/react` + `shadcn`.
+
+## Setup
+
+### 1. Variables de entorno
+
+Crear `.env.local` en la raíz:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# SQLite local: file:dev.db — Turso: libsql://<db>.turso.io
+DATABASE_URL=file:dev.db
+DATABASE_AUTH_TOKEN=          # solo si DATABASE_URL apunta a Turso
+
+JWT_SECRET=                   # string aleatorio de al menos 32 caracteres
+
+# Credenciales del primer admin. Se crean automáticamente en el primer
+# intento de login si todavía no existe ningún administrador_general.
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Generar un `JWT_SECRET` válido:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 2. Base de datos
 
-## Learn More
+El repo no versiona `dev.db` (contiene datos de desarrollo/credenciales). Para crear una base local desde cero:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+sqlite3 dev.db < db/schema.sql
+sqlite3 dev.db < db/migrations/001_analisis_ventas.sql
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`db/schema.sql` define el esquema completo (tablas, índices y el seed de `modules` que alimenta el sidebar de admin). `db/migrations/` tiene cambios incrementales posteriores al schema base — revisar el directorio y aplicar los que falten en orden numérico.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 3. Instalar y correr
 
-## Deploy on Vercel
+```bash
+npm install
+npm run dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Abrir [http://localhost:3000](http://localhost:3000). El primer login con `ADMIN_USERNAME`/`ADMIN_PASSWORD` crea la cuenta `administrador_general`; desde ahí se gestionan el resto de usuarios, tiendas y permisos en `/admin/gestion`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Estructura
+
+- `src/app/admin/*` — panel de administración (rol `admin` / `administrador_general`).
+- `src/app/client/*` — vista de tienda (rol `client`).
+- `src/app/(auth)/login` — login.
+- `src/app/api/*` — route handlers (auth, export, lotes).
+- `src/lib/actions/*` — Server Actions por dominio (usuarios, tiendas, credenciales, permisos).
+- `src/lib/auth.ts` — sesión JWT, hashing de contraseñas, `requireRole`/`requireModule`.
+- `src/lib/rate-limit.ts` — rate limiting en memoria para login y acciones sensibles (por proceso; no persiste entre restarts ni se comparte entre instancias).
+- `src/proxy.ts` — proxy de Next (equivalente a `middleware.ts` en versiones previas): redirige por rol antes de renderizar `/admin`, `/client` y `/login`.
+- `db/schema.sql` / `db/migrations/` — esquema y migraciones de la base.
+
+## Scripts
+
+```bash
+npm run dev     # servidor de desarrollo
+npm run build   # build de producción
+npm run start   # servir el build
+npm run lint    # eslint
+```

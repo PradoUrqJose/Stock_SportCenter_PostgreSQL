@@ -150,14 +150,14 @@ export default async function ActualizacionPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-[#181d26]">Editor de descuentos</h1>
+        <h1 className="text-xl font-semibold text-foreground">Editor de descuentos</h1>
         <div className="flex flex-wrap items-center gap-3">
           {publicadoActivo && (
             <Link
               href="/admin/actualizacion-updates"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-sm font-medium text-green-800 hover:bg-green-100 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 dark:border-green-500/25 bg-green-50 dark:bg-green-500/10 px-3 py-1.5 text-sm font-medium text-green-800 dark:text-green-300 hover:bg-green-100 transition-colors"
             >
               {`Lote #${publicadoActivo.id} publicado — gestionar en Registro de cambios`}
               <ArrowRight className="h-3.5 w-3.5" />
@@ -166,7 +166,7 @@ export default async function ActualizacionPage() {
           <PageHelp items={HELP} />
         </div>
       </div>
-      <p className="mt-1 mb-6 text-sm text-[#41454d]">
+      <p className="mt-1 mb-6 text-sm text-muted-foreground">
         {productos.length > 0
           ? `${productos.length.toLocaleString("en-US")} productos · planea los descuentos del próximo lote.`
           : "Sin productos cargados. Sube el stock primero."}

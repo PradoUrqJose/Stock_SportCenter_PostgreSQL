@@ -29,11 +29,11 @@ export default async function UtilsPage() {
   const publicado = await fetchLotePublicadoActivo();
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-[#181d26]">Utilidades</h1>
-          <p className="mt-1 text-sm text-[#41454d]">
+          <h1 className="text-xl font-semibold text-foreground">Utilidades</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Carga masiva desde Excel: enlaza imágenes por código universal, o crea un borrador de
             descuentos por código universal.
           </p>

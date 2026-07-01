@@ -51,14 +51,14 @@ export function PermisosTable({
 
   if (admins.length === 0) {
     return (
-      <div className="rounded-lg border border-[#dddddd] bg-white p-8 text-center text-sm text-[#41454d]">
+      <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">
         No hay usuarios con rol Admin. Créalos en la sección Usuarios.
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-[#dddddd] bg-white">
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
       <Table>
         <TableHeader>
           <TableRow>
@@ -76,8 +76,8 @@ export function PermisosTable({
           {admins.map((u) => (
             <TableRow key={u.id}>
               <TableCell>
-                <p className="font-medium text-[#181d26]">{u.nombre}</p>
-                <p className="font-mono text-xs text-[#41454d]">{u.username}</p>
+                <p className="font-medium text-foreground">{u.nombre}</p>
+                <p className="font-mono text-xs text-muted-foreground">{u.username}</p>
               </TableCell>
               {modules.map((m) => (
                 <TableCell key={m.id} className="text-center">

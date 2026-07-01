@@ -79,14 +79,14 @@ export function ImagenesMasivoForm() {
       key: "cod_universal",
       header: "Cod. Universal",
       width: 1,
-      cell: (r) => <span className="font-mono text-xs text-[#181d26]">{r.cod_universal}</span>,
+      cell: (r) => <span className="font-mono text-xs text-foreground">{r.cod_universal}</span>,
     },
     {
       key: "enlace",
       header: "Enlace de imagen",
       width: 3,
       cell: (r) => (
-        <span className="block truncate text-xs text-[#41454d]" title={r.imagen_url}>
+        <span className="block truncate text-xs text-muted-foreground" title={r.imagen_url}>
           {r.imagen_url}
         </span>
       ),
@@ -95,9 +95,9 @@ export function ImagenesMasivoForm() {
 
   if (step.id === "done") {
     return (
-      <div className="rounded-xl border border-green-200 bg-green-50 p-6 space-y-3">
-        <p className="font-semibold text-green-800">Imágenes aplicadas</p>
-        <p className="text-sm text-green-700">
+      <div className="rounded-xl border border-green-200 dark:border-green-500/25 bg-green-50 dark:bg-green-500/10 p-6 space-y-3">
+        <p className="font-semibold text-green-800 dark:text-green-300">Imágenes aplicadas</p>
+        <p className="text-sm text-green-700 dark:text-green-300">
           {step.aplicadas} imagen(es) guardadas en la tabla de imágenes (source: sistema).
         </p>
         <Button variant="outline" size="sm" onClick={reset}>Nueva carga</Button>
@@ -107,9 +107,9 @@ export function ImagenesMasivoForm() {
 
   if (step.id === "error") {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-6 space-y-3">
-        <p className="font-semibold text-red-800">Error</p>
-        <p className="text-sm font-mono text-red-700">{step.msg}</p>
+      <div className="rounded-xl border border-red-200 dark:border-red-500/25 bg-red-50 dark:bg-red-500/10 p-6 space-y-3">
+        <p className="font-semibold text-red-800 dark:text-red-300">Error</p>
+        <p className="text-sm font-mono text-red-700 dark:text-red-300">{step.msg}</p>
         <Button variant="outline" size="sm" onClick={reset}>Reintentar</Button>
       </div>
     );
@@ -117,7 +117,7 @@ export function ImagenesMasivoForm() {
 
   if (step.id === "parsing") {
     return (
-      <div className="flex items-center justify-center gap-2 rounded-xl border bg-white p-6 text-center text-sm text-gray-500">
+      <div className="flex items-center justify-center gap-2 rounded-xl border bg-card p-6 text-center text-sm text-gray-500">
         <Loader2 className="h-4 w-4 animate-spin" />
         Leyendo archivo...
       </div>
@@ -127,7 +127,7 @@ export function ImagenesMasivoForm() {
   if (step.id === "uploading") {
     const pct = step.total > 0 ? Math.round((step.current / step.total) * 100) : 0;
     return (
-      <div className="rounded-xl border bg-white p-6 space-y-4">
+      <div className="rounded-xl border bg-card p-6 space-y-4">
         <p className="text-sm font-medium text-gray-700">Subiendo imágenes...</p>
         <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
           <div className="h-2 rounded-full bg-blue-500 transition-all duration-300" style={{ width: `${pct}%` }} />
@@ -141,8 +141,8 @@ export function ImagenesMasivoForm() {
     const { rows } = step;
     return (
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white p-4">
-          <span className="text-sm text-[#41454d]">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4">
+          <span className="text-sm text-muted-foreground">
             {rows.length} imagen(es) listas para aplicar.
           </span>
           <div className="flex gap-2">
@@ -164,7 +164,7 @@ export function ImagenesMasivoForm() {
   // idle
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border bg-white p-6 space-y-4">
+      <div className="rounded-xl border bg-card p-6 space-y-4">
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-gray-700">Archivo de imágenes (XLSX)</label>
           <input

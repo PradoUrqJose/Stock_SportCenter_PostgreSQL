@@ -85,12 +85,12 @@ export function VentasUploadForm({ onSuccess }: { onSuccess?: () => void } = {})
   if (step.id === "done") {
     const dup = step.insertadas;
     return (
-      <div className="rounded-xl border border-green-200 bg-green-50 p-6 space-y-4">
-        <p className="font-semibold text-green-800">
+      <div className="rounded-xl border border-green-200 dark:border-green-500/25 bg-green-50 dark:bg-green-500/10 p-6 space-y-4">
+        <p className="font-semibold text-green-800 dark:text-green-300">
           {step.modo === "reconstruir" ? "Histórico reconstruido" : "Ventas agregadas"}
         </p>
-        <p className="text-2xl font-bold text-green-900">{dup.toLocaleString()}</p>
-        <p className="text-xs text-green-700">
+        <p className="text-2xl font-bold text-green-900 dark:text-green-200">{dup.toLocaleString()}</p>
+        <p className="text-xs text-green-700 dark:text-green-300">
           ventas nuevas · total en histórico: {step.total.toLocaleString()}
         </p>
         <Button variant="outline" size="sm" onClick={reset}>Nueva carga</Button>
@@ -100,9 +100,9 @@ export function VentasUploadForm({ onSuccess }: { onSuccess?: () => void } = {})
 
   if (step.id === "error") {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-6 space-y-3">
-        <p className="font-semibold text-red-800">Error durante el import</p>
-        <p className="text-sm text-red-700 font-mono">{step.msg}</p>
+      <div className="rounded-xl border border-red-200 dark:border-red-500/25 bg-red-50 dark:bg-red-500/10 p-6 space-y-3">
+        <p className="font-semibold text-red-800 dark:text-red-300">Error durante el import</p>
+        <p className="text-sm text-red-700 dark:text-red-300 font-mono">{step.msg}</p>
         <Button variant="outline" size="sm" onClick={reset}>Reintentar</Button>
       </div>
     );
@@ -110,7 +110,7 @@ export function VentasUploadForm({ onSuccess }: { onSuccess?: () => void } = {})
 
   if (step.id === "parsing") {
     return (
-      <div className="flex items-center justify-center gap-2 rounded-xl border bg-white p-6 text-center text-sm text-gray-500">
+      <div className="flex items-center justify-center gap-2 rounded-xl border bg-card p-6 text-center text-sm text-gray-500">
         <Loader2 className="h-4 w-4 animate-spin" />
         Leyendo archivo...
       </div>
@@ -120,7 +120,7 @@ export function VentasUploadForm({ onSuccess }: { onSuccess?: () => void } = {})
   if (step.id === "uploading") {
     const pct = step.total > 0 ? Math.round((step.current / step.total) * 100) : null;
     return (
-      <div className="rounded-xl border bg-white p-6 space-y-4">
+      <div className="rounded-xl border bg-card p-6 space-y-4">
         <p className="text-sm font-medium text-gray-700">{step.label}</p>
         <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
           <div
@@ -141,7 +141,7 @@ export function VentasUploadForm({ onSuccess }: { onSuccess?: () => void } = {})
     const maxDate = rows.reduce((a, r) => r.fecha_venta > a ? r.fecha_venta : a, rows[0]?.fecha_venta ?? "");
     return (
       <div className="space-y-4">
-        <div className="rounded-xl border bg-white p-6 space-y-3">
+        <div className="rounded-xl border bg-card p-6 space-y-3">
           <p className="font-medium text-gray-800">Archivo leído correctamente</p>
           <p className="text-2xl font-bold text-gray-900">{rows.length.toLocaleString()}</p>
           <p className="text-xs text-gray-500">
@@ -173,7 +173,7 @@ export function VentasUploadForm({ onSuccess }: { onSuccess?: () => void } = {})
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border bg-white p-5 space-y-3">
+      <div className="rounded-xl border bg-card p-5 space-y-3">
         <div className="space-y-1.5">
           <Label className="text-sm font-medium text-gray-700">
             Reporte de ventas (XLSX) <span className="text-red-500">*</span>

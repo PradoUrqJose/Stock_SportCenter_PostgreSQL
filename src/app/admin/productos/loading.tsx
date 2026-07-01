@@ -2,7 +2,7 @@ import { PageHeaderSkeleton, FilterBarSkeleton, TableSkeleton } from "@/componen
 
 export default function Loading() {
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <PageHeaderSkeleton />
       <FilterBarSkeleton filters={3} />
       <TableSkeleton rows={10} cols={9} />

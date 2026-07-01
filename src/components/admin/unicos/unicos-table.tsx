@@ -26,7 +26,7 @@ const COLUMNS: ColDef<UnicoRow>[] = [
     width: 1,
     sortable: true,
     sortValue: (r) => r.cod_universal,
-    cell: (r) => <span className="font-mono text-xs text-[#181d26]">{r.cod_universal}</span>,
+    cell: (r) => <span className="font-mono text-xs text-foreground">{r.cod_universal}</span>,
   },
   {
     key: "marca",
@@ -79,7 +79,7 @@ const COLUMNS: ColDef<UnicoRow>[] = [
     cell: (r) => {
       const t = tiendas(r);
       return t.length > 0 ? (
-        <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-[#41454d]">{t.join(" / ")}</span>
+        <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-muted-foreground">{t.join(" / ")}</span>
       ) : (
         <span className="text-gray-400">—</span>
       );

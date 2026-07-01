@@ -28,7 +28,7 @@ export default async function LoteDetallePage({
   const volver = (
     <Link
       href="/admin/actualizacion-updates/historial"
-      className="inline-flex items-center gap-1.5 rounded-lg border border-[#dddddd] bg-white px-3 py-1.5 text-sm font-medium text-[#41454d] hover:bg-[#f8fafc] transition-colors"
+      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
     >
       <ArrowLeft className="h-3.5 w-3.5" />
       Volver al historial
@@ -44,7 +44,7 @@ export default async function LoteDetallePage({
     });
     const lineas = toPlain<BorradorLineaRow>(lineasResult.rows);
     return (
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         <BorradorReviewPanel
           loteId={lote.id}
           createdAt={lote.created_at}
@@ -57,7 +57,7 @@ export default async function LoteDetallePage({
 
   const rows = await fetchConfirmaciones(lote.id);
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <ConfirmacionesPanel
         rows={rows}
         loteId={lote.id}

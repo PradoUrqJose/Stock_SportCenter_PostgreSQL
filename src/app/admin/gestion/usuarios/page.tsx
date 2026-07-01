@@ -22,9 +22,9 @@ export default async function UsuariosPage() {
   const tiendas = toPlain<Tienda>(tiendasResult.rows);
 
   return (
-    <div className="p-8">
-      <h1 className="text-xl font-semibold text-[#181d26]">Usuarios</h1>
-      <p className="mt-1 mb-6 text-sm text-[#41454d]">
+    <div className="p-4 md:p-8">
+      <h1 className="text-xl font-semibold text-foreground">Usuarios</h1>
+      <p className="mt-1 mb-6 text-sm text-muted-foreground">
         Crea usuarios con rol Admin o Cliente. El Administrador General se configura por variable de entorno.
       </p>
       <UsuariosTable usuarios={usuarios} tiendas={tiendas} />

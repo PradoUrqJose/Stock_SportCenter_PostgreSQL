@@ -39,9 +39,9 @@ export default async function ClientProductosPage() {
   const productos = toPlain<ClientProductoRow>(result.rows);
 
   return (
-    <div className="p-8">
-      <h1 className="text-xl font-semibold text-[#181d26]">Productos</h1>
-      <p className="mt-1 mb-6 text-sm text-[#41454d]">
+    <div className="p-4 md:p-8">
+      <h1 className="text-xl font-semibold text-foreground">Productos</h1>
+      <p className="mt-1 mb-6 text-sm text-muted-foreground">
         {productos.length > 0
           ? `${productos.length.toLocaleString("en-US")} productos en el espejo del ERP.`
           : "Sin productos cargados."}

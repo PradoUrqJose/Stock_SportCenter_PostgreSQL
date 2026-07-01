@@ -212,7 +212,7 @@ export function UsuariosTable({
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-[#dddddd] bg-white">
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -227,21 +227,21 @@ export function UsuariosTable({
           <TableBody>
             {usuarios.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="py-8 text-center text-[#41454d]">
+                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                   Sin usuarios registrados
                 </TableCell>
               </TableRow>
             )}
             {usuarios.map((u) => (
               <TableRow key={u.id}>
-                <TableCell className="font-mono text-sm text-[#181d26]">{u.username}</TableCell>
+                <TableCell className="font-mono text-sm text-foreground">{u.username}</TableCell>
                 <TableCell>{u.nombre}</TableCell>
                 <TableCell>
                   <Badge variant={u.rol === "administrador_general" ? "default" : "secondary"}>
                     {ROL_LABEL[u.rol] ?? u.rol}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-sm text-[#41454d]">
+                <TableCell className="text-sm text-muted-foreground">
                   {u.tienda_nombre ?? "—"}
                 </TableCell>
                 <TableCell>

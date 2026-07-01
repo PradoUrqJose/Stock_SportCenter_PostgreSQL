@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { ThemeScript } from "@/components/ui/theme-script";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -19,7 +20,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={`${inter.variable} h-full antialiased`} suppressHydrationWarning>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <ThemeScript />
+        {children}
+      </body>
     </html>
   );
 }

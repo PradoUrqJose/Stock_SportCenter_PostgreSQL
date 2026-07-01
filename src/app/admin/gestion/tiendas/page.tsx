@@ -32,9 +32,9 @@ export default async function TiendasPage() {
   }
 
   return (
-    <div className="p-8">
-      <h1 className="text-xl font-semibold text-[#181d26]">Tiendas</h1>
-      <p className="mt-1 mb-6 text-sm text-[#41454d]">
+    <div className="p-4 md:p-8">
+      <h1 className="text-xl font-semibold text-foreground">Tiendas</h1>
+      <p className="mt-1 mb-6 text-sm text-muted-foreground">
         Gestión de tiendas. El nombre debe coincidir exactamente con el código de almacén del ERP.
       </p>
       <TiendasTable

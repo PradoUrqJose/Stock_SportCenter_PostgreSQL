@@ -158,7 +158,7 @@ export function DataTable<T>({
   return (
     <div className="space-y-3">
       {/* Table */}
-      <div className="overflow-hidden rounded-lg border border-[#dddddd] bg-white">
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
         <Table style={hasWidths ? { tableLayout: "fixed" } : undefined}>
           {hasWidths && (
             <colgroup>
@@ -196,7 +196,7 @@ export function DataTable<T>({
             {data.length === 0 ? (
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={columns.length} className="py-16 text-center">
-                  <p className="font-medium text-[#41454d]">{emptyTitle}</p>
+                  <p className="font-medium text-muted-foreground">{emptyTitle}</p>
                   {emptyDesc && (
                     <p className="mt-1 text-xs text-gray-400">{emptyDesc}</p>
                   )}

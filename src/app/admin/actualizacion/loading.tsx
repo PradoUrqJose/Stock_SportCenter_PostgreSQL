@@ -2,7 +2,7 @@ import { Skeleton, PageHeaderSkeleton, FilterBarSkeleton, TableSkeleton } from "
 
 export default function Loading() {
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <PageHeaderSkeleton withSubtitle={false} />
       <Skeleton className="mb-6 h-4 w-80" />
       <FilterBarSkeleton filters={4} />

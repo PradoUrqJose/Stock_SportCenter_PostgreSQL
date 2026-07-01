@@ -337,7 +337,7 @@ export function EditorTable({ productos, lote, lineas, lineasPublicadas, desajus
       width: 1,
       sortValue: (r) => r.cod_universal,
       cell: (r) => (
-        <span className="font-mono text-xs text-[#181d26]">{r.cod_universal}</span>
+        <span className="font-mono text-xs text-foreground">{r.cod_universal}</span>
       ),
     },
     {
@@ -470,19 +470,19 @@ export function EditorTable({ productos, lote, lineas, lineasPublicadas, desajus
         const estado = estadoDe(rowKey(r));
         if (estado === "pendiente")
           return (
-            <Badge className="border-amber-200 bg-amber-100 text-amber-800">
+            <Badge className="border-amber-200 dark:border-amber-500/25 bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300">
               pendiente
             </Badge>
           );
         if (estado === "planeado")
           return (
-            <Badge className="border-blue-200 bg-blue-100 text-blue-800">
+            <Badge className="border-blue-200 dark:border-blue-500/25 bg-blue-100 dark:bg-blue-500/15 text-blue-800 dark:text-blue-300">
               planeado
             </Badge>
           );
         if (estado === "publicado")
           return (
-            <Badge className="border-green-200 bg-green-100 text-green-800">
+            <Badge className="border-green-200 dark:border-green-500/25 bg-green-100 dark:bg-green-500/15 text-green-800 dark:text-green-300">
               publicado
             </Badge>
           );
@@ -518,14 +518,14 @@ export function EditorTable({ productos, lote, lineas, lineasPublicadas, desajus
     <div className="space-y-4">
       {/* Desajuste banner */}
       {showDesajuste && (
-        <div className="flex items-start justify-between rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+        <div className="flex items-start justify-between rounded-lg border border-orange-200 dark:border-orange-500/25 bg-orange-50 dark:bg-orange-500/10 px-4 py-3 text-sm text-orange-800 dark:text-orange-300">
           <div className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" />
             <div>
               <p className="font-medium">
                 Desajuste en lote #{desajuste!.loteId} — {desajuste!.n} producto(s) no coinciden con el ERP
               </p>
-              <p className="mt-0.5 text-xs text-orange-700">
+              <p className="mt-0.5 text-xs text-orange-700 dark:text-orange-300">
                 El baseline del ERP (último upload) difiere de los descuentos publicados en ese lote.
                 Verifica que el ZIP fue aplicado correctamente. Cuando esté resuelto, marca como resanado.
               </p>
@@ -535,7 +535,7 @@ export function EditorTable({ productos, lote, lineas, lineasPublicadas, desajus
             size="sm"
             variant="outline"
             onClick={() => setResanarOpen(true)}
-            className="shrink-0 border-orange-300 text-orange-800 hover:bg-orange-100"
+            className="shrink-0 border-orange-300 dark:border-orange-500/30 text-orange-800 dark:text-orange-300 hover:bg-orange-100"
           >
             <CheckCircle2 className="h-4 w-4" />
             Marcar resanado
@@ -557,12 +557,12 @@ export function EditorTable({ productos, lote, lineas, lineasPublicadas, desajus
         actions={
           <>
             {saveMsg && (
-              <span className={`text-xs ${saveMsg.ok ? "text-green-700" : "text-red-600"}`}>
+              <span className={`text-xs ${saveMsg.ok ? "text-green-700 dark:text-green-300" : "text-red-600"}`}>
                 {saveMsg.text}
               </span>
             )}
             {pendingCount > 0 && (
-              <span className="text-xs text-amber-700">
+              <span className="text-xs text-amber-700 dark:text-amber-300">
                 {pendingCount} cambio(s) sin guardar
               </span>
             )}
@@ -683,7 +683,7 @@ export function EditorTable({ productos, lote, lineas, lineasPublicadas, desajus
             </div>
 
             {imgMsg && (
-              <p className={`text-xs ${imgMsg.ok ? "text-green-700" : "text-red-600"}`}>
+              <p className={`text-xs ${imgMsg.ok ? "text-green-700 dark:text-green-300" : "text-red-600"}`}>
                 {imgMsg.text}
               </p>
             )}
@@ -695,7 +695,7 @@ export function EditorTable({ productos, lote, lineas, lineasPublicadas, desajus
                 variant="outline"
                 onClick={() => saveImagenUrl("")}
                 disabled={imgSaving}
-                className="border-red-200 text-red-700 hover:bg-red-50"
+                className="border-red-200 dark:border-red-500/25 text-red-700 dark:text-red-300 hover:bg-red-50"
               >
                 Quitar imagen
               </Button>

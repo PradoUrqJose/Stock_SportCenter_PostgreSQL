@@ -17,18 +17,18 @@ export default async function LotesHistorialPage() {
   );
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-[#181d26]">Historial de lotes</h1>
+        <h1 className="text-xl font-semibold text-foreground">Historial de lotes</h1>
         <Link
           href="/admin/actualizacion-updates"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[#dddddd] bg-white px-3 py-1.5 text-sm font-medium text-[#41454d] hover:bg-[#f8fafc] transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           Volver al lote actual
         </Link>
       </div>
-      <p className="mt-1 mb-6 text-sm text-[#41454d]">
+      <p className="mt-1 mb-6 text-sm text-muted-foreground">
         {lotes.length > 0
           ? `${lotes.length} lote(s) · haz clic en un lote para ver su detalle.`
           : "Aún no se ha creado ningún lote."}

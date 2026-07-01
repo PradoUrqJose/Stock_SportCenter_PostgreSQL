@@ -130,12 +130,12 @@ function LoteExclusionToggle({
       />
       <label
         htmlFor={`lote-exc-${tiendaId}`}
-        className="cursor-pointer text-sm text-[#41454d] select-none"
+        className="cursor-pointer text-sm text-muted-foreground select-none"
       >
         {optimisticExcluida ? (
           <span className="text-red-600">Excluida del lote #{loteId}</span>
         ) : (
-          <span className="text-[#41454d]">Incluida</span>
+          <span className="text-muted-foreground">Incluida</span>
         )}
       </label>
     </div>
@@ -161,13 +161,13 @@ export function TiendasTable({ tiendas, loteBorrador, exclusionesLote }: Props) 
       </div>
 
       {showLoteCol && (
-        <p className="mb-3 text-xs text-[#41454d]">
+        <p className="mb-3 text-xs text-muted-foreground">
           Hay un borrador activo (lote #{loteBorrador!.id}). Puedes excluir tiendas de esta
           publicación — no recibirán confirmaciones al publicar.
         </p>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-[#dddddd] bg-white">
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -181,14 +181,14 @@ export function TiendasTable({ tiendas, loteBorrador, exclusionesLote }: Props) 
           <TableBody>
             {tiendas.length === 0 && (
               <TableRow>
-                <TableCell colSpan={showLoteCol ? 5 : 4} className="py-8 text-center text-[#41454d]">
+                <TableCell colSpan={showLoteCol ? 5 : 4} className="py-8 text-center text-muted-foreground">
                   Sin tiendas registradas
                 </TableCell>
               </TableRow>
             )}
             {tiendas.map((t) => (
               <TableRow key={t.id}>
-                <TableCell className="font-medium text-[#181d26]">{t.nombre}</TableCell>
+                <TableCell className="font-medium text-foreground">{t.nombre}</TableCell>
                 <TableCell>
                   {t.excluida_actualizacion ? (
                     <Badge variant="secondary">Excluida siempre</Badge>
@@ -205,7 +205,7 @@ export function TiendasTable({ tiendas, loteBorrador, exclusionesLote }: Props) 
                     />
                   </TableCell>
                 )}
-                <TableCell className="text-sm text-[#41454d]">
+                <TableCell className="text-sm text-muted-foreground">
                   {t.created_at.slice(0, 10)}
                 </TableCell>
                 <TableCell>

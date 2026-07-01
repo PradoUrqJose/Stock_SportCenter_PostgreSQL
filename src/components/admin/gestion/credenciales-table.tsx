@@ -161,7 +161,7 @@ export function CredencialesTable({
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-[#dddddd] bg-white">
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -175,16 +175,16 @@ export function CredencialesTable({
           <TableBody>
             {vendedores.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-[#41454d]">
+                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
                   Sin vendedores registrados
                 </TableCell>
               </TableRow>
             )}
             {vendedores.map((v) => (
               <TableRow key={v.id}>
-                <TableCell className="font-mono font-medium text-[#181d26]">{v.codigo}</TableCell>
+                <TableCell className="font-mono font-medium text-foreground">{v.codigo}</TableCell>
                 <TableCell>{v.nombre}</TableCell>
-                <TableCell className="text-sm text-[#41454d]">{v.tienda_nombre}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{v.tienda_nombre}</TableCell>
                 <TableCell>
                   {v.activo ? (
                     <Badge variant="outline">Activo</Badge>

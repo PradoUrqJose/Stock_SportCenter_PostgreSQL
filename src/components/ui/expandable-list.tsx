@@ -5,7 +5,7 @@ import { ChevronDown } from "lucide-react";
 
 export function ExpandableList({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-[#dddddd] bg-white divide-y divide-[#f0f0f0] overflow-hidden">
+    <div className="rounded-lg border border-border bg-card divide-y divide-border overflow-hidden">
       <AnimatePresence mode="popLayout" initial={false}>
         {children}
       </AnimatePresence>
@@ -49,14 +49,14 @@ export function ExpandableRow({
             onToggle();
           }
         }}
-        className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left hover:bg-[#fafafa] transition-colors"
+        className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors"
       >
         <motion.div
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ duration: 0.2 }}
           className="shrink-0"
         >
-          <ChevronDown className="h-4 w-4 text-[#41454d]" />
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
         </motion.div>
         {header}
       </div>
@@ -69,7 +69,7 @@ export function ExpandableRow({
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="overflow-hidden border-t border-[#f0f0f0] bg-[#f8fafc]"
+            className="overflow-hidden border-t border-border bg-muted/50"
           >
             {children}
           </motion.div>
