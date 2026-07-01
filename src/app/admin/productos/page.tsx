@@ -1,6 +1,15 @@
 import { requireRole, requireModule } from "@/lib/auth";
 import { db, toPlain } from "@/lib/db";
 import { ProductosTable } from "@/components/admin/productos/productos-table";
+import { PageHelp } from "@/components/ui/page-help";
+
+const HELP = [
+  { term: "Precio lista", desc: "Precio del ERP sin descuento." },
+  { term: "Descuento", desc: "% vigente en el sistema. El color corresponde al nivel (10, 20, …, 70)." },
+  { term: "Precio dto", desc: "Precio final ya con el descuento aplicado." },
+  { term: "Stock", desc: "Unidades disponibles (suma de variantes/tallas del producto)." },
+  { term: "Actualizar stock", desc: "Sube el archivo del ERP y reemplaza el espejo de productos." },
+];
 
 export type ProductoRow = {
   cod_universal: string;
@@ -30,12 +39,17 @@ export default async function ProductosPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-xl font-semibold text-[#181d26]">Productos</h1>
-      <p className="mt-1 mb-6 text-sm text-[#41454d]">
-        {productos.length > 0
-          ? `${productos.length.toLocaleString("en-US")} productos en el espejo del ERP.`
-          : "Sin productos cargados."}
-      </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-[#181d26]">Productos</h1>
+          <p className="mt-1 text-sm text-[#41454d]">
+            {productos.length > 0
+              ? `${productos.length.toLocaleString("en-US")} productos en el espejo del ERP.`
+              : "Sin productos cargados."}
+          </p>
+        </div>
+        <PageHelp items={HELP} />
+      </div>
       <ProductosTable productos={productos} />
     </div>
   );

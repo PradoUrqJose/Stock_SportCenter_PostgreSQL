@@ -286,8 +286,8 @@ export function DescuentosMasivoForm({ borrador, publicado }: Props) {
               hover:file:bg-gray-200 cursor-pointer"
           />
           <p className="text-xs text-gray-400">
-            Columnas requeridas: Código Universal, Descuento (0-100). Un código puede afectar más de un
-            género si el producto existe en ambos.
+            Columnas requeridas: <code>cod_universal</code>, <code>descuento</code> (0-100). Un código
+            puede afectar más de un género si el producto existe en ambos.
           </p>
         </div>
         <p className="text-xs text-gray-400">

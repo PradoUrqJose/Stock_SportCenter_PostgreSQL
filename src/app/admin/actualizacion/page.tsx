@@ -4,6 +4,16 @@ import { requireRole, requireModule } from "@/lib/auth";
 import { db, toPlain } from "@/lib/db";
 import { EditorTable } from "@/components/admin/actualizacion/editor-table";
 import { fetchLotePublicadoActivo } from "@/lib/queries/lotes";
+import { PageHelp } from "@/components/ui/page-help";
+
+const HELP = [
+  { term: "Descuento ERP", desc: "El descuento que hoy tiene el producto en el sistema." },
+  { term: "Estado", desc: "Pendiente = sin cambio; Planeado = editado en el borrador; Publicado = ya en el lote activo." },
+  { term: "Semáforo de rotación", desc: "Cobertura del stock según ventas: verde = rápida, ámbar = moderada, rojo = lenta (candidato a descuento), gris = sin datos." },
+  { term: "Detalle (tooltip)", desc: "Al pasar el cursor: antigüedad del stock, vendido en 90 días y días de cobertura." },
+  { term: "Desajuste", desc: "Líneas del último lote cerrado cuyo descuento ya no coincide con el ERP." },
+  { term: "Destino", desc: "Dónde caen los cambios que guardas: al borrador o al lote publicado activo." },
+];
 
 export type LoteActivo = {
   id: number;
@@ -98,7 +108,7 @@ export default async function ActualizacionPage() {
         GROUP BY cod_universal, genero
       ),
       vel AS (
-        SELECT cod_universal, genero, SUM(cantidad) AS vendido_90d
+        SELECT cod_universal, genero, COUNT(*) AS vendido_90d
         FROM ventas
         WHERE fecha_venta >= date('now', '-90 days')
           AND cod_universal IS NOT NULL AND genero IS NOT NULL
@@ -143,15 +153,18 @@ export default async function ActualizacionPage() {
     <div className="p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold text-[#181d26]">Editor de descuentos</h1>
-        {publicadoActivo && (
-          <Link
-            href="/admin/actualizacion-updates"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-sm font-medium text-green-800 hover:bg-green-100 transition-colors"
-          >
-            {`Lote #${publicadoActivo.id} publicado — gestionar en Registro de cambios`}
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {publicadoActivo && (
+            <Link
+              href="/admin/actualizacion-updates"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 bg-green-50 px-3 py-1.5 text-sm font-medium text-green-800 hover:bg-green-100 transition-colors"
+            >
+              {`Lote #${publicadoActivo.id} publicado — gestionar en Registro de cambios`}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          )}
+          <PageHelp items={HELP} />
+        </div>
       </div>
       <p className="mt-1 mb-6 text-sm text-[#41454d]">
         {productos.length > 0

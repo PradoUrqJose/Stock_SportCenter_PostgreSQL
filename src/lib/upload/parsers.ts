@@ -19,11 +19,29 @@ function num(val: unknown): number | null {
   return isNaN(n) ? null : n;
 }
 
-// barcode format: J + AAMMDD (e.g. J230415 → 2023-04-15)
-function parseIngresofecha(barcode: string): string | null {
-  const m = barcode.match(/^J(\d{2})(\d{2})(\d{2})/i);
+// El código de barras codifica la fecha del lote de ingreso. Dos formatos coexisten
+// (prefijo = cualquier letra: J, D, P, V, I, B…):
+//   • 12 chars → Letra + AAMMDD + serial(5)  → día real (ej. J24092800086 → 2024-09-28)
+//   • 9-10 chars (antiguos) → Letra + AAMM + serial → solo año/mes, DÍA = MES
+//     (ej. J181100537 → 2018-11-11, D11081326 → 2011-08-08)
+export function parseIngresofecha(barcode: string): string | null {
+  const m = barcode.match(/^[A-Za-z](\d+)/);
   if (!m) return null;
-  const [, aa, mm, dd] = m;
+  const digits = m[1];
+  if (digits.length < 4) return null;
+
+  const aa = digits.slice(0, 2);
+  const mm = digits.slice(2, 4);
+  const month = parseInt(mm, 10);
+  if (month < 1 || month > 12) return null;
+
+  let dd = mm; // formato antiguo: día = mes
+  if (barcode.length === 12) {
+    const dayStr = digits.slice(4, 6);
+    const day = parseInt(dayStr, 10);
+    if (day >= 1 && day <= 31) dd = dayStr; // día real; si viene inválido, cae a día = mes
+  }
+
   return `${2000 + parseInt(aa, 10)}-${mm}-${dd}`;
 }
 
@@ -283,17 +301,35 @@ export async function parseVentasFile(file: File): Promise<VentaInsert[]> {
     return headerRow.findIndex((h) => patterns.some((p) => normHeader(h).includes(normHeader(p))));
   }
 
-  const idxBarras = colIdx(["COD.BARRAS", "BARRAS", "CODBARRAS", "CODBARRA"]);
-  const idxFecha  = colIdx(["FEC.VENDIDA", "FECHA", "FEC"]);
-  const idxCant   = colIdx(["CANTIDAD", "CANT", "UNIDADES", "UNID", "QTY"]);  // VEND is a boolean flag, not quantity
-  const idxImporte = colIdx(["VENTA", "IMPORTE", "TOTAL", "MONTO", "VALOR"]);
+  const idxBarras   = colIdx(["COD.BARRAS", "BARRAS", "CODBARRAS", "CODBARRA"]);
+  const idxFecha    = colIdx(["FEC.VENDIDA", "FECHA", "FEC"]);
+  const idxUniv     = colIdx(["COD.UNIV.", "CODUNIV", "CODUNIVERSAL"]);
+  const idxGenero   = colIdx(["GENERO"]);
+  const idxVend     = colIdx(["VEND"]);        // flag S/N — solo cuenta lo vendido
+  const idxIzq      = colIdx(["IZQ"]);
+  const idxDer      = colIdx(["DER"]);
+  const idxMarca    = colIdx(["MARCA"]);
+  const idxModelo   = colIdx(["MODELO"]);
+  const idxCateg    = colIdx(["CATEGORIA"]);
+  const idxGrupo    = colIdx(["GRUPO"]);
+  const idxColor    = colIdx(["COLOR"]);
+  const idxTalla    = colIdx(["TALLA"]);
+  const idxCompra   = colIdx(["COMPRA"]);
+  const idxLista    = colIdx(["LISTA"]);
+  const idxImporte  = colIdx(["VENTA", "IMPORTE", "TOTAL", "MONTO", "VALOR"]);
 
   if (idxBarras === -1) throw new Error("No se encontró columna de código de barras.");
   if (idxFecha  === -1) throw new Error("No se encontró columna de fecha.");
 
+  const at = (row: unknown[], idx: number): unknown => (idx !== -1 ? row[idx] : null);
+
   const result: VentaInsert[] = [];
   for (const row of dataRows) {
     if (!Array.isArray(row)) continue;
+
+    // Solo unidades efectivamente vendidas (VEND='S'). Si no hay columna VEND,
+    // la fecha de venta válida hace de filtro.
+    if (idxVend !== -1 && str(row[idxVend]) !== "S") continue;
 
     const cod_barras = str(row[idxBarras]);
     if (!cod_barras) continue;
@@ -301,14 +337,22 @@ export async function parseVentasFile(file: File): Promise<VentaInsert[]> {
     const fecha_venta = parseDate(row[idxFecha]);
     if (!fecha_venta) continue;
 
-    const cantVal = idxCant !== -1 ? num(row[idxCant]) : null;
-    const cantidad = cantVal != null && cantVal > 0 ? Math.round(cantVal) : 1;
-
     result.push({
       cod_barras,
+      cod_universal: str(at(row, idxUniv)),
+      genero: str(at(row, idxGenero)),
       fecha_venta,
-      cantidad,
-      importe: idxImporte !== -1 ? num(row[idxImporte]) : null,
+      ingreso_fecha: parseIngresofecha(cod_barras),
+      almacen: str(at(row, idxIzq)) ?? str(at(row, idxDer)),
+      marca: str(at(row, idxMarca)),
+      modelo: str(at(row, idxModelo)),
+      categoria: str(at(row, idxCateg)),
+      grupo: str(at(row, idxGrupo)),
+      color: str(at(row, idxColor)),
+      talla: str(at(row, idxTalla)),
+      precio_compra: num(at(row, idxCompra)),
+      precio_lista: num(at(row, idxLista)),
+      importe: num(at(row, idxImporte)),
     });
   }
 

@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   PackageCheck,
   UploadCloud,
+  BarChart3,
 } from "lucide-react";
 import { db } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth";
@@ -24,6 +25,7 @@ const ICONS: Record<string, React.ReactNode> = {
   registro: <ClipboardList className="h-4 w-4" />,
   reposicion: <PackageCheck className="h-4 w-4" />,
   utils: <UploadCloud className="h-4 w-4" />,
+  analisis: <BarChart3 className="h-4 w-4" />,
   tiendas: <Store className="h-4 w-4" />,
   usuarios: <Users className="h-4 w-4" />,
   credenciales: <KeyRound className="h-4 w-4" />,

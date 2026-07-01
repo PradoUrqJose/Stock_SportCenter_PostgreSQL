@@ -110,29 +110,44 @@ export async function clearVentas(): Promise<ActionResult> {
   }
 }
 
-export async function uploadVentasBatch(rows: VentaInsert[]): Promise<ActionResult> {
+// Append incremental. INSERT OR IGNORE deduplica por cod_barras (unidad ya cargada).
+// Devuelve cuántas filas eran nuevas (rowsAffected suma solo inserciones reales).
+export async function uploadVentasBatch(
+  rows: VentaInsert[]
+): Promise<ActionResult<{ insertadas: number }>> {
   try {
     await requireRole("admin", "administrador_general");
+    let insertadas = 0;
     for (const chunk of chunks(rows, CHUNK)) {
-      await db.batch(
+      const results = await db.batch(
         chunk.map((r) => ({
-          sql: `INSERT INTO ventas (cod_barras, fecha_venta, cantidad, importe)
-                VALUES (?, ?, ?, ?)`,
-          args: [r.cod_barras, r.fecha_venta, r.cantidad, r.importe ?? null],
+          sql: `INSERT OR IGNORE INTO ventas
+                  (cod_barras, cod_universal, genero, fecha_venta, ingreso_fecha, almacen,
+                   marca, modelo, categoria, grupo, color, talla, precio_compra, precio_lista, importe)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            r.cod_barras, r.cod_universal, r.genero, r.fecha_venta, r.ingreso_fecha, r.almacen,
+            r.marca, r.modelo, r.categoria, r.grupo, r.color, r.talla,
+            r.precio_compra, r.precio_lista, r.importe,
+          ],
         })),
         "write"
       );
+      insertadas += results.reduce((sum, r) => sum + (r.rowsAffected ?? 0), 0);
     }
-    return { success: true, msg: `${rows.length} ventas insertadas` };
+    return { success: true, msg: `${insertadas} ventas nuevas`, data: { insertadas } };
   } catch (e) {
     return { success: false, msg: String(e) };
   }
 }
 
-export async function finalizeVentasUpload(totalFilas: number): Promise<ActionResult> {
+export async function finalizeVentasUpload(
+  totalFilas: number
+): Promise<ActionResult<{ total: number }>> {
   try {
     const session = await requireRole("admin", "administrador_general");
-    // Populate cod_universal + genero from variantes via barcode join
+    // Fallback best-effort: rellena cod_universal/genero desde variantes solo si el
+    // archivo no los trajo (la unidad podría seguir en stock por re-ingreso).
     await db.execute({
       sql: `UPDATE ventas
             SET cod_universal = (SELECT cod_universal FROM variantes WHERE variantes.cod_barras = ventas.cod_barras LIMIT 1),
@@ -144,9 +159,12 @@ export async function finalizeVentasUpload(totalFilas: number): Promise<ActionRe
       sql: `INSERT INTO sync_log (tipo, filas, ejecutado_by) VALUES ('ventas', ?, ?)`,
       args: [totalFilas, session.id],
     });
+    const totalRes = await db.execute(`SELECT COUNT(*) AS n FROM ventas`);
+    const total = (totalRes.rows[0].n as number) ?? 0;
     revalidatePath("/admin");
     revalidatePath("/admin/actualizacion");
-    return { success: true, msg: "Import de ventas registrado" };
+    revalidatePath("/admin/analisis");
+    return { success: true, msg: "Import de ventas registrado", data: { total } };
   } catch (e) {
     return { success: false, msg: String(e) };
   }

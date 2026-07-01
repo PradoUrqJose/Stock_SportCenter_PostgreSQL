@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable, type ColDef } from "@/components/ui/data-table";
+import { ProductImageThumb } from "@/components/ui/product-image-thumb";
 import { parseImagenesMasivoFile, type ImagenMasivoRow } from "@/lib/masivo/parsers";
 import { subirImagenesMasivoBatch } from "@/lib/actions/utils";
 
@@ -68,13 +69,20 @@ export function ImagenesMasivoForm() {
 
   const columns: ColDef<ImagenMasivoRow>[] = [
     {
+      key: "imagen_url",
+      header: "Imagen",
+      width: 1,
+      align: "center",
+      cell: (r) => <ProductImageThumb imagenUrl={r.imagen_url} codigo={r.cod_universal} />,
+    },
+    {
       key: "cod_universal",
       header: "Cod. Universal",
       width: 1,
       cell: (r) => <span className="font-mono text-xs text-[#181d26]">{r.cod_universal}</span>,
     },
     {
-      key: "imagen_url",
+      key: "enlace",
       header: "Enlace de imagen",
       width: 3,
       cell: (r) => (
@@ -169,7 +177,8 @@ export function ImagenesMasivoForm() {
               hover:file:bg-gray-200 cursor-pointer"
           />
           <p className="text-xs text-gray-400">
-            Columnas requeridas: Código Universal, Enlace de Imagen (URL http/https).
+            Columnas requeridas: <code>CODE</code> (código universal), <code>ENLACE</code> (URL
+            http/https de la imagen).
           </p>
         </div>
         <p className="text-xs text-gray-400">

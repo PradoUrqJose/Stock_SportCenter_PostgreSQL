@@ -35,8 +35,19 @@ export type BuildResult = {
 };
 
 export type VentaInsert = {
-  cod_barras: string;
+  cod_barras: string; // serial por unidad → clave de dedup
+  cod_universal: string | null;
+  genero: string | null;
   fecha_venta: string; // ISO YYYY-MM-DD
-  cantidad: number;
+  ingreso_fecha: string | null; // derivada del barcode
+  almacen: string | null;
+  marca: string | null;
+  modelo: string | null;
+  categoria: string | null;
+  grupo: string | null;
+  color: string | null;
+  talla: string | null;
+  precio_compra: number | null;
+  precio_lista: number | null;
   importe: number | null;
 };

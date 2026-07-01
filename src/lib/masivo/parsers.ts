@@ -13,7 +13,7 @@ function readAsBuffer(file: File): Promise<ArrayBuffer> {
 }
 
 function normHeader(s: string) {
-  return s.replace(/[\s.]+/g, "").toUpperCase();
+  return s.replace(/[\s._]+/g, "").toUpperCase();
 }
 
 function findCol(headers: string[], patterns: string[]): string | undefined {
@@ -37,10 +37,10 @@ export async function parseImagenesMasivoFile(file: File): Promise<ImagenMasivoR
   if (rows.length === 0) throw new Error("El archivo no tiene filas.");
   const headers = Object.keys(rows[0]);
 
-  const colCod = findCol(headers, ["CODIGOUNIVERSAL", "CODUNIVERSAL"]);
-  const colUrl = findCol(headers, ["ENLACEDEIMAGEN", "ENLACEIMAGEN", "IMAGEN", "URL", "FOTO"]);
-  if (!colCod) throw new Error("No se encontró la columna 'Código Universal'.");
-  if (!colUrl) throw new Error("No se encontró la columna 'Enlace de Imagen'.");
+  const colCod = findCol(headers, ["CODE"]);
+  const colUrl = findCol(headers, ["ENLACE"]);
+  if (!colCod) throw new Error("No se encontró la columna 'CODE'.");
+  if (!colUrl) throw new Error("No se encontró la columna 'ENLACE'.");
 
   const map = new Map<string, string>();
   for (const row of rows) {

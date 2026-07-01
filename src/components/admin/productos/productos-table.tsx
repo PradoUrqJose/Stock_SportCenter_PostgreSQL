@@ -15,7 +15,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { UploadForm } from "@/components/admin/upload/upload-form";
-import { VentasUploadForm } from "@/components/admin/upload/ventas-upload-form";
 import type { ProductoRow } from "@/app/admin/productos/page";
 
 function precioConDescuento(r: ProductoRow): number {
@@ -139,7 +138,6 @@ const FILTERS: SelectFilterDef<ProductoRow>[] = [
 
 export function ProductosTable({ productos }: { productos: ProductoRow[] }) {
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [ventasOpen, setVentasOpen] = useState(false);
   const router = useRouter();
 
   return (
@@ -151,10 +149,6 @@ export function ProductosTable({ productos }: { productos: ProductoRow[] }) {
         getSearchText={(r) => `${r.cod_universal} ${r.marca ?? ""} ${r.modelo ?? ""}`}
         actions={
           <>
-            <Button size="sm" variant="outline" onClick={() => setVentasOpen(true)}>
-              <Upload className="h-4 w-4" />
-              Importar ventas
-            </Button>
             <Button size="sm" onClick={() => setUploadOpen(true)}>
               <Upload className="h-4 w-4" />
               Actualizar stock
@@ -186,16 +180,6 @@ export function ProductosTable({ productos }: { productos: ProductoRow[] }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={ventasOpen} onOpenChange={(open) => { if (!open) setVentasOpen(false); }}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Importar ventas</DialogTitle>
-          </DialogHeader>
-          {ventasOpen && (
-            <VentasUploadForm onSuccess={() => { router.refresh(); setVentasOpen(false); }} />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

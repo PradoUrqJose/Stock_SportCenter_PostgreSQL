@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
 import { db, toPlain } from "@/lib/db";
 import { fetchLotePublicadoActivo } from "@/lib/queries/lotes";
+import { PageHelp } from "@/components/ui/page-help";
 
 type KpiRow = {
   n_productos: number;
@@ -108,9 +109,20 @@ export default async function AdminPage() {
 
   return (
     <div className="p-8 space-y-8">
-      <div>
-        <h1 className="text-xl font-semibold text-[#181d26]">Dashboard</h1>
-        <p className="mt-1 text-sm text-[#41454d]">Bienvenido, {session?.nombre}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-[#181d26]">Dashboard</h1>
+          <p className="mt-1 text-sm text-[#41454d]">Bienvenido, {session?.nombre}</p>
+        </div>
+        <PageHelp
+          items={[
+            { term: "Productos", desc: "Combinaciones únicas de código universal + género en el espejo del ERP." },
+            { term: "Variantes", desc: "Cada talla/código de barras individual de un producto." },
+            { term: "Stock total", desc: "Suma de unidades disponibles en almacén." },
+            { term: "Con descuento ERP", desc: "Productos que hoy tienen algún descuento activo en el sistema." },
+            { term: "Lote activo", desc: "El borrador o lote publicado de descuentos en curso." },
+          ]}
+        />
       </div>
 
       {/* KPI cards */}

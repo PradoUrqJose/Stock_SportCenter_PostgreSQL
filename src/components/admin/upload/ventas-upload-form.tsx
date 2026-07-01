@@ -23,8 +23,10 @@ type Step =
   | { id: "parsing" }
   | { id: "preview"; rows: VentaInsert[] }
   | { id: "uploading"; label: string; current: number; total: number }
-  | { id: "done"; filas: number }
+  | { id: "done"; insertadas: number; total: number; modo: Modo }
   | { id: "error"; msg: string };
+
+type Modo = "agregar" | "reconstruir";
 
 export function VentasUploadForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   const [step, setStep] = useState<Step>({ id: "idle" });
@@ -36,25 +38,30 @@ export function VentasUploadForm({ onSuccess }: { onSuccess?: () => void } = {})
     setStep({ id: "parsing" });
     try {
       const rows = await parseVentasFile(file);
+      if (rows.length === 0) throw new Error("No se encontraron ventas válidas (VEND='S' con fecha).");
       setStep({ id: "preview", rows });
     } catch (e) {
       setStep({ id: "error", msg: String(e) });
     }
   }
 
-  async function handleUpload(rows: VentaInsert[]) {
+  async function handleUpload(rows: VentaInsert[], modo: Modo) {
     try {
-      setStep({ id: "uploading", label: "Limpiando ventas anteriores...", current: 0, total: 0 });
-      const clear = await clearVentas();
-      if (!clear.success) throw new Error(clear.msg);
+      if (modo === "reconstruir") {
+        setStep({ id: "uploading", label: "Borrando histórico anterior...", current: 0, total: 0 });
+        const clear = await clearVentas();
+        if (!clear.success) throw new Error(clear.msg);
+      }
 
       const batches = chunkArray(rows, BATCH_SIZE);
+      let insertadas = 0;
       let done = 0;
       for (let i = 0; i < batches.length; i += CONCURRENCY) {
         const group = batches.slice(i, i + CONCURRENCY);
         const results = await Promise.all(group.map((b) => uploadVentasBatch(b)));
         const failed = results.find((r) => !r.success);
         if (failed) throw new Error(failed.msg);
+        insertadas += results.reduce((sum, r) => sum + (r.data?.insertadas ?? 0), 0);
         done = Math.min(i + CONCURRENCY, batches.length);
         setStep({ id: "uploading", label: "Subiendo ventas", current: done, total: batches.length });
       }
@@ -63,7 +70,7 @@ export function VentasUploadForm({ onSuccess }: { onSuccess?: () => void } = {})
       const fin = await finalizeVentasUpload(rows.length);
       if (!fin.success) throw new Error(fin.msg);
 
-      setStep({ id: "done", filas: rows.length });
+      setStep({ id: "done", insertadas, total: fin.data?.total ?? 0, modo });
       onSuccess?.();
     } catch (e) {
       setStep({ id: "error", msg: String(e) });
@@ -76,11 +83,16 @@ export function VentasUploadForm({ onSuccess }: { onSuccess?: () => void } = {})
   }
 
   if (step.id === "done") {
+    const dup = step.insertadas;
     return (
       <div className="rounded-xl border border-green-200 bg-green-50 p-6 space-y-4">
-        <p className="font-semibold text-green-800">Import completado</p>
-        <p className="text-2xl font-bold text-green-900">{step.filas.toLocaleString()}</p>
-        <p className="text-xs text-green-700">ventas importadas</p>
+        <p className="font-semibold text-green-800">
+          {step.modo === "reconstruir" ? "Histórico reconstruido" : "Ventas agregadas"}
+        </p>
+        <p className="text-2xl font-bold text-green-900">{dup.toLocaleString()}</p>
+        <p className="text-xs text-green-700">
+          ventas nuevas · total en histórico: {step.total.toLocaleString()}
+        </p>
         <Button variant="outline" size="sm" onClick={reset}>Nueva carga</Button>
       </div>
     );
@@ -133,15 +145,27 @@ export function VentasUploadForm({ onSuccess }: { onSuccess?: () => void } = {})
           <p className="font-medium text-gray-800">Archivo leído correctamente</p>
           <p className="text-2xl font-bold text-gray-900">{rows.length.toLocaleString()}</p>
           <p className="text-xs text-gray-500">
-            líneas de venta · {minDate} → {maxDate}
+            ventas en el archivo · {minDate} → {maxDate}
           </p>
           <p className="text-xs text-gray-400">
-            Se borrarán todas las ventas anteriores y se reemplazarán con estas.
+            Al agregar, las unidades ya cargadas (mismo código de barras) se ignoran — no hay doble
+            conteo.
           </p>
         </div>
-        <div className="flex gap-3">
-          <Button onClick={() => handleUpload(rows)}>Importar ventas</Button>
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={() => handleUpload(rows, "agregar")}>Agregar al histórico</Button>
           <Button variant="outline" onClick={reset}>Cancelar</Button>
+          <Button
+            variant="ghost"
+            className="text-red-600 hover:bg-red-50 hover:text-red-700 ml-auto"
+            onClick={() => {
+              if (confirm("Esto BORRA todo el histórico de ventas y lo reemplaza solo con este archivo. ¿Continuar?")) {
+                handleUpload(rows, "reconstruir");
+              }
+            }}
+          >
+            Reconstruir (borrar todo)
+          </Button>
         </div>
       </div>
     );
@@ -164,7 +188,8 @@ export function VentasUploadForm({ onSuccess }: { onSuccess?: () => void } = {})
               hover:file:bg-gray-200 cursor-pointer"
           />
           <p className="text-xs text-gray-400">
-            Columnas requeridas: código de barras, fecha, cantidad. Opcional: importe.
+            Se leen COD.BARRAS, COD.UNIV., FEC.VENDIDA y atributos (marca, categoría, precios,
+            almacén). Solo se cargan filas con VEND=&apos;S&apos;. La carga es incremental.
           </p>
         </div>
       </div>

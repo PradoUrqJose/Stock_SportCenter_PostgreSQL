@@ -4,6 +4,14 @@ import { fetchLotePublicadoActivo } from "@/lib/queries/lotes";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ImagenesMasivoForm } from "@/components/admin/utils/imagenes-masivo-form";
 import { DescuentosMasivoForm } from "@/components/admin/utils/descuentos-masivo-form";
+import { PageHelp } from "@/components/ui/page-help";
+
+const HELP = [
+  { term: "Imágenes", desc: "Excel con columnas CODE y ENLACE. Se previsualizan las imágenes antes de aplicarlas al catálogo." },
+  { term: "Descuentos", desc: "Excel con cod_universal y descuento. Muestra antes (ERP) vs después (Excel) por producto." },
+  { term: "Selección", desc: "Marca las filas que quieres aplicar; el resto se ignora." },
+  { term: "Guardar", desc: "Crea o actualiza un borrador de descuentos con los códigos seleccionados." },
+];
 
 export default async function UtilsPage() {
   const session = await requireRole("admin", "administrador_general");
@@ -22,11 +30,16 @@ export default async function UtilsPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-xl font-semibold text-[#181d26]">Utilidades</h1>
-      <p className="mt-1 mb-6 text-sm text-[#41454d]">
-        Carga masiva desde Excel: enlaza imágenes por código universal, o crea un borrador de
-        descuentos por código universal.
-      </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-[#181d26]">Utilidades</h1>
+          <p className="mt-1 text-sm text-[#41454d]">
+            Carga masiva desde Excel: enlaza imágenes por código universal, o crea un borrador de
+            descuentos por código universal.
+          </p>
+        </div>
+        <PageHelp items={HELP} />
+      </div>
       <Tabs defaultValue="imagenes">
         <TabsList>
           <TabsTrigger value="imagenes">Imágenes</TabsTrigger>
