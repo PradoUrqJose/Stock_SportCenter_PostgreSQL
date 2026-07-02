@@ -45,7 +45,53 @@ sqlite3 dev.db < db/migrations/001_analisis_ventas.sql
 
 `db/schema.sql` define el esquema completo (tablas, índices y el seed de `modules` que alimenta el sidebar de admin). `db/migrations/` tiene cambios incrementales posteriores al schema base — revisar el directorio y aplicar los que falten en orden numérico.
 
-### 3. Instalar y correr
+Corré esto desde la raíz del proyecto:
+
+$env:DATABASE_URL="libsql://TU-BASE.turso.io"
+$env:DATABASE_AUTH_TOKEN="TU-TOKEN" node apply-schema.mjs db\schema.sql
+
+Cuando termine (te tiene que imprimir OK: db\schema.sql aplicado.), borralo:
+
+Remove-Item apply-schema.mjs
+
+### 4. Producción — Turso + Vercel
+
+```bash
+# 1. Instalar Turso CLI (https://turso.tech/install)
+winget install Turso       # Windows
+# o: curl -sSfL https://get.turso.tech | bash   # Linux/macOS
+
+turso auth login
+
+# 2. Crear la base
+turso db create stock-descuentos
+
+# 3. Obtener credenciales
+turso db show stock-descuentos --url
+turso db tokens create stock-descuentos
+
+# 4. Aplicar schema (base nueva)
+turso db shell stock-descuentos < db/schema.sql
+
+# Si la base ya tenía datos previos, aplicar solo migraciones nuevas:
+# turso db shell stock-descuentos < db/migrations/002_rate_limits.sql
+```
+
+Configurar en **Vercel → Project Settings → Environment Variables** (solo Production):
+
+| Variable              | Valor                                                                                                      |
+| --------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`        | `libsql://<tu-db>.turso.io` (del paso 3)                                                                   |
+| `DATABASE_AUTH_TOKEN` | token del paso 3                                                                                           |
+| `JWT_SECRET`          | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` — **distinto al de desarrollo** |
+| `ADMIN_USERNAME`      | ej. `admin`                                                                                                |
+| `ADMIN_PASSWORD`      | contraseña del admin general                                                                               |
+
+El primer deploy y login con `ADMIN_USERNAME`/`ADMIN_PASSWORD` crea la cuenta `administrador_general` automáticamente.
+
+---
+
+### 5. Instalar y correr
 
 ```bash
 npm install

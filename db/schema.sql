@@ -174,6 +174,15 @@ CREATE INDEX IF NOT EXISTS idx_ventas_marca     ON ventas(marca);
 CREATE INDEX IF NOT EXISTS idx_ventas_categoria ON ventas(categoria);
 CREATE INDEX IF NOT EXISTS idx_ventas_ingreso   ON ventas(ingreso_fecha);
 
+-- rate-limit persistido (src/lib/rate-limit.ts). Se crea aquí en su forma final
+-- (ver db/migrations/002_rate_limits.sql) para que un setup desde cero no
+-- dependa de ejecutar esa migración únicamente por su efecto de esquema.
+CREATE TABLE IF NOT EXISTS rate_limits (
+  clave    TEXT PRIMARY KEY,
+  intentos INTEGER NOT NULL DEFAULT 1,
+  reset_at INTEGER NOT NULL
+);
+
 -- Módulos del sidebar admin (referenciados por admin_modules). Datos de configuración,
 -- no datos de negocio: van seedeados junto con el schema.
 INSERT OR IGNORE INTO modules (id, nombre, ruta, orden) VALUES

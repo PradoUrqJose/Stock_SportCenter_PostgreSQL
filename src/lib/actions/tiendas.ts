@@ -26,7 +26,7 @@ function normalize(nombre: string) {
 
 export async function crearTienda(nombre: string): Promise<ActionResult> {
   if (!(await guard())) return { success: false, msg: "Sin permisos" };
-  if (!rateLimit(await getIP(), 30, 60_000)) return { success: false, msg: "Demasiadas solicitudes" };
+  if (!(await rateLimit(await getIP(), 30, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
 
   const n = normalize(nombre);
   if (!n) return { success: false, msg: "Nombre requerido" };
@@ -51,7 +51,7 @@ export async function editarTienda(
   excluida: boolean
 ): Promise<ActionResult> {
   if (!(await guard())) return { success: false, msg: "Sin permisos" };
-  if (!rateLimit(await getIP(), 30, 60_000)) return { success: false, msg: "Demasiadas solicitudes" };
+  if (!(await rateLimit(await getIP(), 30, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
 
   const n = normalize(nombre);
   if (!n) return { success: false, msg: "Nombre requerido" };
@@ -77,7 +77,7 @@ export async function toggleLoteExclusion(
 ): Promise<ActionResult> {
   const s = await guard();
   if (!s) return { success: false, msg: "Sin permisos" };
-  if (!rateLimit(await getIP(), 60, 60_000)) return { success: false, msg: "Demasiadas solicitudes" };
+  if (!(await rateLimit(await getIP(), 60, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
 
   try {
     if (excluir) {
@@ -101,7 +101,7 @@ export async function toggleLoteExclusion(
 
 export async function eliminarTienda(id: string): Promise<ActionResult> {
   if (!(await guard())) return { success: false, msg: "Sin permisos" };
-  if (!rateLimit(await getIP(), 30, 60_000)) return { success: false, msg: "Demasiadas solicitudes" };
+  if (!(await rateLimit(await getIP(), 30, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
 
   try {
     await db.execute({ sql: "DELETE FROM tiendas WHERE id=?", args: [id] });

@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
     req.headers.get("x-real-ip") ??
     "unknown";
 
-  if (!rateLimit(ip, 10, 60_000)) {
+  if (!(await rateLimit(ip, 10, 60_000))) {
     return NextResponse.json(
       { success: false, msg: "Demasiados intentos. Espera un momento." },
       { status: 429 }

@@ -45,3 +45,9 @@ next-env.d.ts
 *.db-journal
 *.db-wal
 *.db-shm
+
+# scripts de verificación ad-hoc y transcripts de sesión volcados a la raíz
+/verify-tmp*.mjs
+/*.txt
+
+.vercel

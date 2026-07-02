@@ -26,7 +26,7 @@ export async function crearVendedor(data: {
   tienda_id: string;
 }): Promise<ActionResult> {
   if (!(await guard())) return { success: false, msg: "Sin permisos" };
-  if (!rateLimit(await getIP(), 30, 60_000)) return { success: false, msg: "Demasiadas solicitudes" };
+  if (!(await rateLimit(await getIP(), 30, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
 
   const nombre = data.nombre.trim();
   const codigo = data.codigo.trim().toUpperCase();
@@ -56,7 +56,7 @@ export async function editarVendedor(
   }
 ): Promise<ActionResult> {
   if (!(await guard())) return { success: false, msg: "Sin permisos" };
-  if (!rateLimit(await getIP(), 30, 60_000)) return { success: false, msg: "Demasiadas solicitudes" };
+  if (!(await rateLimit(await getIP(), 30, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
 
   const nombre = data.nombre.trim();
   const codigo = data.codigo.trim().toUpperCase();
@@ -78,7 +78,7 @@ export async function editarVendedor(
 
 export async function eliminarVendedor(id: number): Promise<ActionResult> {
   if (!(await guard())) return { success: false, msg: "Sin permisos" };
-  if (!rateLimit(await getIP(), 30, 60_000)) return { success: false, msg: "Demasiadas solicitudes" };
+  if (!(await rateLimit(await getIP(), 30, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
 
   await db.execute({ sql: "DELETE FROM vendedores WHERE id=?", args: [id] });
 

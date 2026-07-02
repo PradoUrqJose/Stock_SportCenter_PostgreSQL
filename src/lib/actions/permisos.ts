@@ -26,7 +26,7 @@ export async function toggleModulo(
   granted: boolean
 ): Promise<ActionResult> {
   if (!(await guard())) return { success: false, msg: "Sin permisos" };
-  if (!rateLimit(await getIP(), 60, 60_000)) return { success: false, msg: "Demasiadas solicitudes" };
+  if (!(await rateLimit(await getIP(), 60, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
 
   if (granted) {
     await db.execute({

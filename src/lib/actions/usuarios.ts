@@ -28,7 +28,7 @@ export async function crearUsuario(data: {
   tienda_id: string | null;
 }): Promise<ActionResult> {
   if (!(await guard())) return { success: false, msg: "Sin permisos" };
-  if (!rateLimit(await getIP(), 20, 60_000)) return { success: false, msg: "Demasiadas solicitudes" };
+  if (!(await rateLimit(await getIP(), 20, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
 
   const username = data.username.trim().toLowerCase();
   const nombre = data.nombre.trim();
@@ -72,7 +72,7 @@ export async function editarUsuario(
   }
 ): Promise<ActionResult> {
   if (!(await guard())) return { success: false, msg: "Sin permisos" };
-  if (!rateLimit(await getIP(), 20, 60_000)) return { success: false, msg: "Demasiadas solicitudes" };
+  if (!(await rateLimit(await getIP(), 20, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
 
   const username = data.username.trim().toLowerCase();
   const nombre = data.nombre.trim();
@@ -108,7 +108,7 @@ export async function editarUsuario(
 export async function eliminarUsuario(id: string): Promise<ActionResult> {
   const session = await guard();
   if (!session) return { success: false, msg: "Sin permisos" };
-  if (!rateLimit(await getIP(), 20, 60_000)) return { success: false, msg: "Demasiadas solicitudes" };
+  if (!(await rateLimit(await getIP(), 20, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
   if (id === session.id) return { success: false, msg: "No puedes eliminarte a ti mismo" };
 
   await db.execute({
