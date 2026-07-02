@@ -54,100 +54,113 @@ export type RotacionRow = {
 };
 
 export default async function ActualizacionPage() {
+  const requestStart = Date.now();
   const session = await requireRole("admin", "administrador_general");
   await requireModule(session, "actualizacion");
+  console.log(`[PERF][actualizacion] auth ${Date.now() - requestStart}ms`);
 
-  const loteResult = await db.execute({
-    sql: `SELECT id, estado, created_at FROM lotes WHERE estado = 'borrador' ORDER BY id DESC LIMIT 1`,
-    args: [],
-  });
+  const t1 = Date.now();
+  const [loteResult, publicadoActivo, prodResult, ventasCountResult, cerradoResult] =
+    await Promise.all([
+      db.execute({
+        sql: `SELECT id, estado, created_at FROM lotes WHERE estado = 'borrador' ORDER BY id DESC LIMIT 1`,
+        args: [],
+      }),
+      fetchLotePublicadoActivo(),
+      db.execute(
+        `SELECT p.cod_universal, p.genero, p.marca, p.modelo, p.categoria, p.grupo, p.color,
+                p.precio_lista, p.descuento, pi.imagen_url
+         FROM productos p
+         LEFT JOIN producto_imagenes pi ON pi.cod_universal = p.cod_universal
+         ORDER BY p.marca, p.modelo`
+      ),
+      db.execute(`SELECT COUNT(*) AS n FROM ventas`),
+      db.execute({
+        sql: `SELECT id FROM lotes WHERE estado='cerrado' AND resanado_at IS NULL ORDER BY id DESC LIMIT 1`,
+        args: [],
+      }),
+    ]);
+  console.log(`[PERF][actualizacion] oleada 1 (5 queries) ${Date.now() - t1}ms`);
+
   const lote: LoteActivo =
     loteResult.rows.length > 0
       ? toPlain<NonNullable<LoteActivo>>(loteResult.rows)[0]
       : null;
 
-  const publicadoActivo = await fetchLotePublicadoActivo();
-
-  const prodResult = await db.execute(
-    `SELECT p.cod_universal, p.genero, p.marca, p.modelo, p.categoria, p.grupo, p.color,
-            p.precio_lista, p.descuento, pi.imagen_url
-     FROM productos p
-     LEFT JOIN producto_imagenes pi ON pi.cod_universal = p.cod_universal
-     ORDER BY p.marca, p.modelo`
-  );
   const productos = toPlain<EditorProductoRow>(prodResult.rows);
 
-  let lineas: LoteLineaRow[] = [];
-  if (lote?.estado === "borrador") {
-    const lineasResult = await db.execute({
-      sql: `SELECT cod_universal, genero, descuento_nuevo FROM lote_lineas WHERE lote_id = ?`,
-      args: [lote.id],
-    });
-    lineas = toPlain<LoteLineaRow>(lineasResult.rows);
-  }
-
-  let lineasPublicadas: LoteLineaRow[] = [];
-  if (publicadoActivo) {
-    const lineasPubResult = await db.execute({
-      sql: `SELECT cod_universal, genero, descuento_nuevo FROM lote_lineas WHERE lote_id = ?`,
-      args: [publicadoActivo.id],
-    });
-    lineasPublicadas = toPlain<LoteLineaRow>(lineasPubResult.rows);
-  }
-
-  // Rotation metrics — only computed when ventas data exists
-  const ventasCountResult = await db.execute(`SELECT COUNT(*) AS n FROM ventas`);
   const hasVentas = (ventasCountResult.rows[0].n as number) > 0;
 
-  let rotacion: RotacionRow[] = [];
-  if (hasVentas) {
-    const rotResult = await db.execute(`
-      WITH antigs AS (
-        SELECT cod_universal, genero, MIN(ingreso_fecha) AS primera_entrada
-        FROM variantes WHERE ingreso_fecha IS NOT NULL
-        GROUP BY cod_universal, genero
-      ),
-      vel AS (
-        SELECT cod_universal, genero, COUNT(*) AS vendido_90d
-        FROM ventas
-        WHERE fecha_venta >= date('now', '-90 days')
-          AND cod_universal IS NOT NULL AND genero IS NOT NULL
-        GROUP BY cod_universal, genero
-      )
-      SELECT p.cod_universal, p.genero,
-        CAST(ROUND(julianday('now') - julianday(a.primera_entrada)) AS INTEGER) AS antiguedad_dias,
-        COALESCE(vel.vendido_90d, 0) AS vendido_90d,
-        CASE
-          WHEN COALESCE(vel.vendido_90d, 0) > 0
-          THEN CAST(ROUND(p.stock_total / (COALESCE(vel.vendido_90d, 0) / 90.0)) AS INTEGER)
-          ELSE NULL
-        END AS cobertura_dias
-      FROM productos p
-      LEFT JOIN antigs a ON a.cod_universal = p.cod_universal AND a.genero = p.genero
-      LEFT JOIN vel ON vel.cod_universal = p.cod_universal AND vel.genero = p.genero
-    `);
-    rotacion = toPlain<RotacionRow>(rotResult.rows);
-  }
+  const cerradoId = cerradoResult.rows.length > 0 ? (cerradoResult.rows[0].id as number) : null;
+
+  const t2 = Date.now();
+  const [lineasResult, lineasPubResult, rotResult, nResult] = await Promise.all([
+    lote?.estado === "borrador"
+      ? db.execute({
+          sql: `SELECT cod_universal, genero, descuento_nuevo FROM lote_lineas WHERE lote_id = ?`,
+          args: [lote.id],
+        })
+      : Promise.resolve(null),
+    publicadoActivo
+      ? db.execute({
+          sql: `SELECT cod_universal, genero, descuento_nuevo FROM lote_lineas WHERE lote_id = ?`,
+          args: [publicadoActivo.id],
+        })
+      : Promise.resolve(null),
+    hasVentas
+      ? db.execute(`
+          WITH antigs AS (
+            SELECT cod_universal, genero, MIN(ingreso_fecha) AS primera_entrada
+            FROM variantes WHERE ingreso_fecha IS NOT NULL
+            GROUP BY cod_universal, genero
+          ),
+          vel AS (
+            SELECT cod_universal, genero, COUNT(*) AS vendido_90d
+            FROM ventas
+            WHERE fecha_venta >= date('now', '-90 days')
+              AND cod_universal IS NOT NULL AND genero IS NOT NULL
+            GROUP BY cod_universal, genero
+          )
+          SELECT p.cod_universal, p.genero,
+            CAST(ROUND(julianday('now') - julianday(a.primera_entrada)) AS INTEGER) AS antiguedad_dias,
+            COALESCE(vel.vendido_90d, 0) AS vendido_90d,
+            CASE
+              WHEN COALESCE(vel.vendido_90d, 0) > 0
+              THEN CAST(ROUND(p.stock_total / (COALESCE(vel.vendido_90d, 0) / 90.0)) AS INTEGER)
+              ELSE NULL
+            END AS cobertura_dias
+          FROM productos p
+          LEFT JOIN antigs a ON a.cod_universal = p.cod_universal AND a.genero = p.genero
+          LEFT JOIN vel ON vel.cod_universal = p.cod_universal AND vel.genero = p.genero
+        `)
+      : Promise.resolve(null),
+    cerradoId !== null
+      ? db.execute({
+          sql: `SELECT COUNT(*) AS n
+                FROM lote_lineas ll
+                JOIN productos p ON p.cod_universal = ll.cod_universal AND p.genero = ll.genero
+                WHERE ll.lote_id = ?
+                  AND ABS(ll.descuento_nuevo - p.descuento) > 0.001`,
+          args: [cerradoId],
+        })
+      : Promise.resolve(null),
+  ]);
+  console.log(`[PERF][actualizacion] oleada 2 (4 queries) ${Date.now() - t2}ms`);
+
+  const lineas: LoteLineaRow[] = lineasResult ? toPlain<LoteLineaRow>(lineasResult.rows) : [];
+  const lineasPublicadas: LoteLineaRow[] = lineasPubResult
+    ? toPlain<LoteLineaRow>(lineasPubResult.rows)
+    : [];
+  const rotacion: RotacionRow[] = rotResult ? toPlain<RotacionRow>(rotResult.rows) : [];
 
   // Desajuste: most recent cerrado lote with resanado_at IS NULL where ERP baseline diverges
   let desajuste: Desajuste = null;
-  const cerradoResult = await db.execute({
-    sql: `SELECT id FROM lotes WHERE estado='cerrado' AND resanado_at IS NULL ORDER BY id DESC LIMIT 1`,
-    args: [],
-  });
-  if (cerradoResult.rows.length > 0) {
-    const cerradoId = cerradoResult.rows[0].id as number;
-    const nResult = await db.execute({
-      sql: `SELECT COUNT(*) AS n
-            FROM lote_lineas ll
-            JOIN productos p ON p.cod_universal = ll.cod_universal AND p.genero = ll.genero
-            WHERE ll.lote_id = ?
-              AND ABS(ll.descuento_nuevo - p.descuento) > 0.001`,
-      args: [cerradoId],
-    });
+  if (cerradoId !== null && nResult) {
     const n = nResult.rows[0].n as number;
     if (n > 0) desajuste = { loteId: cerradoId, n };
   }
+
+  console.log(`[PERF][actualizacion] total ${Date.now() - requestStart}ms`);
 
   return (
     <div className="p-4 md:p-8">

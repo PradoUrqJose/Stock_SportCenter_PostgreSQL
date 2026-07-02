@@ -144,6 +144,7 @@ CREATE INDEX IF NOT EXISTS idx_variantes_alm_der    ON variantes(alm_der);
 CREATE INDEX IF NOT EXISTS idx_lineas_lote          ON lote_lineas(lote_id);
 CREATE INDEX IF NOT EXISTS idx_conf_lote            ON confirmaciones(lote_id);
 CREATE INDEX IF NOT EXISTS idx_conf_tienda_estado   ON confirmaciones(tienda_id, estado);
+CREATE INDEX IF NOT EXISTS idx_productos_marca_modelo ON productos(marca, modelo);
 
 -- ventas: convertida en tabla de hechos por db/migrations/001_analisis_ventas.sql.
 -- Se crea aquí ya en su forma final para que un setup desde cero no dependa de

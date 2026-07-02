@@ -22,12 +22,17 @@ const HELP = [
 ];
 
 export default async function AnalisisPage() {
+  const requestStart = Date.now();
   const session = await requireRole("admin", "administrador_general");
   await requireModule(session, "analisis");
+  console.log(`[PERF][analisis] auth ${Date.now() - requestStart}ms`);
 
+  const t0 = Date.now();
   const conVentas = await hasVentas();
+  console.log(`[PERF][analisis] hasVentas ${Date.now() - t0}ms`);
 
   // Únicos es un reporte de stock, independiente de si hay ventas cargadas.
+  const t1 = Date.now();
   const [kpis, productos, tendencia, rankings, unicos] = await Promise.all([
     conVentas ? fetchAnalisisKpis() : Promise.resolve(null),
     conVentas ? fetchProductosAnalisis() : Promise.resolve([]),
@@ -35,6 +40,8 @@ export default async function AnalisisPage() {
     conVentas ? fetchModelosRanking() : Promise.resolve([]),
     fetchUnicos(),
   ]);
+  console.log(`[PERF][analisis] oleada (5 queries) ${Date.now() - t1}ms`);
+  console.log(`[PERF][analisis] total ${Date.now() - requestStart}ms`);
 
   return (
     <div className="p-4 md:p-8">

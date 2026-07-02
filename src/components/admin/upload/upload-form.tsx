@@ -19,8 +19,8 @@ import {
 } from "@/lib/actions/upload";
 import type { BuildResult } from "@/lib/upload/types";
 
-const BATCH_SIZE = 500;
-const CONCURRENCY = 3;
+const BATCH_SIZE = 2000;
+const CONCURRENCY = 6;
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const result: T[][] = [];
