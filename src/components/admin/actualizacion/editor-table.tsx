@@ -36,7 +36,6 @@ import type {
   LoteActivo,
   LoteLineaRow,
   Desajuste,
-  RotacionRow,
 } from "@/app/admin/actualizacion/page";
 import { cn } from "@/lib/utils";
 
@@ -115,7 +114,6 @@ type Props = {
   lineas: LoteLineaRow[];
   lineasPublicadas: LoteLineaRow[];
   desajuste: Desajuste;
-  rotacion: RotacionRow[];
   publicadoActivo: LotePublicadoActivo | null;
 };
 
@@ -126,13 +124,6 @@ const ESTADO_LABEL: Record<EstadoFila, string> = {
   planeado: "planeado",
   publicado: "publicado",
 };
-
-function semaforo(cobertura: number | null): { dot: string; title: string } {
-  if (cobertura === null) return { dot: "bg-gray-300", title: "Sin datos de ventas" };
-  if (cobertura < 30)    return { dot: "bg-green-500", title: `Cobertura ${cobertura}d — rotación rápida` };
-  if (cobertura < 90)    return { dot: "bg-amber-400", title: `Cobertura ${cobertura}d — rotación moderada` };
-  return                        { dot: "bg-red-500",   title: `Cobertura ${cobertura}d — rotación lenta, considerar descuento` };
-}
 
 const DISCOUNT_OPTIONS = [0, 10, 20, 30, 40, 50, 60, 70];
 
@@ -148,7 +139,7 @@ const BASE_FILTERS: SelectFilterDef<EditorProductoRow>[] = [
   },
 ];
 
-export function EditorTable({ productos, lote, lineas, lineasPublicadas, desajuste, rotacion, publicadoActivo }: Props) {
+export function EditorTable({ productos, lote, lineas, lineasPublicadas, desajuste, publicadoActivo }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState<Record<string, number>>({});
   const [destino, setDestino] = useState<Destino>("borrador");
@@ -200,12 +191,6 @@ export function EditorTable({ productos, lote, lineas, lineasPublicadas, desajus
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [pending, savedMap, publicadoMap]
   );
-
-  const rotacionMap = useMemo(() => {
-    const m = new Map<string, RotacionRow>();
-    for (const r of rotacion) m.set(rowKey(r), r);
-    return m;
-  }, [rotacion]);
 
   function handleDiscountChange(key: string, value: string, descuentoErp: number) {
     let n = parseFloat(value);
@@ -487,27 +472,6 @@ export function EditorTable({ productos, lote, lineas, lineasPublicadas, desajus
             </Badge>
           );
         return null;
-      },
-    },
-    {
-      key: "rotacion",
-      header: "Rot.",
-      align: "center",
-      width: 1,
-      cell: (r) => {
-        const rot = rotacionMap.get(rowKey(r));
-        if (!rot) return null;
-        const { dot, title } = semaforo(rot.cobertura_dias);
-        const lines = [
-          rot.antiguedad_dias != null ? `Antigüedad: ${rot.antiguedad_dias}d` : null,
-          `Vendido 90d: ${rot.vendido_90d}`,
-          rot.cobertura_dias != null ? `Cobertura: ${rot.cobertura_dias}d` : "Sin ventas recientes",
-        ].filter(Boolean).join(" · ");
-        return (
-          <span title={lines} className="flex justify-center">
-            <span className={`inline-block h-2.5 w-2.5 rounded-full ${dot}`} />
-          </span>
-        );
       },
     },
   ];

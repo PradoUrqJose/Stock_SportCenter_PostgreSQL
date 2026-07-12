@@ -10,6 +10,11 @@ import { fetchUnicos } from "@/lib/queries/unicos";
 import { AnalisisDashboard } from "@/components/admin/analisis/analisis-dashboard";
 import { PageHelp } from "@/components/ui/page-help";
 
+// La subida de ventas corre server actions (uploadVentasBatch/finalizeVentasUpload)
+// que Vercel factura al maxDuration de esta ruta, no al del archivo de actions.
+// El default del plan (10s en Hobby) se queda corto para varios lotes de 2000 filas.
+export const maxDuration = 60;
+
 const HELP = [
   { term: "Unidades vendidas", desc: "Total de unidades en el histórico cargado (cada código de barras es una unidad)." },
   { term: "Importe total", desc: "Suma de las ventas en soles. Los regalos entran como 0." },

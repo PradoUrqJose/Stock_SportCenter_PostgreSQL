@@ -33,7 +33,7 @@ export async function guardarImagenProducto(
       sql: `INSERT INTO producto_imagenes (cod_universal, imagen_url, source)
             VALUES (?, ?, 'sistema')
             ON CONFLICT (cod_universal)
-            DO UPDATE SET imagen_url = excluded.imagen_url, source = 'sistema', updated_at = datetime('now')`,
+            DO UPDATE SET imagen_url = excluded.imagen_url, source = 'sistema', updated_at = now_text()`,
       args: [cod_universal, url],
     });
 

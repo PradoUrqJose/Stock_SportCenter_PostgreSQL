@@ -54,8 +54,8 @@ export async function fetchAnalisisKpis(): Promise<AnalisisKpis> {
       MIN(fecha_venta) AS desde,
       MAX(fecha_venta) AS hasta,
       SUM(COALESCE(importe, 0)) AS importe_total,
-      AVG(CASE WHEN ingreso_fecha IS NOT NULL AND julianday(fecha_venta) >= julianday(ingreso_fecha)
-               THEN julianday(fecha_venta) - julianday(ingreso_fecha) END) AS dias_prom
+      AVG(CASE WHEN ingreso_fecha IS NOT NULL AND fecha_venta::date >= ingreso_fecha::date
+               THEN (fecha_venta::date - ingreso_fecha::date) END) AS dias_prom
     FROM ventas
   `);
   const row = toPlain<AnalisisKpis & { dias_prom: number | null }>(r.rows)[0];
@@ -74,10 +74,10 @@ export async function fetchProductosAnalisis(): Promise<ProductoAnalisisRow[]> {
     WITH v AS (
       SELECT cod_universal, genero,
         COUNT(*) AS unidades,
-        SUM(CASE WHEN fecha_venta >= date('now', '-90 days') THEN 1 ELSE 0 END) AS vendido_90d,
+        SUM(CASE WHEN fecha_venta::date >= CURRENT_DATE - 90 THEN 1 ELSE 0 END) AS vendido_90d,
         MAX(fecha_venta) AS ultima_venta,
-        AVG(CASE WHEN ingreso_fecha IS NOT NULL AND julianday(fecha_venta) >= julianday(ingreso_fecha)
-                 THEN julianday(fecha_venta) - julianday(ingreso_fecha) END) AS dias_prom,
+        AVG(CASE WHEN ingreso_fecha IS NOT NULL AND fecha_venta::date >= ingreso_fecha::date
+                 THEN (fecha_venta::date - ingreso_fecha::date) END) AS dias_prom,
         SUM(COALESCE(importe, 0)) AS importe_total
       FROM ventas
       WHERE cod_universal IS NOT NULL AND genero IS NOT NULL
@@ -85,9 +85,9 @@ export async function fetchProductosAnalisis(): Promise<ProductoAnalisisRow[]> {
     ),
     ant AS (
       SELECT cod_universal, genero,
-        CAST(ROUND(julianday('now') - julianday(MAX(ingreso_fecha))) AS INTEGER) AS dias_ultimo_ingreso,
-        CAST(ROUND(julianday('now') - julianday(MIN(ingreso_fecha))) AS INTEGER) AS dias_primer_ingreso,
-        SUM(CASE WHEN julianday('now') - julianday(ingreso_fecha) >= ${DIAS_REZAGO} THEN 1 ELSE 0 END) AS unidades_viejas
+        CAST(CURRENT_DATE - MAX(ingreso_fecha)::date AS INTEGER) AS dias_ultimo_ingreso,
+        CAST(CURRENT_DATE - MIN(ingreso_fecha)::date AS INTEGER) AS dias_primer_ingreso,
+        SUM(CASE WHEN (CURRENT_DATE - ingreso_fecha::date) >= ${DIAS_REZAGO} THEN 1 ELSE 0 END) AS unidades_viejas
       FROM variantes WHERE ingreso_fecha IS NOT NULL
       GROUP BY cod_universal, genero
     )

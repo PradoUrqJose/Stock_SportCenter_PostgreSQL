@@ -2,14 +2,14 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle, XCircle, Clock, Download, X } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Download, X, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DiscountBadge } from "@/components/ui/discount-badge";
 import { ExpandableList, ExpandableRow } from "@/components/ui/expandable-list";
 import { FilterBar, type SelectFilterDef } from "@/components/ui/filter-bar";
-import { cerrarLote } from "@/lib/actions/descuentos";
+import { cerrarLote, sincronizarConfirmaciones } from "@/lib/actions/descuentos";
 import { groupConfirmaciones, type ProductGroup } from "@/lib/product-groups";
 
 export type ConfirmacionFlatRow = {
@@ -61,6 +61,7 @@ export function ConfirmacionesPanel({ rows, loteId, loteEstado, publishedAt, hea
   const router = useRouter();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [cerrarOpen, setCerrarOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
 
   function toggle(key: string) {
     setExpanded((prev) => {
@@ -107,6 +108,15 @@ export function ConfirmacionesPanel({ rows, loteId, loteEstado, publishedAt, hea
                   <Download className="h-3.5 w-3.5" />
                   Exportar ZIP
                 </a>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={() => setSyncOpen(true)}
+                  className="border-blue-200 dark:border-blue-500/25 text-blue-700 dark:text-blue-300 hover:bg-blue-50"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Sincronizar confirmaciones
+                </Button>
                 <Button
                   size="xs"
                   variant="outline"
@@ -313,6 +323,23 @@ export function ConfirmacionesPanel({ rows, loteId, loteEstado, publishedAt, hea
         }
         confirmLabel="Cerrar lote"
         onConfirm={() => cerrarLote(loteId)}
+        onSuccess={() => router.refresh()}
+      />
+
+      <ConfirmDialog
+        open={syncOpen}
+        onOpenChange={setSyncOpen}
+        title={`Sincronizar confirmaciones del lote #${loteId}`}
+        description={
+          <>
+            Recalcula las confirmaciones contra el stock y las tiendas excluidas actuales: agrega
+            confirmaciones para tiendas elegibles que ahora tienen el producto y elimina las{" "}
+            <strong>pendientes</strong> de tiendas que ya no lo tienen o que fueron excluidas.
+            Las confirmaciones ya resueltas (confirmadas o rechazadas) no se tocan.
+          </>
+        }
+        confirmLabel="Sincronizar"
+        onConfirm={() => sincronizarConfirmaciones(loteId)}
         onSuccess={() => router.refresh()}
       />
     </div>

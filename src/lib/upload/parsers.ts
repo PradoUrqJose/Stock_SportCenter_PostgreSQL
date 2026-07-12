@@ -1,5 +1,8 @@
 import * as XLSX from "xlsx";
-import type { BuildResult, ImagenInsert, ProductoInsert, VarianteInsert, VentaInsert } from "./types";
+import type {
+  BuildResult, ImagenInsert, ProductoInsert, VarianteInsert, VentaInsert,
+  FacturacionInsert, IngresoInsert,
+} from "./types";
 
 const ALMACENES_VALIDOS = new Set([
   "JAL1", "JAL4", "T01", "T02", "T03", "T04", "T05",
@@ -63,6 +66,62 @@ function readAsText(file: File): Promise<string> {
   });
 }
 
+// Minimal RFC4180-ish CSV parser: handles quoted fields (with embedded commas/
+// newlines/escaped quotes) and both \n and \r\n line endings.
+function parseCSV(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  let i = 0;
+  const len = text.length;
+
+  while (i < len) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i += 2;
+        } else {
+          inQuotes = false;
+          i++;
+        }
+      } else {
+        field += c;
+        i++;
+      }
+      continue;
+    }
+
+    if (c === '"') {
+      inQuotes = true;
+      i++;
+    } else if (c === ",") {
+      row.push(field);
+      field = "";
+      i++;
+    } else if (c === "\r") {
+      i++;
+    } else if (c === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      i++;
+    } else {
+      field += c;
+      i++;
+    }
+  }
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  return rows.filter((r) => !(r.length === 1 && r[0].trim() === ""));
+}
+
 // normalizes header for flexible matching: removes spaces, periods, accents, toUpperCase
 function normHeader(s: string) {
   return s
@@ -78,94 +137,82 @@ function findCol(headers: string[], search: string): number {
   return headers.findIndex((h) => normHeader(h) === target);
 }
 
-type HtmlTable = {
-  headers: string[];
-  cells: (string | null)[][];
-  imgSrcs: (string | null)[][];
-};
-
-function parseHtmlTable(html: string): HtmlTable {
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  const trs = Array.from(doc.querySelectorAll("table tr"));
-  if (trs.length === 0) return { headers: [], cells: [], imgSrcs: [] };
-
-  const headers = Array.from(trs[0].querySelectorAll("th, td")).map(
-    (el) => el.textContent?.trim() ?? ""
-  );
-
-  const cells: (string | null)[][] = [];
-  const imgSrcs: (string | null)[][] = [];
-
-  for (const tr of trs.slice(1)) {
-    const tds = Array.from(tr.querySelectorAll("td"));
-    cells.push(tds.map((td) => td.textContent?.trim() || null));
-    imgSrcs.push(tds.map((td) => td.querySelector("img")?.getAttribute("src") ?? null));
-  }
-
-  return { headers, cells, imgSrcs };
-}
-
 // --- public parsers ---
 
 export async function parseStockFile(file: File): Promise<Record<string, unknown>[]> {
-  const buf = await readAsBuffer(file);
-  const wb = XLSX.read(buf, { type: "array" });
-  const ws = wb.Sheets[wb.SheetNames[0]];
+  const text = await readAsText(file);
+  const rows = parseCSV(text);
 
-  // Find the header row dynamically — ERP may prepend title rows before the real headers
-  const rawArrays = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null });
-  const headerRowIdx = rawArrays.findIndex((row) =>
-    Array.isArray(row) &&
+  // Find the header row dynamically — ERP export may prepend title rows before the real headers
+  const headerRowIdx = rows.findIndex((row) =>
     row.some((cell) => {
       const s = String(cell ?? "").trim().toUpperCase();
       return s === "IZQ" || s === "COD.BARRAS" || s === "COD.PROD";
     })
   );
-  if (headerRowIdx === -1) throw new Error("No se encontró la fila de encabezados en el Excel (se buscó IZQ / COD.BARRAS / COD.PROD).");
+  if (headerRowIdx === -1) throw new Error("No se encontró la fila de encabezados en el CSV (se buscó IZQ / COD.BARRAS / COD.PROD).");
 
-  return XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: null, range: headerRowIdx });
+  const headers = rows[headerRowIdx].map((h) => h.trim());
+  return rows.slice(headerRowIdx + 1).map((row) => {
+    const rec: Record<string, unknown> = {};
+    headers.forEach((h, i) => {
+      const v = row[i];
+      rec[h] = v == null || v === "" ? null : v;
+    });
+    return rec;
+  });
+}
+
+// El ERP sirve íconos placeholder (ej. "Used Product-100.png") desde su propia
+// carpeta de recursos del sistema cuando el producto no tiene foto real. No son
+// fotos de producto, así que cualquier URL bajo esa ruta se descarta.
+const PLACEHOLDER_IMAGE_PATH = "/recursos/img/iconsistem/";
+
+function isPlaceholderImage(url: string): boolean {
+  return url.toLowerCase().includes(PLACEHOLDER_IMAGE_PATH);
 }
 
 export async function parseImagesFile(file: File): Promise<Map<string, string>> {
-  const html = await readAsText(file);
-  const { headers, cells, imgSrcs } = parseHtmlTable(html);
+  const text = await readAsText(file);
+  const rows = parseCSV(text);
+  if (rows.length === 0) return new Map();
 
-  const codIdx = findCol(headers, "COD. UNIVERSAL");
+  const headers = rows[0].map((h) => h.trim());
+  const codIdx = findCol(headers, "COD.UNIVERSAL");
   const fotoIdx = findCol(headers, "FOTO");
 
   const map = new Map<string, string>();
-  for (let i = 0; i < cells.length; i++) {
-    const cod = cells[i][codIdx];
-    const url = imgSrcs[i]?.[fotoIdx] ?? cells[i][fotoIdx];
+  for (const row of rows.slice(1)) {
+    const cod = row[codIdx]?.trim();
+    const url = row[fotoIdx]?.trim();
     if (!cod || !url) continue;
     if (!url.startsWith("http://") && !url.startsWith("https://")) continue;
-    map.set(cod.trim().toUpperCase(), url);
+    if (isPlaceholderImage(url)) continue;
+    map.set(cod.toUpperCase(), url);
   }
   return map;
 }
 
-// Each file name contains the discount %, e.g. "desc_10.html" → 10%
-export async function parseDiscountFiles(files: File[]): Promise<Map<string, number>> {
+// descuentos.csv: columnas COD.UNIVERSAL y DESCUENTO, con el % como texto (ej: "70%")
+export async function parseDiscountFile(file: File): Promise<Map<string, number>> {
+  const text = await readAsText(file);
+  const rows = parseCSV(text);
+  if (rows.length === 0) return new Map();
+
+  const headers = rows[0].map((h) => h.trim());
+  const codIdx = findCol(headers, "COD.UNIVERSAL");
+  const descIdx = findCol(headers, "DESCUENTO");
+  if (codIdx === -1 || descIdx === -1) return new Map();
+
   const map = new Map<string, number>();
-
-  for (const file of files) {
-    const pctMatch = file.name.match(/\d+/);
-    if (!pctMatch) continue;
-    const pct = parseInt(pctMatch[0], 10);
-
-    const html = await readAsText(file);
-    const { headers, cells } = parseHtmlTable(html);
-
-    const codIdx = findCol(headers, "COD. UNIVERSAL.");
-    if (codIdx === -1) continue;
-
-    for (const row of cells) {
-      const cod = row[codIdx];
-      if (!cod) continue;
-      map.set(cod.trim().toUpperCase(), pct);
-    }
+  for (const row of rows.slice(1)) {
+    const cod = row[codIdx]?.trim();
+    const rawDesc = row[descIdx]?.trim();
+    if (!cod || !rawDesc) continue;
+    const pct = parseInt(rawDesc.replace("%", ""), 10);
+    if (isNaN(pct)) continue;
+    map.set(cod.toUpperCase(), pct);
   }
-
   return map;
 }
 
@@ -353,6 +400,176 @@ export async function parseVentasFile(file: File): Promise<VentaInsert[]> {
       precio_compra: num(at(row, idxCompra)),
       precio_lista: num(at(row, idxLista)),
       importe: num(at(row, idxImporte)),
+    });
+  }
+
+  return result;
+}
+
+// Lee un .xlsx a filas-array (header:1) buscando la fila de encabezados por
+// contener alguno de los headerHints (normalizados). Compartido por los
+// parsers de facturación e ingresos, ambos históricos (archivo de 2022+
+// exportado del ERP con menos columnas que el scraper actual).
+function readSheetRows(
+  allRows: unknown[][],
+  headerHints: string[]
+): { headerRow: string[]; dataRows: unknown[][] } {
+  const headerRowIdx = allRows.findIndex(
+    (row) =>
+      Array.isArray(row) &&
+      row.some((cell) => headerHints.includes(normHeader(String(cell ?? ""))))
+  );
+  if (headerRowIdx === -1) {
+    throw new Error("No se encontró la fila de encabezados en el archivo.");
+  }
+  const headerRow: string[] = (allRows[headerRowIdx] ?? []).map((c) => String(c ?? ""));
+  return { headerRow, dataRows: allRows.slice(headerRowIdx + 1) };
+}
+
+export async function parseFacturacionFile(file: File): Promise<FacturacionInsert[]> {
+  const buf = await readAsBuffer(file);
+  const wb = XLSX.read(buf, { type: "array", cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const allRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null });
+
+  const { headerRow, dataRows } = readSheetRows(allRows, ["SERNUM", "NDCTO", "MINORISTA", "CLIENTE"]);
+  function colIdx(patterns: string[]): number {
+    for (const p of patterns) {
+      const idx = headerRow.findIndex((h) => normHeader(h) === normHeader(p));
+      if (idx !== -1) return idx;
+    }
+    return headerRow.findIndex((h) => patterns.some((p) => normHeader(h).includes(normHeader(p))));
+  }
+
+  const idxSerNum   = colIdx(["SER-NUM", "N°DCTO", "NDCTO"]);
+  const idxCodigo   = colIdx(["CODIGO"]);
+  const idxTienda   = colIdx(["TIENDA"]);
+  const idxTipoCmp  = colIdx(["COMPROBANTE", "DCTO"]);
+  const idxCliente  = colIdx(["MINORISTA", "CLIENTE"]);
+  const idxMayor    = colIdx(["MAYORISTA"]);
+  const idxFecha    = colIdx(["FECHA"]);
+  const idxMoneda   = colIdx(["MONEDA"]);
+  const idxSubtotal = colIdx(["SUBTOTAL"]);
+  const idxDscto    = colIdx(["DSCTO"]);
+  const idxNotCre   = colIdx(["NOT.CRE.", "NOTCRE"]);
+  const idxBi       = colIdx(["B.I.", "BI"]);
+  const idxIgv      = colIdx(["IGV"]);
+  const idxTotal    = colIdx(["TOTAL"]);
+  const idxEfectivo = colIdx(["EFECTIVO"]);
+  const idxTarjeta  = colIdx(["TARJETA"]);
+  const idxTransf   = colIdx(["TRANSFERENCIA"]);
+  const idxDetTarj  = colIdx(["DETALLE VENTA CON TARJETA"]);
+  const idxVendedor = colIdx(["VENDEDOR"]);
+  const idxNc       = colIdx(["NC"]);
+
+  if (idxSerNum === -1) throw new Error("No se encontró columna SER-NUM / N°DCTO.");
+  if (idxFecha === -1) throw new Error("No se encontró columna FECHA.");
+
+  const at = (row: unknown[], idx: number): unknown => (idx !== -1 ? row[idx] : null);
+  const result: FacturacionInsert[] = [];
+
+  for (const row of dataRows) {
+    if (!Array.isArray(row)) continue;
+    const ser_num = str(row[idxSerNum]);
+    if (!ser_num) continue;
+    const fecha = parseDate(row[idxFecha]);
+    if (!fecha) continue;
+
+    result.push({
+      ser_num,
+      codigo: str(at(row, idxCodigo)),
+      tienda: str(at(row, idxTienda)),
+      tipo_comprobante: str(at(row, idxTipoCmp)),
+      cliente: str(at(row, idxCliente)),
+      mayorista: str(at(row, idxMayor)),
+      fecha,
+      moneda: str(at(row, idxMoneda)),
+      subtotal: num(at(row, idxSubtotal)),
+      dscto: num(at(row, idxDscto)),
+      not_cre: num(at(row, idxNotCre)),
+      bi: num(at(row, idxBi)),
+      igv: num(at(row, idxIgv)),
+      total: num(at(row, idxTotal)) ?? 0,
+      efectivo: num(at(row, idxEfectivo)),
+      tarjeta: num(at(row, idxTarjeta)),
+      transferencia: num(at(row, idxTransf)),
+      detalle_tarjeta: str(at(row, idxDetTarj)),
+      vendedor: str(at(row, idxVendedor)),
+      nc: str(at(row, idxNc)),
+      fuente: "historico",
+    });
+  }
+
+  return result;
+}
+
+export async function parseIngresosFile(file: File): Promise<IngresoInsert[]> {
+  const buf = await readAsBuffer(file);
+  const wb = XLSX.read(buf, { type: "array", cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const allRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null });
+
+  const { headerRow, dataRows } = readSheetRows(allRows, ["CODIGO", "CODIGOINTERNO"]);
+  function colIdx(patterns: string[]): number {
+    for (const p of patterns) {
+      const idx = headerRow.findIndex((h) => normHeader(h) === normHeader(p));
+      if (idx !== -1) return idx;
+    }
+    return headerRow.findIndex((h) => patterns.some((p) => normHeader(h).includes(normHeader(p))));
+  }
+
+  const idxCodigo    = colIdx(["CODIGO", "CÓDIGO INTERNO", "CODIGO INTERNO"]);
+  const idxEmp       = colIdx(["EMP"]);
+  const idxAlm       = colIdx(["ALM", "ALMC"]);
+  const idxIngSal    = colIdx(["ING/SAL"]);
+  const idxTipoMov   = colIdx(["TIPO MOV."]);
+  const idxSerie     = colIdx(["N° DCTO", "SERIE-NÚMERO", "SERIE-NUMERO"]);
+  const idxEmision   = colIdx(["EMISION", "EMISIÓN"]);
+  const idxMoneda    = colIdx(["MONEDA", "MOND."]);
+  const idxImporte   = colIdx(["IMPORTE"]);
+  const idxSubtotal  = colIdx(["SUBTOTAL"]);
+  const idxIgv       = colIdx(["IGV"]);
+  const idxDscto     = colIdx(["DSCTO"]);
+  const idxTotal     = colIdx(["TOTAL"]);
+  const idxRuc       = colIdx(["RUC"]);
+  const idxProveedor = colIdx(["PROVEEDOR"]);
+  const idxCmpl      = colIdx(["CMPL"]);
+  const idxMcdr      = colIdx(["MCDR"]);
+  const idxOrdCompra = colIdx(["ORD.COMPRA"]);
+
+  if (idxCodigo === -1) throw new Error("No se encontró columna CODIGO / CÓDIGO INTERNO.");
+  if (idxEmision === -1) throw new Error("No se encontró columna EMISION.");
+
+  const at = (row: unknown[], idx: number): unknown => (idx !== -1 ? row[idx] : null);
+  const result: IngresoInsert[] = [];
+
+  for (const row of dataRows) {
+    if (!Array.isArray(row)) continue;
+    const codigo_interno = str(row[idxCodigo]);
+    if (!codigo_interno) continue;
+    const emision = parseDate(row[idxEmision]);
+    if (!emision) continue;
+
+    result.push({
+      codigo_interno,
+      emp: str(at(row, idxEmp)),
+      almacen: str(at(row, idxAlm)),
+      ing_sal: str(at(row, idxIngSal)),
+      tipo_mov: str(at(row, idxTipoMov)),
+      serie_numero: str(at(row, idxSerie)),
+      emision,
+      moneda: str(at(row, idxMoneda)),
+      importe: num(at(row, idxImporte)),
+      subtotal: num(at(row, idxSubtotal)),
+      igv: num(at(row, idxIgv)),
+      dscto: num(at(row, idxDscto)),
+      total: num(at(row, idxTotal)),
+      ruc: str(at(row, idxRuc)),
+      proveedor: str(at(row, idxProveedor)),
+      cmpl: str(at(row, idxCmpl)),
+      mcdr: str(at(row, idxMcdr)),
+      ord_compra: str(at(row, idxOrdCompra)),
+      fuente: "historico",
     });
   }
 

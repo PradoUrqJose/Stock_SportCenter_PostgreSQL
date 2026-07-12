@@ -15,7 +15,7 @@ const CHUNK = 500;
 
 function confirmacionesFanoutStmt(loteId: number) {
   return {
-    sql: `INSERT OR IGNORE INTO confirmaciones (lote_id, tienda_id, cod_universal, genero)
+    sql: `INSERT INTO confirmaciones (lote_id, tienda_id, cod_universal, genero)
           SELECT DISTINCT ll.lote_id, t.id, ll.cod_universal, ll.genero
           FROM lote_lineas ll
           JOIN (
@@ -26,7 +26,8 @@ function confirmacionesFanoutStmt(loteId: number) {
           JOIN tiendas t ON t.nombre = v.alm
           WHERE ll.lote_id = ?
             AND t.excluida_actualizacion = 0
-            AND t.id NOT IN (SELECT tienda_id FROM lote_exclusiones WHERE lote_id = ?)`,
+            AND t.id NOT IN (SELECT tienda_id FROM lote_exclusiones WHERE lote_id = ?)
+          ON CONFLICT DO NOTHING`,
     args: [loteId, loteId],
   };
 }
@@ -70,7 +71,7 @@ export async function guardarDescuentos(
                   p.marca, p.modelo, p.categoria, p.color, p.precio_lista,
                   (SELECT MIN(v.precio_compra) FROM variantes v
                    WHERE v.cod_universal = p.cod_universal AND v.genero = p.genero),
-                  datetime('now')
+                  now_text()
                 FROM productos p
                 WHERE p.cod_universal = ? AND p.genero = ?
                 ON CONFLICT (lote_id, cod_universal, genero) DO UPDATE SET
@@ -129,7 +130,7 @@ export async function publicarLote(loteId: number): Promise<ActionResult> {
       [
         confirmacionesFanoutStmt(loteId),
         {
-          sql: `UPDATE lotes SET estado='publicado', published_at=datetime('now'), published_by=? WHERE id=?`,
+          sql: `UPDATE lotes SET estado='publicado', published_at=now_text(), published_by=? WHERE id=?`,
           args: [session.id, loteId],
         },
       ],
@@ -176,7 +177,7 @@ export async function agregarLineasALotePublicado(
         const chunk = nuevas.slice(i, i + CHUNK);
         await db.batch(
           chunk.map((l) => ({
-            sql: `INSERT OR IGNORE INTO lote_lineas
+            sql: `INSERT INTO lote_lineas
                     (lote_id, cod_universal, genero, descuento_antes, descuento_nuevo,
                      snap_marca, snap_modelo, snap_categoria, snap_color,
                      snap_precio_lista, snap_precio_compra, editado_at)
@@ -185,9 +186,10 @@ export async function agregarLineasALotePublicado(
                     p.marca, p.modelo, p.categoria, p.color, p.precio_lista,
                     (SELECT MIN(v.precio_compra) FROM variantes v
                      WHERE v.cod_universal = p.cod_universal AND v.genero = p.genero),
-                    datetime('now')
+                    now_text()
                   FROM productos p
-                  WHERE p.cod_universal = ? AND p.genero = ?`,
+                  WHERE p.cod_universal = ? AND p.genero = ?
+                  ON CONFLICT DO NOTHING`,
             args: [loteId, l.descuento_nuevo, l.cod_universal, l.genero],
           })),
           "write"
@@ -234,6 +236,73 @@ export async function agregarLineasALotePublicado(
   }
 }
 
+// Un lote publicado fija sus confirmaciones a la distribución de stock (y
+// exclusiones de tienda) del momento en que se publicó. Si luego se sube
+// stock nuevo (traslados entre tiendas, etc.) o se excluye una tienda, esa
+// foto queda desactualizada: una tienda puede seguir con una confirmación
+// pendiente de un producto que ya no tiene (o que ahora está excluida), y
+// una tienda que ahora sí lo tiene puede no tener ninguna. Este reconcilia
+// contra el stock y las exclusiones actuales: agrega las confirmaciones que
+// faltan y borra las pendientes que ya no corresponden a ninguna tienda
+// elegible con stock (las ya resueltas —confirmado/rechazado— se conservan
+// como historial).
+export async function sincronizarConfirmaciones(
+  loteId: number
+): Promise<ActionResult<{ agregadas: number; eliminadas: number }>> {
+  try {
+    await requireRole("admin", "administrador_general");
+
+    const loteRow = await db.execute({
+      sql: `SELECT estado FROM lotes WHERE id = ?`,
+      args: [loteId],
+    });
+    if (!loteRow.rows.length) return { success: false, msg: "Lote no encontrado." };
+    if (loteRow.rows[0].estado !== "publicado")
+      return { success: false, msg: "Solo se puede sincronizar un lote publicado." };
+
+    const insertRes = await db.execute(confirmacionesFanoutStmt(loteId));
+    const agregadas = insertRes.rowsAffected ?? 0;
+
+    const deleteRes = await db.execute({
+      sql: `DELETE FROM confirmaciones c
+            WHERE c.lote_id = ?
+              AND c.estado = 'pendiente'
+              AND NOT EXISTS (
+                SELECT 1
+                FROM lote_lineas ll
+                JOIN (
+                  SELECT cod_universal, genero, alm_izq AS alm FROM variantes WHERE alm_izq IS NOT NULL
+                  UNION
+                  SELECT cod_universal, genero, alm_der AS alm FROM variantes WHERE alm_der IS NOT NULL
+                ) v ON v.cod_universal = ll.cod_universal AND v.genero = ll.genero
+                JOIN tiendas t ON t.nombre = v.alm
+                WHERE ll.lote_id = c.lote_id
+                  AND t.id = c.tienda_id
+                  AND ll.cod_universal = c.cod_universal
+                  AND ll.genero = c.genero
+                  AND t.excluida_actualizacion = 0
+                  AND t.id NOT IN (SELECT tienda_id FROM lote_exclusiones WHERE lote_id = c.lote_id)
+              )`,
+      args: [loteId],
+    });
+    const eliminadas = deleteRes.rowsAffected ?? 0;
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/actualizacion");
+    revalidatePath("/admin/actualizacion-updates");
+    revalidatePath("/client/actualizacion");
+
+    const partes: string[] = [];
+    if (agregadas > 0) partes.push(`${agregadas} confirmación(es) nueva(s) agregada(s)`);
+    if (eliminadas > 0) partes.push(`${eliminadas} pendiente(s) obsoleta(s) eliminada(s)`);
+    if (partes.length === 0) partes.push("Ya estaban al día, sin cambios");
+
+    return { success: true, msg: `${partes.join(", ")}.`, data: { agregadas, eliminadas } };
+  } catch (e) {
+    return { success: false, msg: String(e) };
+  }
+}
+
 export async function marcarResanado(loteId: number): Promise<ActionResult> {
   try {
     const session = await requireRole("admin", "administrador_general");
@@ -247,7 +316,7 @@ export async function marcarResanado(loteId: number): Promise<ActionResult> {
       return { success: false, msg: "Solo se puede resanar un lote cerrado." };
 
     await db.execute({
-      sql: `UPDATE lotes SET resanado_at=datetime('now'), resanado_by=? WHERE id=?`,
+      sql: `UPDATE lotes SET resanado_at=now_text(), resanado_by=? WHERE id=?`,
       args: [session.id, loteId],
     });
 
@@ -271,7 +340,7 @@ export async function cerrarLote(loteId: number): Promise<ActionResult> {
       return { success: false, msg: "Solo se puede cerrar un lote publicado." };
 
     await db.execute({
-      sql: `UPDATE lotes SET estado='cerrado', closed_at=datetime('now'), closed_by=? WHERE id=?`,
+      sql: `UPDATE lotes SET estado='cerrado', closed_at=now_text(), closed_by=? WHERE id=?`,
       args: [session.id, loteId],
     });
 

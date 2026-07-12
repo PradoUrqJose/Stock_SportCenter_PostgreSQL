@@ -51,3 +51,49 @@ export type VentaInsert = {
   precio_lista: number | null;
   importe: number | null;
 };
+
+export type FacturacionInsert = {
+  ser_num: string; // clave de dedup, ej. "FJ01-4340"
+  codigo: string | null;
+  tienda: string | null;
+  tipo_comprobante: string | null;
+  cliente: string | null;
+  mayorista: string | null;
+  fecha: string; // ISO YYYY-MM-DD
+  moneda: string | null;
+  subtotal: number | null;
+  dscto: number | null;
+  not_cre: number | null;
+  bi: number | null;
+  igv: number | null;
+  total: number;
+  efectivo: number | null;
+  tarjeta: number | null;
+  transferencia: number | null;
+  detalle_tarjeta: string | null;
+  vendedor: string | null;
+  nc: string | null;
+  fuente: "historico" | "erp";
+};
+
+export type IngresoInsert = {
+  codigo_interno: string; // clave de dedup, ej. "C001538"
+  emp: string | null;
+  almacen: string | null;
+  ing_sal: string | null;
+  tipo_mov: string | null;
+  serie_numero: string | null;
+  emision: string; // ISO YYYY-MM-DD
+  moneda: string | null;
+  importe: number | null;
+  subtotal: number | null;
+  igv: number | null;
+  dscto: number | null;
+  total: number | null;
+  ruc: string | null;
+  proveedor: string | null;
+  cmpl: string | null;
+  mcdr: string | null;
+  ord_compra: string | null;
+  fuente: "historico" | "erp";
+};

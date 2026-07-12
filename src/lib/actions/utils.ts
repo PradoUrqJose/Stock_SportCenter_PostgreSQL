@@ -8,6 +8,43 @@ import type { ActionResult } from "@/types";
 
 const CHUNK = 500;
 
+// ─── Vendedores masivo (Usuario + Nombre + Credencial + Activo) ──────────────
+// Se crean sin tienda asociada: quedan como credencial global (ver resolveVendedor
+// en confirmaciones.ts), asignable a una tienda después vía el CRUD si hace falta.
+
+export async function crearVendedoresMasivoBatch(
+  items: { usuario: string; nombre: string; codigo: string; activo: boolean }[]
+): Promise<ActionResult<{ creados: number; duplicados: number }>> {
+  try {
+    await requireRole("admin", "administrador_general");
+    if (items.length === 0) return { success: true, msg: "Sin cambios", data: { creados: 0, duplicados: 0 } };
+
+    let creados = 0;
+    for (let i = 0; i < items.length; i += CHUNK) {
+      const chunk = items.slice(i, i + CHUNK);
+      const results = await db.batch(
+        chunk.map((it) => ({
+          sql: `INSERT INTO vendedores (usuario, nombre, codigo, activo)
+                VALUES (?, ?, ?, ?) ON CONFLICT (codigo) DO NOTHING`,
+          args: [it.usuario, it.nombre, it.codigo, it.activo ? 1 : 0],
+        })),
+        "write"
+      );
+      creados += results.reduce((sum, r) => sum + (r.rowsAffected ?? 0), 0);
+    }
+    const duplicados = items.length - creados;
+
+    revalidatePath("/admin/gestion/credenciales");
+    return {
+      success: true,
+      msg: `${creados} credencial(es) creada(s)${duplicados > 0 ? `, ${duplicados} código(s) ya existían` : ""}.`,
+      data: { creados, duplicados },
+    };
+  } catch (e) {
+    return { success: false, msg: String(e) };
+  }
+}
+
 // ─── Imágenes masivas (COD. UNIVERSAL + ENLACE DE IMAGEN) ────────────────────
 
 export async function subirImagenesMasivoBatch(
@@ -24,7 +61,7 @@ export async function subirImagenesMasivoBatch(
           sql: `INSERT INTO producto_imagenes (cod_universal, imagen_url, source)
                 VALUES (?, ?, 'sistema')
                 ON CONFLICT (cod_universal)
-                DO UPDATE SET imagen_url = excluded.imagen_url, source = 'sistema', updated_at = datetime('now')`,
+                DO UPDATE SET imagen_url = excluded.imagen_url, source = 'sistema', updated_at = now_text()`,
           args: [it.cod_universal, it.imagen_url],
         })),
         "write"

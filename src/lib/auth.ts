@@ -102,8 +102,9 @@ export async function seedAdmin(): Promise<void> {
   const id = crypto.randomUUID();
   const hashed = await hashPassword(password);
   await db.execute({
-    sql: `INSERT OR IGNORE INTO users (id, username, password, nombre, rol)
-          VALUES (?, ?, ?, 'Administrador General', 'administrador_general')`,
+    sql: `INSERT INTO users (id, username, password, nombre, rol)
+          VALUES (?, ?, ?, 'Administrador General', 'administrador_general')
+          ON CONFLICT DO NOTHING`,
     args: [id, username, hashed],
   });
 }

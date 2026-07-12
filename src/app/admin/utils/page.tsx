@@ -4,11 +4,13 @@ import { fetchLotePublicadoActivo } from "@/lib/queries/lotes";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ImagenesMasivoForm } from "@/components/admin/utils/imagenes-masivo-form";
 import { DescuentosMasivoForm } from "@/components/admin/utils/descuentos-masivo-form";
+import { VendedoresMasivoForm } from "@/components/admin/utils/vendedores-masivo-form";
 import { PageHelp } from "@/components/ui/page-help";
 
 const HELP = [
   { term: "Imágenes", desc: "Excel con columnas CODE y ENLACE. Se previsualizan las imágenes antes de aplicarlas al catálogo." },
   { term: "Descuentos", desc: "Excel con cod_universal y descuento. Muestra antes (ERP) vs después (Excel) por producto." },
+  { term: "Vendedores", desc: "Excel con Usuario, Nombre, Credencial y Activo (opcional). Se crean sin tienda asignada (credencial global)." },
   { term: "Selección", desc: "Marca las filas que quieres aplicar; el resto se ignora." },
   { term: "Guardar", desc: "Crea o actualiza un borrador de descuentos con los códigos seleccionados." },
 ];
@@ -44,12 +46,16 @@ export default async function UtilsPage() {
         <TabsList>
           <TabsTrigger value="imagenes">Imágenes</TabsTrigger>
           <TabsTrigger value="descuentos">Descuentos</TabsTrigger>
+          <TabsTrigger value="vendedores">Vendedores</TabsTrigger>
         </TabsList>
         <TabsContent value="imagenes">
           <ImagenesMasivoForm />
         </TabsContent>
         <TabsContent value="descuentos">
           <DescuentosMasivoForm borrador={borrador} publicado={publicado} />
+        </TabsContent>
+        <TabsContent value="vendedores">
+          <VendedoresMasivoForm />
         </TabsContent>
       </Tabs>
     </div>

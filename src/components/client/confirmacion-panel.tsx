@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle, XCircle, Clock, Loader2 } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Loader2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,19 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable, type ColDef } from "@/components/ui/data-table";
 import { FilterBar, type SelectFilterDef } from "@/components/ui/filter-bar";
 import { ProductImageThumb } from "@/components/ui/product-image-thumb";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { confirmarAplicacion, rechazarProductos } from "@/lib/actions/confirmaciones";
+
+// A partir de esta cantidad de pendientes seleccionados sin confirmar, se avisa
+// al vendedor para que no acumule de más antes de escanear su credencial.
+const ALERTA_SELECCION_SIN_CONFIRMAR = 10;
 
 export type ConfirmacionRow = {
   id: number;
@@ -76,6 +88,10 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
   const [showRechazo, setShowRechazo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanCodigo, setScanCodigo] = useState("");
+  const [scanMsg, setScanMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [scanSubmitting, setScanSubmitting] = useState(false);
 
   const pendientes = useMemo(() => confirmaciones.filter((c) => c.estado === "pendiente"), [confirmaciones]);
   const confirmados = useMemo(() => confirmaciones.filter((c) => c.estado === "confirmado"), [confirmaciones]);
@@ -105,16 +121,29 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
     });
   }
 
-  async function handleConfirmar() {
-    setSubmitting(true);
-    setMsg(null);
-    const result = await confirmarAplicacion(codigo, selectedPendientes);
-    setMsg({ text: result.msg, ok: result.success });
+  function closeScan(open: boolean) {
+    if (scanSubmitting) return; // no cerrar mientras se procesa el escaneo
+    setScanOpen(open);
+    if (!open) {
+      setScanCodigo("");
+      setScanMsg(null);
+    }
+  }
+
+  async function handleScanConfirm(e: React.FormEvent) {
+    e.preventDefault();
+    setScanSubmitting(true);
+    setScanMsg(null);
+    const result = await confirmarAplicacion(scanCodigo, selectedPendientes);
     if (result.success) {
       setSelected(new Set());
+      setScanCodigo("");
+      setScanOpen(false);
       router.refresh();
+    } else {
+      setScanMsg({ text: result.msg, ok: false });
     }
-    setSubmitting(false);
+    setScanSubmitting(false);
   }
 
   async function handleRechazar() {
@@ -286,22 +315,43 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
         searchPlaceholder="Buscar por código, marca o modelo…"
         getSearchText={(c) => `${c.cod_universal} ${c.snap_marca ?? ""} ${c.snap_modelo ?? ""}`}
         actions={
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <div className="rounded-lg border border-border bg-card px-3 py-1.5 text-center">
-              <p className="text-lg font-bold text-foreground">{confirmaciones.length}</p>
-              <p className="text-[11px] text-muted-foreground">Total</p>
-            </div>
-            <div className="rounded-lg border border-amber-100 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 px-3 py-1.5 text-center">
-              <p className="text-lg font-bold text-amber-700 dark:text-amber-300">{pendientes.length}</p>
-              <p className="text-[11px] text-muted-foreground">Pendiente</p>
-            </div>
-            <div className="rounded-lg border border-green-100 dark:border-green-500/20 bg-green-50 dark:bg-green-500/10 px-3 py-1.5 text-center">
-              <p className="text-lg font-bold text-green-700 dark:text-green-300">{confirmados.length}</p>
-              <p className="text-[11px] text-muted-foreground">Confirmado</p>
-            </div>
-            <div className="rounded-lg border border-red-100 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-3 py-1.5 text-center">
-              <p className="text-lg font-bold text-red-700 dark:text-red-300">{rechazados.length}</p>
-              <p className="text-[11px] text-muted-foreground">Rechazado</p>
+          <div className="flex flex-wrap items-center gap-3">
+            {pendientes.length > 0 && (
+              <Button
+                size="sm"
+                onClick={() => setScanOpen(true)}
+                disabled={!somePendientesSelected}
+                className="h-7 bg-green-600 hover:bg-green-700"
+              >
+                <CheckCircle className="h-3.5 w-3.5" />
+                Confirmar ({selectedPendientes.length})
+              </Button>
+            )}
+
+            {selectedPendientes.length >= ALERTA_SELECCION_SIN_CONFIRMAR && (
+              <div className="flex items-center gap-1.5 rounded-md border border-amber-200 dark:border-amber-500/25 bg-amber-50 dark:bg-amber-500/10 px-2.5 py-1 text-xs text-amber-800 dark:text-amber-300">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                Tienes {selectedPendientes.length} seleccionados sin confirmar — te recomendamos confirmar tus avances.
+              </div>
+            )}
+
+            <div className="grid h-14 grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="flex h-14 flex-col items-center justify-center rounded-lg border border-border bg-card px-3 text-center">
+                <p className="text-lg font-bold text-foreground">{confirmaciones.length}</p>
+                <p className="text-[11px] text-muted-foreground">Total</p>
+              </div>
+              <div className="flex h-14 flex-col items-center justify-center rounded-lg border border-amber-100 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 px-3 text-center">
+                <p className="text-lg font-bold text-amber-700 dark:text-amber-300">{pendientes.length}</p>
+                <p className="text-[11px] text-muted-foreground">Pendiente</p>
+              </div>
+              <div className="flex h-14 flex-col items-center justify-center rounded-lg border border-green-100 dark:border-green-500/20 bg-green-50 dark:bg-green-500/10 px-3 text-center">
+                <p className="text-lg font-bold text-green-700 dark:text-green-300">{confirmados.length}</p>
+                <p className="text-[11px] text-muted-foreground">Confirmado</p>
+              </div>
+              <div className="flex h-14 flex-col items-center justify-center rounded-lg border border-red-100 dark:border-red-500/20 bg-red-50 dark:bg-red-500/10 px-3 text-center">
+                <p className="text-lg font-bold text-red-700 dark:text-red-300">{rechazados.length}</p>
+                <p className="text-[11px] text-muted-foreground">Rechazado</p>
+              </div>
             </div>
           </div>
         }
@@ -342,11 +392,6 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
             )}
 
             <div className="flex items-center gap-2 pb-0.5">
-              <Button size="sm" onClick={handleConfirmar} disabled={!somePendientesSelected || submitting} className="bg-green-600 hover:bg-green-700">
-                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                Confirmar ({selectedPendientes.length})
-              </Button>
-
               <Button
                 size="sm"
                 variant="outline"
@@ -377,6 +422,40 @@ export function ConfirmacionPanel({ confirmaciones, loteId, tiendaNombre, publis
           {msg && <p className={`text-xs ${msg.ok ? "text-green-700 dark:text-green-300" : "text-red-600"}`}>{msg.text}</p>}
         </div>
       )}
+
+      <Dialog open={scanOpen} onOpenChange={closeScan}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar {selectedPendientes.length} producto(s)</DialogTitle>
+            <DialogDescription>
+              Escanea tu credencial con la pistola lectora de código de barras.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleScanConfirm} className="space-y-3">
+            <Input
+              type="password"
+              autoFocus
+              autoComplete="off"
+              placeholder="Escanea tu credencial…"
+              value={scanCodigo}
+              onChange={(e) => {
+                setScanCodigo(e.target.value);
+                setScanMsg(null);
+              }}
+            />
+            {scanMsg && <p className="text-xs text-red-600">{scanMsg.text}</p>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => closeScan(false)} disabled={scanSubmitting}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={scanSubmitting || !scanCodigo.trim()} className="bg-green-600 hover:bg-green-700">
+                {scanSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+                Confirmar
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

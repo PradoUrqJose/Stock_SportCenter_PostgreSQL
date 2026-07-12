@@ -28,7 +28,10 @@ import {
 import { crearVendedor, editarVendedor, eliminarVendedor } from "@/lib/actions/credenciales";
 import type { Tienda, Vendedor } from "@/types";
 
+const SIN_TIENDA = "__sin_tienda__";
+
 type VendedorFormData = {
+  usuario: string;
   nombre: string;
   codigo: string;
   tienda_id: string;
@@ -47,9 +50,10 @@ function VendedorForm({
   onDone: () => void;
 }) {
   const [form, setForm] = useState<VendedorFormData>({
+    usuario: initial?.usuario ?? "",
     nombre: initial?.nombre ?? "",
     codigo: initial?.codigo ?? "",
-    tienda_id: initial?.tienda_id ?? "",
+    tienda_id: initial?.tienda_id ?? SIN_TIENDA,
     activo: initial ? initial.activo === 1 : true,
   });
   const [error, setError] = useState("");
@@ -64,9 +68,13 @@ function VendedorForm({
     setLoading(true);
     setError("");
 
+    const payload = {
+      ...form,
+      tienda_id: form.tienda_id === SIN_TIENDA ? null : form.tienda_id,
+    };
     const r = isEdit && initial
-      ? await editarVendedor(initial.id, form)
-      : await crearVendedor(form);
+      ? await editarVendedor(initial.id, payload)
+      : await crearVendedor(payload);
 
     setLoading(false);
     if (!r.success) { setError(r.msg); return; }
@@ -77,6 +85,17 @@ function VendedorForm({
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 pt-1">
       <div className="grid grid-cols-2 gap-3">
         <div className="flex flex-col gap-1.5">
+          <Label htmlFor="v-usuario">Usuario</Label>
+          <Input
+            id="v-usuario"
+            value={form.usuario}
+            onChange={(e) => set("usuario", e.target.value)}
+            placeholder="jlopez"
+            required
+            autoFocus={!isEdit}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="v-nombre">Nombre vendedor</Label>
           <Input
             id="v-nombre"
@@ -84,29 +103,30 @@ function VendedorForm({
             onChange={(e) => set("nombre", e.target.value)}
             placeholder="Juan López"
             required
-            autoFocus={!isEdit}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="v-codigo">Código de confirmación</Label>
-          <Input
-            id="v-codigo"
-            value={form.codigo}
-            onChange={(e) => set("codigo", e.target.value.toUpperCase())}
-            placeholder="Ej: VEN01"
-            required
-            className="font-mono"
           />
         </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label>Tienda <span className="text-red-500">*</span></Label>
-        <Select value={form.tienda_id} onValueChange={(v) => set("tienda_id", v ?? "")}>
+        <Label htmlFor="v-codigo">Código de confirmación</Label>
+        <Input
+          id="v-codigo"
+          value={form.codigo}
+          onChange={(e) => set("codigo", e.target.value.toUpperCase())}
+          placeholder="Ej: VEN01"
+          required
+          className="font-mono"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>Tienda</Label>
+        <Select value={form.tienda_id} onValueChange={(v) => set("tienda_id", v ?? SIN_TIENDA)}>
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Seleccionar tienda…" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value={SIN_TIENDA}>Sin tienda (credencial global)</SelectItem>
             {tiendas.map((t) => (
               <SelectItem key={t.id} value={t.id}>
                 {t.nombre}
@@ -114,6 +134,9 @@ function VendedorForm({
             ))}
           </SelectContent>
         </Select>
+        <p className="text-xs text-muted-foreground">
+          Sin tienda, el código sirve para confirmar/rechazar en cualquier tienda.
+        </p>
       </div>
 
       {isEdit && (
@@ -165,6 +188,7 @@ export function CredencialesTable({
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Usuario</TableHead>
               <TableHead>Código</TableHead>
               <TableHead>Nombre</TableHead>
               <TableHead>Tienda</TableHead>
@@ -175,16 +199,19 @@ export function CredencialesTable({
           <TableBody>
             {vendedores.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                   Sin vendedores registrados
                 </TableCell>
               </TableRow>
             )}
             {vendedores.map((v) => (
               <TableRow key={v.id}>
+                <TableCell className="text-sm text-muted-foreground">{v.usuario ?? "—"}</TableCell>
                 <TableCell className="font-mono font-medium text-foreground">{v.codigo}</TableCell>
                 <TableCell>{v.nombre}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{v.tienda_nombre}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {v.tienda_nombre ?? <Badge variant="secondary">Global</Badge>}
+                </TableCell>
                 <TableCell>
                   {v.activo ? (
                     <Badge variant="outline">Activo</Badge>

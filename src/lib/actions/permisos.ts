@@ -30,7 +30,7 @@ export async function toggleModulo(
 
   if (granted) {
     await db.execute({
-      sql: "INSERT OR IGNORE INTO admin_modules (user_id, module_id) VALUES (?,?)",
+      sql: "INSERT INTO admin_modules (user_id, module_id) VALUES (?,?) ON CONFLICT DO NOTHING",
       args: [userId, moduleId],
     });
   } else {

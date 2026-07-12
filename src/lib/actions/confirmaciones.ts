@@ -5,12 +5,17 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth";
 import type { ActionResult } from "@/types";
 
+// Un vendedor sin tienda asociada (tienda_id IS NULL) es una credencial global:
+// válida para confirmar/rechazar en cualquier tienda. Uno con tienda asignada
+// sigue restringido a esa tienda únicamente.
 async function resolveVendedor(
   codigoVendedor: string,
   tiendaId: string
 ): Promise<{ id: number } | null> {
   const result = await db.execute({
-    sql: `SELECT id FROM vendedores WHERE codigo = ? AND tienda_id = ? AND activo = 1 LIMIT 1`,
+    sql: `SELECT id FROM vendedores
+          WHERE codigo = ? AND activo = 1 AND (tienda_id = ? OR tienda_id IS NULL)
+          LIMIT 1`,
     args: [codigoVendedor.trim().toUpperCase(), tiendaId],
   });
   if (!result.rows.length) return null;
@@ -39,7 +44,7 @@ export async function confirmarAplicacion(
     const placeholders = ids.map(() => "?").join(",");
     const result = await db.execute({
       sql: `UPDATE confirmaciones
-            SET estado='confirmado', resuelto_at=datetime('now'),
+            SET estado='confirmado', resuelto_at=now_text(),
                 vendedor_id=?, codigo_usado=?
             WHERE id IN (${placeholders})
               AND tienda_id=?
@@ -85,7 +90,7 @@ export async function rechazarProductos(
     const placeholders = ids.map(() => "?").join(",");
     const result = await db.execute({
       sql: `UPDATE confirmaciones
-            SET estado='rechazado', resuelto_at=datetime('now'),
+            SET estado='rechazado', resuelto_at=now_text(),
                 vendedor_id=?, codigo_usado=?, motivo_rechazo=?
             WHERE id IN (${placeholders})
               AND tienda_id=?

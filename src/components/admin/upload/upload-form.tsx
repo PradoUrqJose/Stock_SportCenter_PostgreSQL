@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import {
   parseStockFile,
   parseImagesFile,
-  parseDiscountFiles,
+  parseDiscountFile,
   buildData,
 } from "@/lib/upload/parsers";
 import {
@@ -46,18 +46,17 @@ export function UploadForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   async function handleParse() {
     const stockFile = stockRef.current?.files?.[0];
     const imagesFile = imagesRef.current?.files?.[0];
-    const discountFiles = Array.from(discountsRef.current?.files ?? []);
+    const discountFile = discountsRef.current?.files?.[0];
 
-    if (!stockFile) return alert("Selecciona el archivo de stock (XLSX).");
+    if (!stockFile) return alert("Selecciona el archivo de stock (CSV).");
 
     setStep({ id: "parsing" });
     try {
       const rawRows = await parseStockFile(stockFile);
       const imageMap = imagesFile ? await parseImagesFile(imagesFile) : new Map<string, string>();
-      const discountMap =
-        discountFiles.length > 0
-          ? await parseDiscountFiles(discountFiles)
-          : new Map<string, number>();
+      const discountMap = discountFile
+        ? await parseDiscountFile(discountFile)
+        : new Map<string, number>();
 
       const result = buildData(rawRows, imageMap, discountMap);
       setStep({ id: "preview", result });
@@ -69,54 +68,60 @@ export function UploadForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   async function handleUpload(result: BuildResult) {
     const { productos, variantes, imagenes } = result;
 
+    const prodBatches = chunkArray(productos, BATCH_SIZE);
+    const varBatches = chunkArray(variantes, BATCH_SIZE);
+    const imgBatches = chunkArray(imagenes, BATCH_SIZE);
+    // Unidades de progreso reales: limpieza + cada lote enviado + finalizado.
+    const totalUnits = 1 + prodBatches.length + varBatches.length + imgBatches.length + 1;
+    let doneUnits = 0;
+
+    const report = (label: string) =>
+      setStep({ id: "uploading", label, current: doneUnits, total: totalUnits });
+
     try {
       // 1. Clear mirror
-      setStep({ id: "uploading", label: "Limpiando espejo...", current: 0, total: 0 });
+      report("Limpiando espejo...");
       const init = await initUpload();
       if (!init.success) throw new Error(init.msg);
+      doneUnits += 1;
+      report("Limpiando espejo...");
 
       // 2. Upload productos
-      const prodBatches = chunkArray(productos, BATCH_SIZE);
-      let done = 0;
       for (let i = 0; i < prodBatches.length; i += CONCURRENCY) {
         const group = prodBatches.slice(i, i + CONCURRENCY);
         const results = await Promise.all(group.map((b) => uploadProductosBatch(b)));
         const failed = results.find((r) => !r.success);
         if (failed) throw new Error(failed.msg);
-        done = Math.min(i + CONCURRENCY, prodBatches.length);
-        setStep({ id: "uploading", label: "Subiendo productos", current: done, total: prodBatches.length });
+        doneUnits += group.length;
+        report("Subiendo productos");
       }
 
       // 3. Upload variantes
-      const varBatches = chunkArray(variantes, BATCH_SIZE);
-      done = 0;
       for (let i = 0; i < varBatches.length; i += CONCURRENCY) {
         const group = varBatches.slice(i, i + CONCURRENCY);
         const results = await Promise.all(group.map((b) => uploadVariantesBatch(b)));
         const failed = results.find((r) => !r.success);
         if (failed) throw new Error(failed.msg);
-        done = Math.min(i + CONCURRENCY, varBatches.length);
-        setStep({ id: "uploading", label: "Subiendo variantes", current: done, total: varBatches.length });
+        doneUnits += group.length;
+        report("Subiendo variantes");
       }
 
       // 4. Upload imagenes
-      if (imagenes.length > 0) {
-        const imgBatches = chunkArray(imagenes, BATCH_SIZE);
-        done = 0;
-        for (let i = 0; i < imgBatches.length; i += CONCURRENCY) {
-          const group = imgBatches.slice(i, i + CONCURRENCY);
-          const results = await Promise.all(group.map((b) => uploadImagenesBatch(b)));
-          const failed = results.find((r) => !r.success);
-          if (failed) throw new Error(failed.msg);
-          done = Math.min(i + CONCURRENCY, imgBatches.length);
-          setStep({ id: "uploading", label: "Subiendo imágenes", current: done, total: imgBatches.length });
-        }
+      for (let i = 0; i < imgBatches.length; i += CONCURRENCY) {
+        const group = imgBatches.slice(i, i + CONCURRENCY);
+        const results = await Promise.all(group.map((b) => uploadImagenesBatch(b)));
+        const failed = results.find((r) => !r.success);
+        if (failed) throw new Error(failed.msg);
+        doneUnits += group.length;
+        report("Subiendo imágenes");
       }
 
       // 5. Finalize
-      setStep({ id: "uploading", label: "Finalizando...", current: 0, total: 0 });
+      report("Finalizando...");
       const fin = await finalizeUpload(productos.length + variantes.length);
       if (!fin.success) throw new Error(fin.msg);
+      doneUnits += 1;
+      report("Finalizando...");
 
       setStep({ id: "done", productos: productos.length, variantes: variantes.length, imagenes: imagenes.length });
       onSuccess?.();
@@ -172,22 +177,17 @@ export function UploadForm({ onSuccess }: { onSuccess?: () => void } = {}) {
   }
 
   if (step.id === "uploading") {
-    const pct =
-      step.total > 0 ? Math.round((step.current / step.total) * 100) : null;
+    const pct = Math.round((step.current / step.total) * 100);
     return (
       <div className="rounded-xl border bg-card p-6 space-y-4">
         <p className="text-sm font-medium text-gray-700">{step.label}</p>
         <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
           <div
             className="h-2 rounded-full bg-blue-500 transition-all duration-300"
-            style={{ width: pct != null ? `${pct}%` : "100%" }}
+            style={{ width: `${pct}%` }}
           />
         </div>
-        {pct != null && (
-          <p className="text-xs text-gray-400 text-right">
-            {step.current} / {step.total} lotes
-          </p>
-        )}
+        <p className="text-xs text-gray-400 text-right">{pct}%</p>
       </div>
     );
   }
@@ -223,22 +223,22 @@ export function UploadForm({ onSuccess }: { onSuccess?: () => void } = {}) {
     <div className="space-y-6">
       <div className="rounded-xl border bg-card p-6 space-y-5">
         <FileField
-          label="Stock (XLSX)"
-          accept=".xlsx,.xls"
+          label="Stock (stock.csv)"
+          accept=".csv"
           inputRef={stockRef}
           required
         />
         <FileField
-          label="Imágenes (HTML)"
-          accept=".html,.htm"
+          label="Imágenes (imagenes.csv)"
+          accept=".csv"
           inputRef={imagesRef}
+          hint="Columnas: COD.UNIVERSAL, FOTO"
         />
         <FileField
-          label="Descuentos (HTML, múltiples)"
-          accept=".html,.htm"
+          label="Descuentos (descuentos.csv)"
+          accept=".csv"
           inputRef={discountsRef}
-          multiple
-          hint="El % de descuento se lee del nombre del archivo (ej: 10.html = 10%)"
+          hint="Columnas: COD.UNIVERSAL, DESCUENTO (ej: 70%)"
         />
       </div>
       <Button onClick={handleParse}>Leer archivos</Button>

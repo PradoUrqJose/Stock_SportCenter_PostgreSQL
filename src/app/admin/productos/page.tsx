@@ -3,6 +3,11 @@ import { db, toPlain } from "@/lib/db";
 import { ProductosTable } from "@/components/admin/productos/productos-table";
 import { PageHelp } from "@/components/ui/page-help";
 
+// La subida de stock corre server actions (initUpload/uploadXBatch/finalizeUpload)
+// que Vercel factura al maxDuration de esta ruta, no al del archivo de actions.
+// El default del plan (10s en Hobby) se queda corto para varios lotes de 2000 filas.
+export const maxDuration = 60;
+
 const HELP = [
   { term: "Precio lista", desc: "Precio del ERP sin descuento." },
   { term: "Descuento", desc: "% vigente en el sistema. El color corresponde al nivel (10, 20, …, 70)." },

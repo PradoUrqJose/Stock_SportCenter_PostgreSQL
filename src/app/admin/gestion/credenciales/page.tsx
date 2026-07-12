@@ -9,11 +9,11 @@ export default async function CredencialesPage() {
 
   const [vendResult, tiendasResult] = await Promise.all([
     db.execute(`
-      SELECT v.id, v.nombre, v.codigo, v.tienda_id,
+      SELECT v.id, v.usuario, v.nombre, v.codigo, v.tienda_id,
              t.nombre AS tienda_nombre, v.activo, v.created_at
       FROM vendedores v
-      JOIN tiendas t ON t.id = v.tienda_id
-      ORDER BY t.nombre, v.codigo
+      LEFT JOIN tiendas t ON t.id = v.tienda_id
+      ORDER BY t.nombre NULLS FIRST, v.codigo
     `),
     db.execute("SELECT id, nombre, excluida_actualizacion, created_at FROM tiendas ORDER BY nombre"),
   ]);

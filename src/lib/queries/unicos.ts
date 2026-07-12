@@ -28,7 +28,7 @@ export async function fetchUnicos(): Promise<UnicoRow[]> {
     SELECT p.cod_universal, p.genero, p.marca, p.modelo, p.categoria, p.color,
       p.precio_lista, p.descuento,
       v.talla, v.alm_izq, v.alm_der, v.ingreso_fecha,
-      CAST(ROUND(julianday('now') - julianday(v.ingreso_fecha)) AS INTEGER) AS antiguedad_dias
+      CAST(CURRENT_DATE - v.ingreso_fecha::date AS INTEGER) AS antiguedad_dias
     FROM u
     JOIN productos p ON p.cod_universal = u.cod_universal AND p.genero = u.genero
     JOIN variantes v ON v.cod_universal = u.cod_universal AND v.genero = u.genero

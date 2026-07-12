@@ -1,107 +1,112 @@
-import { createClient, type InStatement } from "@libsql/client";
-import os from "node:os";
-import path from "node:path";
+import pg from "pg";
 
 // Instancia del proceso: si esto es un cold start de la función serverless,
 // se recalcula en cada arranque. Permite distinguir cold start vs. query lenta.
 const processStartedAt = Date.now();
 console.log(`[PERF][db] módulo cargado @ ${new Date(processStartedAt).toISOString()}`);
 
-const databaseUrl = process.env.DATABASE_URL!;
-const isRemote = /^(libsql:|https:|wss:)/.test(databaseUrl);
+// PostgreSQL devuelve int8 (bigint, p.ej. COUNT(*)) y numeric como STRING por
+// defecto. SQLite/libSQL los daba como number, y el código hace `as number` y
+// aritmética directa. Registramos parsers para que vuelvan como number JS y no
+// se rompan comparaciones (`n > 0`) ni cálculos. Los precios son DOUBLE PRECISION
+// (float8), que pg ya devuelve como number.
+pg.types.setTypeParser(20, (v) => (v === null ? null : parseInt(v, 10))); // int8
+pg.types.setTypeParser(1700, (v) => (v === null ? null : parseFloat(v))); // numeric
 
-// Turso remoto ejecuta el SQL en su propio motor sobre HTTP/WS: para este catálogo
-// (decenas de miles de filas) eso resultó anormalmente lento incluso para operaciones
-// triviales (PRAGMA integrity_check tardó 28s en una base de 13MB). En vez de leer
-// contra ese motor remoto en cada request, usamos un embedded replica: un archivo
-// SQLite local que se sincroniza con el primario. Las lecturas van contra el archivo
-// local; los INSERT/UPDATE/DELETE se reenvían solos al primario (read-your-writes
-// garantizado por @libsql/client, sin necesidad de sync manual tras escribir).
-export const db = isRemote
-  ? createClient({
-      url: `file:${path.join(os.tmpdir(), "stock-descuentos-replica.db")}`,
-      syncUrl: databaseUrl,
-      authToken: process.env.DATABASE_AUTH_TOKEN,
-      syncInterval: 10,
-    })
-  : createClient({
-      url: databaseUrl,
-      authToken: process.env.DATABASE_AUTH_TOKEN,
-      // Local file: SQLite fails writes with SQLITE_BUSY immediately when another
-      // connection holds the lock. Wait for the lock instead. Ignored by remote (Turso).
-      timeout: 15000,
-    });
+// Neon exige SSL. El pooler puede no coincidir con el hostname del certificado,
+// así que ciframos sin verificar la cadena (la conexión sigue siendo TLS).
+const connectionString = process.env.DATABASE_URL!;
 
-// Un archivo de réplica recién creado empieza vacío: la primera query de una
-// instancia fría debe esperar una sincronización completa antes de leer, o vería
-// el catálogo vacío. Memoizado: en instancias tibias es un await sobre una promesa
-// ya resuelta (costo ~0). Las sincronizaciones siguientes las hace `syncInterval` solo.
-let initialSync: Promise<unknown> | null = null;
-function ensureSynced(): Promise<unknown> {
-  if (!isRemote) return Promise.resolve();
-  if (!initialSync) {
-    const t0 = Date.now();
-    initialSync = db
-      .sync()
-      .then(() => {
-        console.log(`[PERF][db] sync inicial ${Date.now() - t0}ms`);
-      })
-      .catch((err) => {
-        initialSync = null;
-        throw err;
-      });
-  }
-  return initialSync;
+// Singleton reutilizable entre requests (lambda tibia) y entre recargas de HMR en
+// dev — evita agotar conexiones del pooler de Neon.
+const globalForDb = globalThis as unknown as { _pgPool?: pg.Pool };
+const pool =
+  globalForDb._pgPool ??
+  new pg.Pool({
+    connectionString,
+    ssl: { rejectUnauthorized: false },
+    max: 3,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 10_000,
+  });
+if (!globalForDb._pgPool) globalForDb._pgPool = pool;
+
+// --- Tipos que reproducen la interfaz de @libsql/client usada por la app ---
+type Args = unknown[];
+type Row = Record<string, unknown>;
+export type InStatement = string | { sql: string; args?: Args };
+export type ExecResult = { rows: Row[]; rowsAffected: number };
+
+// El código usa placeholders posicionales `?` (convención libSQL). PostgreSQL usa
+// `$1, $2, …`. Convertimos en orden de aparición; los args viajan igual.
+function toPg(sql: string): string {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
 }
 
-// --- Instrumentación temporal de performance ---
-// Loguea la duración de cada query/batch y desde cuándo está vivo este proceso,
-// para distinguir cold start de Vercel/Turso de una consulta realmente lenta.
-// Sacar una vez que tengamos el diagnóstico.
-let queryCount = 0;
+function stmtParts(stmt: InStatement): { sql: string; args: Args } {
+  if (typeof stmt === "string") return { sql: stmt, args: [] };
+  return { sql: stmt.sql, args: stmt.args ?? [] };
+}
 
-function sqlLabel(stmt: InStatement): string {
-  const sql = typeof stmt === "string" ? stmt : stmt.sql;
+function sqlLabel(sql: string): string {
   return sql.trim().replace(/\s+/g, " ").slice(0, 90);
 }
 
-const rawExecute = db.execute.bind(db);
-(db as { execute: unknown }).execute = async (stmt: InStatement) => {
-  await ensureSynced();
+let queryCount = 0;
+
+async function execute(stmt: InStatement): Promise<ExecResult> {
+  const { sql, args } = stmtParts(stmt);
   const n = ++queryCount;
   const procesoVivoMs = Date.now() - processStartedAt;
   const t0 = Date.now();
   try {
-    return await rawExecute(stmt);
+    const res = await pool.query(toPg(sql), args);
+    return { rows: res.rows as Row[], rowsAffected: res.rowCount ?? 0 };
   } finally {
     const ms = Date.now() - t0;
     console.log(
-      `[PERF][db#${n}] ${ms}ms | proceso vivo ${procesoVivoMs}ms | ${sqlLabel(stmt)}`
+      `[PERF][db#${n}] ${ms}ms | proceso vivo ${procesoVivoMs}ms | ${sqlLabel(sql)}`
     );
   }
-};
+}
 
-const rawBatch = db.batch.bind(db);
-(db as { batch: unknown }).batch = async (
+// Reemplaza db.batch([...], "write") de libSQL: ejecuta todas las sentencias en
+// una única transacción (BEGIN/COMMIT), con rollback ante cualquier error.
+async function batch(
   stmts: InStatement[],
-  mode?: Parameters<typeof rawBatch>[1]
-) => {
-  await ensureSynced();
+  _mode?: "write" | "read" | "deferred"
+): Promise<ExecResult[]> {
   const n = ++queryCount;
   const procesoVivoMs = Date.now() - processStartedAt;
   const t0 = Date.now();
+  const client = await pool.connect();
   try {
-    return await rawBatch(stmts, mode);
+    await client.query("BEGIN");
+    const out: ExecResult[] = [];
+    for (const stmt of stmts) {
+      const { sql, args } = stmtParts(stmt);
+      const res = await client.query(toPg(sql), args);
+      out.push({ rows: res.rows as Row[], rowsAffected: res.rowCount ?? 0 });
+    }
+    await client.query("COMMIT");
+    return out;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
   } finally {
+    client.release();
     const ms = Date.now() - t0;
     console.log(
       `[PERF][db#${n}] batch(${stmts.length}) ${ms}ms | proceso vivo ${procesoVivoMs}ms`
     );
   }
-};
+}
 
-// @libsql/client rows have a non-enumerable `length` property that React Flight rejects.
-// Spread copies only enumerable own properties, producing a plain serializable object.
+export const db = { execute, batch };
+
+// Compat: los rows de pg ya son objetos planos serializables por React Flight;
+// esta copia es inofensiva y evita tocar los ~40 call-sites que la usan.
 export function toPlain<T>(rows: unknown[]): T[] {
   return rows.map((r) => ({ ...(r as object) })) as T[];
 }

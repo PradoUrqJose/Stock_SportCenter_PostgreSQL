@@ -24,10 +24,11 @@ export type UserRow = {
 
 export type Vendedor = {
   id: number;
+  usuario: string | null;
   nombre: string;
   codigo: string;
-  tienda_id: string;
-  tienda_nombre: string;
+  tienda_id: string | null;
+  tienda_nombre: string | null;
   activo: number;
   created_at: string;
 };

@@ -82,7 +82,7 @@ export async function toggleLoteExclusion(
   try {
     if (excluir) {
       await db.execute({
-        sql: `INSERT OR IGNORE INTO lote_exclusiones (lote_id, tienda_id, excluida_by) VALUES (?, ?, ?)`,
+        sql: `INSERT INTO lote_exclusiones (lote_id, tienda_id, excluida_by) VALUES (?, ?, ?) ON CONFLICT DO NOTHING`,
         args: [loteId, tiendaId, s.id],
       });
     } else {

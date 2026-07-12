@@ -10,6 +10,8 @@ import {
   PackageCheck,
   UploadCloud,
   BarChart3,
+  TruckIcon,
+  Receipt,
 } from "lucide-react";
 import { db } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth";
@@ -27,6 +29,8 @@ const ICONS: Record<string, React.ReactNode> = {
   reposicion: <PackageCheck className="h-4 w-4" />,
   utils: <UploadCloud className="h-4 w-4" />,
   analisis: <BarChart3 className="h-4 w-4" />,
+  ingresos: <TruckIcon className="h-4 w-4" />,
+  facturacion: <Receipt className="h-4 w-4" />,
   tiendas: <Store className="h-4 w-4" />,
   usuarios: <Users className="h-4 w-4" />,
   credenciales: <KeyRound className="h-4 w-4" />,

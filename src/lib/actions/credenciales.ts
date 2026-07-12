@@ -21,22 +21,27 @@ async function guard() {
 }
 
 export async function crearVendedor(data: {
+  usuario: string;
   nombre: string;
   codigo: string;
-  tienda_id: string;
+  tienda_id: string | null;
 }): Promise<ActionResult> {
   if (!(await guard())) return { success: false, msg: "Sin permisos" };
   if (!(await rateLimit(await getIP(), 30, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
 
+  const usuario = data.usuario.trim();
   const nombre = data.nombre.trim();
   const codigo = data.codigo.trim().toUpperCase();
-  if (!nombre || !codigo) return { success: false, msg: "Nombre y código son requeridos" };
-  if (!data.tienda_id) return { success: false, msg: "Tienda requerida" };
+  if (!usuario || !nombre || !codigo)
+    return { success: false, msg: "Usuario, nombre y código son requeridos" };
+  // Tienda es opcional: sin tienda, el código queda como credencial global,
+  // válida para confirmar/rechazar en cualquier tienda (ver resolveVendedor).
+  const tienda_id = data.tienda_id || null;
 
   try {
     await db.execute({
-      sql: "INSERT INTO vendedores (nombre, codigo, tienda_id) VALUES (?,?,?)",
-      args: [nombre, codigo, data.tienda_id],
+      sql: "INSERT INTO vendedores (usuario, nombre, codigo, tienda_id) VALUES (?,?,?,?)",
+      args: [usuario, nombre, codigo, tienda_id],
     });
   } catch {
     return { success: false, msg: "Ya existe un vendedor con ese código" };
@@ -49,24 +54,27 @@ export async function crearVendedor(data: {
 export async function editarVendedor(
   id: number,
   data: {
+    usuario: string;
     nombre: string;
     codigo: string;
-    tienda_id: string;
+    tienda_id: string | null;
     activo: boolean;
   }
 ): Promise<ActionResult> {
   if (!(await guard())) return { success: false, msg: "Sin permisos" };
   if (!(await rateLimit(await getIP(), 30, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
 
+  const usuario = data.usuario.trim();
   const nombre = data.nombre.trim();
   const codigo = data.codigo.trim().toUpperCase();
-  if (!nombre || !codigo) return { success: false, msg: "Nombre y código son requeridos" };
-  if (!data.tienda_id) return { success: false, msg: "Tienda requerida" };
+  if (!usuario || !nombre || !codigo)
+    return { success: false, msg: "Usuario, nombre y código son requeridos" };
+  const tienda_id = data.tienda_id || null;
 
   try {
     await db.execute({
-      sql: "UPDATE vendedores SET nombre=?, codigo=?, tienda_id=?, activo=? WHERE id=?",
-      args: [nombre, codigo, data.tienda_id, data.activo ? 1 : 0, id],
+      sql: "UPDATE vendedores SET usuario=?, nombre=?, codigo=?, tienda_id=?, activo=? WHERE id=?",
+      args: [usuario, nombre, codigo, tienda_id, data.activo ? 1 : 0, id],
     });
   } catch {
     return { success: false, msg: "Ya existe un vendedor con ese código" };
