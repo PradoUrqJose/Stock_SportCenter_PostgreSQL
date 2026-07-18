@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,9 +25,12 @@ export type FilterBarProps<T> = {
   // extra controls rendered in the same row as the filters, pushed to the right
   actions?: React.ReactNode;
   children: (filtered: T[]) => React.ReactNode;
+  // notifies the parent whenever the filtered set changes, so it can render
+  // things (e.g. summary cards) outside/above this component using the same filtered data
+  onFilteredChange?: (filtered: T[]) => void;
 };
 
-export function FilterBar<T>({ data, filters, getSearchText, searchPlaceholder = "Buscar…", actions, children }: FilterBarProps<T>) {
+export function FilterBar<T>({ data, filters, getSearchText, searchPlaceholder = "Buscar…", actions, children, onFilteredChange }: FilterBarProps<T>) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Record<string, string[]>>({});
 
@@ -69,6 +72,10 @@ export function FilterBar<T>({ data, filters, getSearchText, searchPlaceholder =
   }, [data, search, selected, filters, getSearchText]);
 
   const hasActiveFilters = search.trim() !== "" || Object.values(selected).some((v) => v.length > 0);
+
+  useEffect(() => {
+    onFilteredChange?.(filtered);
+  }, [filtered, onFilteredChange]);
 
   return (
     <div className="space-y-4">

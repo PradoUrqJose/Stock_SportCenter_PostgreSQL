@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Upload } from "lucide-react";
+import { Upload, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable, type ColDef } from "@/components/ui/data-table";
 import { FilterBar, type SelectFilterDef } from "@/components/ui/filter-bar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { IngresosUploadForm } from "@/components/admin/upload/ingresos-upload-form";
 import { SincronizarButton } from "@/components/admin/sincronizar-button";
+import { formatDateDDMMYY } from "@/lib/utils";
 import type { IngresoRow } from "@/app/admin/ingresos/page";
 
 function money(v: number | null): string {
@@ -30,7 +31,7 @@ const COLUMNS: ColDef<IngresoRow>[] = [
     width: 1,
     sortable: true,
     sortValue: (r) => r.emision,
-    cell: (r) => <span className="text-sm">{r.emision}</span>,
+    cell: (r) => <span className="text-sm">{formatDateDDMMYY(r.emision)}</span>,
   },
   {
     key: "serie_numero",
@@ -117,6 +118,14 @@ export function IngresosTable({ ingresos }: { ingresos: IngresoRow[] }) {
               <Upload className="h-4 w-4" />
               Cargar histórico
             </Button>
+            <a
+              href="/api/export/ingresos"
+              download="ingresos.xlsx"
+              className="inline-flex items-center gap-1.5 rounded-md border border-green-200 dark:border-green-500/25 bg-green-50 dark:bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-700 dark:text-green-300 hover:bg-green-100 transition-colors"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              Exportar a Excel
+            </a>
           </>
         }
       >
@@ -125,7 +134,7 @@ export function IngresosTable({ ingresos }: { ingresos: IngresoRow[] }) {
             columns={COLUMNS}
             data={filtered}
             keyFn={(r) => r.codigo_interno}
-            defaultSort={{ key: "emision", dir: "desc" }}
+            defaultSort={{ key: "codigo_interno", dir: "asc" }}
             pageSize={50}
             emptyTitle="Sin ingresos cargados"
             emptyDesc='Usa "Cargar histórico" para subir un archivo, o "Sincronizar" para traer del ERP.'

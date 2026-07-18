@@ -1,5 +1,6 @@
 "use client";
 
+import { FileSpreadsheet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type ColDef } from "@/components/ui/data-table";
 import { DiscountBadge } from "@/components/ui/discount-badge";
@@ -126,6 +127,16 @@ export function UnicosTable({ unicos }: { unicos: UnicoRow[] }) {
       filters={FILTERS}
       searchPlaceholder="Buscar por código, marca o modelo…"
       getSearchText={(r) => `${r.cod_universal} ${r.marca ?? ""} ${r.modelo ?? ""}`}
+      actions={
+        <a
+          href="/api/export/unicos"
+          download="unicos.xlsx"
+          className="inline-flex items-center gap-1.5 rounded-md border border-green-200 dark:border-green-500/25 bg-green-50 dark:bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-700 dark:text-green-300 hover:bg-green-100 transition-colors"
+        >
+          <FileSpreadsheet className="h-3.5 w-3.5" />
+          Exportar a Excel
+        </a>
+      }
     >
       {(filtered) => (
         <DataTable

@@ -6,7 +6,7 @@ import { ChevronDown } from "lucide-react";
 export function ExpandableList({ children }: { children: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-border bg-card divide-y divide-border overflow-hidden">
-      <AnimatePresence mode="popLayout" initial={false}>
+      <AnimatePresence mode="popLayout">
         {children}
       </AnimatePresence>
     </div>

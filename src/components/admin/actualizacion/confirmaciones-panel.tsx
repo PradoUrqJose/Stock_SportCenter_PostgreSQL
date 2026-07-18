@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useCallback, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle, XCircle, Clock, Download, X, RefreshCw } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Download, FileSpreadsheet, X, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -10,7 +10,7 @@ import { DiscountBadge } from "@/components/ui/discount-badge";
 import { ExpandableList, ExpandableRow } from "@/components/ui/expandable-list";
 import { FilterBar, type SelectFilterDef } from "@/components/ui/filter-bar";
 import { cerrarLote, sincronizarConfirmaciones } from "@/lib/actions/descuentos";
-import { groupConfirmaciones, type ProductGroup } from "@/lib/product-groups";
+import { groupConfirmaciones } from "@/lib/product-groups";
 
 export type ConfirmacionFlatRow = {
   cod_universal: string;
@@ -19,6 +19,7 @@ export type ConfirmacionFlatRow = {
   tienda_id: string;
   tienda_nombre: string;
   codigo_usado: string | null;
+  vendedor_nombre: string | null;
   motivo_rechazo: string | null;
   resuelto_at: string | null;
   snap_marca: string | null;
@@ -51,10 +52,10 @@ const ESTADO_ICON = {
   rechazado: <XCircle className="h-3.5 w-3.5 text-red-500" />,
 };
 
-const FILTERS: SelectFilterDef<ProductGroup>[] = [
-  { key: "marca", label: "Marca", getValue: (g) => g.snap_marca },
-  { key: "estado", label: "Estado", getValue: (g) => g.estadoResumen },
-  { key: "tienda", label: "Tienda", getValues: (g) => g.tiendas.map((t) => t.tienda_nombre) },
+const FILTERS: SelectFilterDef<ConfirmacionFlatRow>[] = [
+  { key: "marca", label: "Marca", getValue: (r) => r.snap_marca },
+  { key: "estado", label: "Estado", getValue: (r) => r.estado },
+  { key: "tienda", label: "Tienda", getValue: (r) => r.tienda_nombre },
 ];
 
 export function ConfirmacionesPanel({ rows, loteId, loteEstado, publishedAt, headerExtra }: Props) {
@@ -72,7 +73,22 @@ export function ConfirmacionesPanel({ rows, loteId, loteEstado, publishedAt, hea
     });
   }
 
-  const { groups, totals } = useMemo(() => groupConfirmaciones(rows), [rows]);
+  // Totales del lote completo (sin filtrar) — usados para el diálogo de cerrar lote,
+  // que debe reflejar el estado real del lote y no la vista filtrada.
+  const { totals } = useMemo(() => groupConfirmaciones(rows), [rows]);
+
+  // Filas tras aplicar los filtros de la FilterBar, reportadas vía onFilteredChange
+  // para poder mostrar las tarjetas de resumen arriba de todo (por encima de la
+  // barra de búsqueda/filtros) reflejando igualmente el filtro activo.
+  const [filteredRows, setFilteredRows] = useState<ConfirmacionFlatRow[]>(rows);
+  const { totals: filteredTotals } = useMemo(() => groupConfirmaciones(filteredRows), [filteredRows]);
+
+  // Referencia estable: si se recrea en cada render, el useMemo interno de FilterBar
+  // nunca memoriza y su useEffect dispara onFilteredChange sin parar.
+  const getSearchText = useCallback(
+    (r: ConfirmacionFlatRow) => `${r.cod_universal} ${r.snap_marca ?? ""} ${r.snap_modelo ?? ""}`,
+    []
+  );
 
   const isPublicado = loteEstado === "publicado";
 
@@ -100,14 +116,6 @@ export function ConfirmacionesPanel({ rows, loteId, loteEstado, publishedAt, hea
             </span>
             {isPublicado && (
               <>
-                <a
-                  href={`/api/lote/${loteId}/export`}
-                  download={`lote-${loteId}.zip`}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 dark:border-blue-500/25 bg-blue-50 dark:bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100 transition-colors"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Exportar ZIP
-                </a>
                 <Button
                   size="xs"
                   variant="outline"
@@ -133,13 +141,13 @@ export function ConfirmacionesPanel({ rows, loteId, loteEstado, publishedAt, hea
         </div>
       </div>
 
-      {/* Global summary */}
+      {/* Global summary, refleja los filtros activos de la barra de abajo */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: "Total", n: totals.total, color: "text-foreground", bg: "bg-card" },
-          { label: "Pendiente", n: totals.pendiente, color: "text-amber-700 dark:text-amber-300", bg: "bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20" },
-          { label: "Confirmado", n: totals.confirmado, color: "text-green-700 dark:text-green-300", bg: "bg-green-50 dark:bg-green-500/10 border-green-100 dark:border-green-500/20" },
-          { label: "Rechazado", n: totals.rechazado, color: "text-red-700 dark:text-red-300", bg: "bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/20" },
+          { label: "Total", n: filteredTotals.total, color: "text-foreground", bg: "bg-card" },
+          { label: "Pendiente", n: filteredTotals.pendiente, color: "text-amber-700 dark:text-amber-300", bg: "bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20" },
+          { label: "Confirmado", n: filteredTotals.confirmado, color: "text-green-700 dark:text-green-300", bg: "bg-green-50 dark:bg-green-500/10 border-green-100 dark:border-green-500/20" },
+          { label: "Rechazado", n: filteredTotals.rechazado, color: "text-red-700 dark:text-red-300", bg: "bg-red-50 dark:bg-red-500/10 border-red-100 dark:border-red-500/20" },
         ].map(({ label, n, color, bg }) => (
           <div
             key={label}
@@ -148,8 +156,8 @@ export function ConfirmacionesPanel({ rows, loteId, loteEstado, publishedAt, hea
             <p className={`text-2xl font-bold ${color}`}>{n}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {label}
-              {label !== "Total" && totals.total > 0 && (
-                <span className="ml-1 text-muted-foreground">({pct(n, totals.total)})</span>
+              {label !== "Total" && filteredTotals.total > 0 && (
+                <span className="ml-1 text-muted-foreground">({pct(n, filteredTotals.total)})</span>
               )}
             </p>
           </div>
@@ -158,13 +166,37 @@ export function ConfirmacionesPanel({ rows, loteId, loteEstado, publishedAt, hea
 
       {/* Per-product accordion */}
       <FilterBar
-        data={groups}
+        data={rows}
         filters={FILTERS}
         searchPlaceholder="Buscar por producto o código…"
-        getSearchText={(g) => `${g.cod_universal} ${g.snap_marca ?? ""} ${g.snap_modelo ?? ""}`}
+        getSearchText={getSearchText}
+        onFilteredChange={setFilteredRows}
+        actions={
+          <>
+            <a
+              href={`/api/lote/${loteId}/export-confirmaciones`}
+              download={`confirmaciones-lote-${loteId}.xlsx`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-green-200 dark:border-green-500/25 bg-green-50 dark:bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-700 dark:text-green-300 hover:bg-green-100 transition-colors"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              Exportar a Excel
+            </a>
+            {isPublicado && (
+              <a
+                href={`/api/lote/${loteId}/export`}
+                download={`lote-${loteId}.zip`}
+                className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 dark:border-blue-500/25 bg-blue-50 dark:bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100 transition-colors"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Exportar ZIP
+              </a>
+            )}
+          </>
+        }
       >
-        {(filteredGroups) =>
-          filteredGroups.length === 0 ? (
+        {(filteredRows) => {
+          const { groups: filteredGroups } = groupConfirmaciones(filteredRows);
+          return filteredGroups.length === 0 ? (
             <div className="rounded-lg border border-border bg-card px-6 py-12 text-center">
               <p className="text-sm text-muted-foreground">Sin confirmaciones que coincidan.</p>
             </div>
@@ -172,7 +204,6 @@ export function ConfirmacionesPanel({ rows, loteId, loteEstado, publishedAt, hea
             <ExpandableList>
               {filteredGroups.map((g, index) => {
                 const isOpen = expanded.has(g.key);
-                const allDone = g.n_pendiente === 0;
                 return (
                   <ExpandableRow
                     key={g.key}
@@ -194,42 +225,35 @@ export function ConfirmacionesPanel({ rows, loteId, loteEstado, publishedAt, hea
                           </Badge>
                         </div>
 
-                        {/* prices + before → after */}
+                        {/* prices + before → after — anchos fijos para que las columnas alineen entre filas */}
                         <div className="hidden shrink-0 items-center gap-1.5 text-sm sm:flex">
-                          {money(g.snap_precio_lista) && (
-                            <span className="font-mono text-xs text-muted-foreground">{money(g.snap_precio_lista)}</span>
-                          )}
+                          <span className="w-[4.2rem] text-right font-mono text-xs text-muted-foreground">
+                            {money(g.snap_precio_lista) ?? "—"}
+                          </span>
                           <DiscountBadge value={g.descuento_antes} />
                           <span className="text-muted-foreground">→</span>
                           <DiscountBadge value={g.descuento_nuevo} />
-                          {money(g.precio_final) && (
-                            <span className="font-mono text-sm font-semibold text-foreground">
-                              {money(g.precio_final)}
-                            </span>
-                          )}
+                          <span className="w-[4.8rem] text-right font-mono text-sm font-semibold text-foreground">
+                            {money(g.precio_final) ?? "—"}
+                          </span>
                         </div>
 
-                        {/* mini counters */}
-                        <div className="shrink-0 flex items-center gap-2 text-xs">
-                          {g.n_confirmado > 0 && (
-                            <span className="flex items-center gap-0.5 text-green-700 dark:text-green-300">
-                              <CheckCircle className="h-3.5 w-3.5" />
-                              {g.n_confirmado}
-                            </span>
-                          )}
-                          {g.n_pendiente > 0 && (
-                            <span className="flex items-center gap-0.5 text-amber-600">
-                              <Clock className="h-3.5 w-3.5" />
-                              {g.n_pendiente}
-                            </span>
-                          )}
+                        {/* mini counters — confirmado y pendiente siempre visibles, con ancho fijo */}
+                        <div className="shrink-0 flex items-center gap-2 text-xs tabular-nums">
+                          <span className="flex w-8 items-center gap-0.5 text-green-700 dark:text-green-300">
+                            <CheckCircle className="h-3.5 w-3.5" />
+                            {g.n_confirmado}
+                          </span>
+                          <span className="flex w-8 items-center gap-0.5 text-amber-600">
+                            <Clock className="h-3.5 w-3.5" />
+                            {g.n_pendiente}
+                          </span>
                           {g.n_rechazado > 0 && (
                             <span className="flex items-center gap-0.5 text-red-600">
                               <XCircle className="h-3.5 w-3.5" />
                               {g.n_rechazado}
                             </span>
                           )}
-                          {allDone && <span className="text-muted-foreground">todas listas</span>}
                         </div>
                       </>
                     }
@@ -266,7 +290,7 @@ export function ConfirmacionesPanel({ rows, loteId, loteEstado, publishedAt, hea
                               </span>
                             </td>
                             <td className="px-3 py-2 text-muted-foreground">
-                              {t.codigo_usado ?? <span className="text-muted-foreground">—</span>}
+                              {t.vendedor_nombre ?? t.codigo_usado ?? <span className="text-muted-foreground">—</span>}
                             </td>
                             <td className="px-3 py-2 text-muted-foreground">
                               {t.motivo_rechazo ? (
@@ -295,8 +319,8 @@ export function ConfirmacionesPanel({ rows, loteId, loteEstado, publishedAt, hea
                 );
               })}
             </ExpandableList>
-          )
-        }
+          );
+        }}
       </FilterBar>
 
       <ConfirmDialog

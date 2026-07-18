@@ -48,11 +48,12 @@ export async function fetchConfirmaciones(loteId: number): Promise<ConfirmacionF
   const rowsResult = await db.execute({
     sql: `SELECT c.cod_universal, c.genero, c.estado, c.tienda_id,
                  t.nombre AS tienda_nombre,
-                 c.codigo_usado, c.motivo_rechazo, c.resuelto_at,
+                 c.codigo_usado, v.nombre AS vendedor_nombre, c.motivo_rechazo, c.resuelto_at,
                  ll.snap_marca, ll.snap_modelo, ll.snap_precio_lista,
                  ll.descuento_antes, ll.descuento_nuevo
           FROM confirmaciones c
           JOIN tiendas t ON t.id = c.tienda_id
+          LEFT JOIN vendedores v ON v.id = c.vendedor_id
           JOIN lote_lineas ll
             ON ll.lote_id = c.lote_id
            AND ll.cod_universal = c.cod_universal

@@ -16,22 +16,25 @@ export type UnicoRow = {
   antiguedad_dias: number | null;
 };
 
-// Productos con una sola unidad en stock (un único código de barras / variante).
+// Productos con una sola unidad en stock en total, sumando TODOS los géneros de ese
+// cod_universal — no basta con que un género individual tenga 1 sola variante, porque
+// el mismo cod_universal puede tener stock en otros géneros (p.ej. HOMBRE: 7, PRESCOLAR: 1),
+// y en ese caso no es único.
 export async function fetchUnicos(): Promise<UnicoRow[]> {
   const r = await db.execute(`
-    WITH u AS (
-      SELECT cod_universal, genero
+    WITH totales AS (
+      SELECT cod_universal
       FROM variantes
-      GROUP BY cod_universal, genero
+      GROUP BY cod_universal
       HAVING COUNT(*) = 1
     )
     SELECT p.cod_universal, p.genero, p.marca, p.modelo, p.categoria, p.color,
       p.precio_lista, p.descuento,
       v.talla, v.alm_izq, v.alm_der, v.ingreso_fecha,
       CAST(CURRENT_DATE - v.ingreso_fecha::date AS INTEGER) AS antiguedad_dias
-    FROM u
-    JOIN productos p ON p.cod_universal = u.cod_universal AND p.genero = u.genero
-    JOIN variantes v ON v.cod_universal = u.cod_universal AND v.genero = u.genero
+    FROM totales t
+    JOIN variantes v ON v.cod_universal = t.cod_universal
+    JOIN productos p ON p.cod_universal = v.cod_universal AND p.genero = v.genero
     ORDER BY p.marca, p.modelo
   `);
   return toPlain<UnicoRow>(r.rows);
