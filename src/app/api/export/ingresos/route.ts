@@ -1,12 +1,11 @@
 import ExcelJS from "exceljs";
 import { getSession, isAdminRole } from "@/lib/auth";
 import { fetchIngresos } from "@/lib/queries/ingresos";
-import { formatDateDDMMYY } from "@/lib/utils";
 
-const HEADER_FILL_BLACK: ExcelJS.Fill = {
+const HEADER_FILL_BLUE: ExcelJS.Fill = {
   type: "pattern",
   pattern: "solid",
-  fgColor: { argb: "FF000000" },
+  fgColor: { argb: "FF1E40AF" },
 };
 const STRIPE_FILL: ExcelJS.Fill = {
   type: "pattern",
@@ -16,13 +15,18 @@ const STRIPE_FILL: ExcelJS.Fill = {
 const THIN_BORDER = { style: "thin", color: { argb: "FFE5E7EB" } } as const;
 const ALL_BORDERS = { top: THIN_BORDER, left: THIN_BORDER, bottom: THIN_BORDER, right: THIN_BORDER };
 
+function toDateValue(iso: string): Date {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
 export async function GET() {
   const session = await getSession();
   if (!session || !isAdminRole(session.rol)) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const rows = await fetchIngresos();
+  const rows = [...(await fetchIngresos())].sort((a, b) => a.emision.localeCompare(b.emision));
 
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Ingresos");
@@ -39,18 +43,19 @@ export async function GET() {
 
   sheet.getRow(1).eachCell((cell) => {
     cell.alignment = { horizontal: "center", vertical: "middle" };
-    cell.fill = HEADER_FILL_BLACK;
+    cell.fill = HEADER_FILL_BLUE;
     cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
   });
 
   rows.forEach((r, i) => {
+    const rucNum = r.ruc ? Number(r.ruc) : null;
     const row = sheet.addRow({
       codigo_interno: r.codigo_interno,
       almacen: r.almacen ?? "—",
       serie_numero: r.serie_numero ?? "—",
-      emision: formatDateDDMMYY(r.emision),
+      emision: toDateValue(r.emision),
       total: r.total,
-      ruc: r.ruc ?? "—",
+      ruc: rucNum != null && !Number.isNaN(rucNum) ? rucNum : r.ruc ?? "—",
       proveedor: r.proveedor ?? "—",
     });
 
@@ -61,10 +66,31 @@ export async function GET() {
       if (isStripe) cell.fill = STRIPE_FILL;
     });
 
+    const fechaCell = row.getCell(4);
+    fechaCell.numFmt = "dd/mm/yyyy";
+    fechaCell.alignment = { vertical: "middle", horizontal: "center" };
+
     const totalCell = row.getCell(5);
-    totalCell.numFmt = "#,##0.00";
+    totalCell.numFmt = '"S/" #,##0.00';
     totalCell.alignment = { vertical: "middle", horizontal: "right" };
+
+    const rucCell = row.getCell(6);
+    rucCell.numFmt = "0";
+    rucCell.alignment = { vertical: "middle", horizontal: "center" };
   });
+
+  const lastRow = rows.length + 1;
+  const last40TopRow = Math.max(2, lastRow - 39);
+  sheet.autoFilter = { from: "A1", to: `G${lastRow}` };
+  sheet.views = [
+    {
+      state: "frozen",
+      ySplit: 1,
+      topLeftCell: `A${last40TopRow}`,
+      activeCell: `A${lastRow}`,
+      zoomScale: 150,
+    },
+  ];
 
   const buffer = await workbook.xlsx.writeBuffer();
 
