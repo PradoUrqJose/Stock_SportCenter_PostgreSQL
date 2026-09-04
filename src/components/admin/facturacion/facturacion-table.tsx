@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Upload } from "lucide-react";
+import { FileSpreadsheet, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable, type ColDef } from "@/components/ui/data-table";
 import { FilterBar, type SelectFilterDef } from "@/components/ui/filter-bar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FacturacionUploadForm } from "@/components/admin/upload/facturacion-upload-form";
 import { SincronizarButton } from "@/components/admin/sincronizar-button";
-import type { FacturacionRow } from "@/app/admin/facturacion/page";
+import type { FacturacionRow } from "@/lib/queries/facturacion";
 
 function money(v: number | null): string {
   return v == null ? "—" : `S/ ${v.toFixed(2)}`;
@@ -117,6 +117,14 @@ export function FacturacionTable({ facturacion }: { facturacion: FacturacionRow[
               <Upload className="h-4 w-4" />
               Cargar histórico
             </Button>
+            <a
+              href="/api/export/facturacion"
+              download="facturacion.xlsx"
+              className="inline-flex items-center gap-1.5 rounded-md border border-green-200 dark:border-green-500/25 bg-green-50 dark:bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-700 dark:text-green-300 hover:bg-green-100 transition-colors"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              Exportar a Excel
+            </a>
           </>
         }
       >

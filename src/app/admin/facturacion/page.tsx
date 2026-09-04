@@ -1,5 +1,5 @@
 import { requireRole, requireModule } from "@/lib/auth";
-import { db, toPlain } from "@/lib/db";
+import { fetchFacturacion } from "@/lib/queries/facturacion";
 import { FacturacionTable } from "@/components/admin/facturacion/facturacion-table";
 import { PageHelp } from "@/components/ui/page-help";
 
@@ -11,41 +11,11 @@ const HELP = [
   { term: "Sincronizar", desc: "Trae la facturación nueva del ERP (la ya cargada se ignora)." },
 ];
 
-export type FacturacionRow = {
-  ser_num: string;
-  codigo: string | null;
-  tienda: string | null;
-  tipo_comprobante: string | null;
-  cliente: string | null;
-  fecha: string;
-  moneda: string | null;
-  subtotal: number | null;
-  dscto: number | null;
-  not_cre: number | null;
-  bi: number | null;
-  igv: number | null;
-  total: number;
-  efectivo: number | null;
-  tarjeta: number | null;
-  transferencia: number | null;
-  detalle_tarjeta: string | null;
-  vendedor: string | null;
-  nc: string | null;
-};
-
 export default async function FacturacionPage() {
   const session = await requireRole("admin", "administrador_general");
   await requireModule(session, "facturacion");
 
-  const result = await db.execute(
-    `SELECT ser_num, codigo, tienda, tipo_comprobante, cliente, fecha, moneda,
-            subtotal, dscto, not_cre, bi, igv, total,
-            efectivo, tarjeta, transferencia, detalle_tarjeta, vendedor, nc
-     FROM facturacion
-     ORDER BY fecha DESC`
-  );
-
-  const facturacion = toPlain<FacturacionRow>(result.rows);
+  const facturacion = await fetchFacturacion();
 
   return (
     <div className="p-4 md:p-8">
