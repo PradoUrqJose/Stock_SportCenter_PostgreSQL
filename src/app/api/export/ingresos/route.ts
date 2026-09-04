@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { getSession, isAdminRole } from "@/lib/auth";
+import { autoFitColumns } from "@/lib/excel";
 import { fetchIngresos } from "@/lib/queries/ingresos";
 
 const HEADER_FILL_BLUE: ExcelJS.Fill = {
@@ -91,6 +92,7 @@ export async function GET() {
       zoomScale: 150,
     },
   ];
+  autoFitColumns(sheet);
 
   const buffer = await workbook.xlsx.writeBuffer();
 
