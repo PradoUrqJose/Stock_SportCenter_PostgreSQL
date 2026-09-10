@@ -201,16 +201,30 @@ export async function finalizeUpload(totalFilas: number): Promise<ActionResult> 
   }
 }
 
-// ON CONFLICT DO NOTHING deduplica por ser_num (clave de documento, igual en
-// el histórico y en lo que trae el scraper) — permite recargar el histórico
-// completo aunque se solape con datos ya sincronizados desde el ERP.
+// Deduplica por ser_num (clave de documento, igual en el histórico y en lo que
+// trae el scraper) — permite recargar el histórico completo aunque se solape
+// con datos ya sincronizados desde el ERP.
+//
+// Para las filas del ERP no basta con ignorar el duplicado: las guardadas
+// antes traían la fecha de registro de VE/BVENT en vez de la de emisión, y con
+// DO NOTHING nunca se corregirían. Por eso el conflicto ACTUALIZA los campos
+// que el scraper considera autoritativos, pero sólo cuando la fila entrante
+// viene del ERP (`WHERE EXCLUDED.fuente = 'erp'`); una recarga del histórico
+// desde Excel sigue comportándose como DO NOTHING. Las columnas que VEBREDI no
+// trae (tienda, vendedor, medios de pago…) no se tocan, así no se borra lo que
+// ya se había guardado desde BVENT.
 export async function uploadFacturacionBatch(
   rows: FacturacionInsert[]
-): Promise<ActionResult<{ insertadas: number }>> {
+): Promise<ActionResult<{ insertadas: number; corregidas: number }>> {
   try {
     await requireRole("admin", "administrador_general");
     let insertadas = 0;
-    for (const chunk of chunks(rows, CHUNK)) {
+    let corregidas = 0;
+    // DO UPDATE aborta la sentencia entera si un mismo ser_num aparece dos
+    // veces en el mismo INSERT ("cannot affect row a second time"), cosa que
+    // DO NOTHING toleraba. Nos quedamos con la última aparición.
+    const unicas = [...new Map(rows.map((r) => [r.ser_num, r])).values()];
+    for (const chunk of chunks(unicas, CHUNK)) {
       const { sql, args } = buildBulkInsert(
         "facturacion",
         ["ser_num", "codigo", "tienda", "tipo_comprobante", "cliente", "mayorista", "fecha",
@@ -221,12 +235,30 @@ export async function uploadFacturacionBatch(
           r.moneda, r.subtotal, r.dscto, r.not_cre, r.bi, r.igv, r.total,
           r.efectivo, r.tarjeta, r.transferencia, r.detalle_tarjeta, r.vendedor, r.nc, r.fuente,
         ]),
-        "ON CONFLICT (ser_num) DO NOTHING"
+        // xmax = 0 distingue la fila recién insertada de la actualizada, para
+        // poder reportar cuántas se corrigieron aparte de cuántas son nuevas.
+        `ON CONFLICT (ser_num) DO UPDATE SET
+           fecha = EXCLUDED.fecha,
+           total = EXCLUDED.total,
+           cliente = COALESCE(EXCLUDED.cliente, facturacion.cliente),
+           mayorista = COALESCE(EXCLUDED.mayorista, facturacion.mayorista),
+           tipo_comprobante = COALESCE(EXCLUDED.tipo_comprobante, facturacion.tipo_comprobante)
+         WHERE EXCLUDED.fuente = 'erp'
+           AND (facturacion.fecha IS DISTINCT FROM EXCLUDED.fecha
+             OR facturacion.total IS DISTINCT FROM EXCLUDED.total
+             OR facturacion.mayorista IS DISTINCT FROM COALESCE(EXCLUDED.mayorista, facturacion.mayorista))
+         RETURNING (xmax = 0) AS insertada`
       );
       const res = await db.execute({ sql, args });
-      insertadas += res.rowsAffected ?? 0;
+      for (const row of res.rows) {
+        if (row.insertada) insertadas += 1;
+        else corregidas += 1;
+      }
     }
-    return { success: true, msg: `${insertadas} facturas nuevas`, data: { insertadas } };
+    const msg = corregidas > 0
+      ? `${insertadas} facturas nuevas, ${corregidas} corregidas`
+      : `${insertadas} facturas nuevas`;
+    return { success: true, msg, data: { insertadas, corregidas } };
   } catch (e) {
     return { success: false, msg: String(e) };
   }

@@ -19,7 +19,8 @@ uploadFacturacionBatch/uploadIngresosBatch (src/lib/actions/upload.ts).
 import json
 import os
 import re
-from datetime import date, datetime
+import sys
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler
 
 import requests
@@ -97,25 +98,6 @@ def es_fila_de_datos(fila) -> bool:
     return bool(fila) and texto(fila[0]).isdigit()
 
 
-def exportar_excel(s: requests.Session, ruta: str, **params):
-    """GET al endpoint del botón "Exportar a Excel": trae TODO sin paginar en
-    una sola request. La respuesta es HTML (no un .xls real) con un
-    __VIEWSTATE de relleno antes de la tabla real -- se recorta."""
-    url = f"{BASE}/{ruta.lstrip('/')}"
-    r = s.get(url, params=params, headers={"Referer": f"{BASE}/Default.aspx"}, timeout=60)
-    r.raise_for_status()
-    data = r.content
-    i0 = data.find(b"<table")
-    if i0 == -1:
-        return [], []
-    i1 = data.find(b"</table>", i0) + len(b"</table>")
-    fragmento = data[i0:i1].decode("utf-8", errors="replace")
-    headers, filas = parse_tabla(fragmento)
-    if headers and headers[-1] == "":
-        headers = headers[:-1]
-    return headers, filas
-
-
 def cargar(s: requests.Session, **params) -> str:
     """POST a cargador.aspx (el loader normal de la grilla) — para módulos
     chicos, pedir un 'size' generoso trae todo en una sola página."""
@@ -155,45 +137,71 @@ def _fecha_iso(v) -> str | None:
 
 
 # --------------------------------------------------------------------------- #
-# Facturación a Minoristas (VE/BVENT)
+# Facturación a Minoristas (VE/VEBREDI)
 # --------------------------------------------------------------------------- #
+# Se lee VEBREDI (registro de documentos electrónicos) y NO el export de
+# VE/BVENT: la columna FECHA de BVENT es la fecha en que la venta se registró
+# en el módulo, no la de emisión del comprobante. Cuando un lote se registra
+# al día siguiente las dos difieren (p.ej. FJ01-4506..4509, emitidas el
+# 30/08/2026, salían todas con 31/08 en BVENT). VEBREDI trae la fecha que
+# viaja en el CPE a SUNAT, que es la que coincide con el registro de compras
+# del cliente.
+#
+# VEBREDI da exactamente las columnas que consume la app (N°, MAYORISTA,
+# MINORISTA, COMPROBANTE, FECHA, TOTAL, SER-NUM); el resto de campos de
+# `facturacion` (tienda, vendedor, medios de pago, etc.) quedan en NULL, igual
+# que en las 4200+ filas del histórico.
+COL_MAYORISTA = "MAYORISTA"
+COL_MINORISTA = "MINORISTA"
+
+
+def _razon_social(td) -> str | None:
+    """La celda trae razón social y RUC juntos:
+    `RAZON SOCIAL<br/><small><b>20601577055</b></small>` — get_text() los
+    pegaría ("...S.A.C20601577055"), así que se descarta el <small>."""
+    if td is None:
+        return None
+    ruc = td.find("small")
+    if ruc:
+        ruc.extract()
+    return texto(td) or None
+
+
 def scrapear_facturacion(s: requests.Session) -> list[dict]:
-    params = {
-        "pag": 1, "size": 20, "p_desc": "", "p_tienda": "J",
-        "p_fechaInicio": "01/08/2025",
-        "p_fechaFin": date.today().strftime("%d/%m/%Y"),
-        "p_dcto": "01", "p_tipo_descarga": "N",
-    }
-    headers, filas = exportar_excel(s, "Vistas/VE/excelVEBVENT.aspx", **params)
+    # size grande = todo en una sola request (el módulo pagina de 10 en 10).
+    html = cargar(s, f="VEBREDI", m="VE", pag=1, size=5000, desc="", nc="")
+    headers, filas = parse_tabla(html)
+    idx = {h: i for i, h in enumerate(headers)}
     out = []
     for fila in filas:
         if not es_fila_de_datos(fila):
             continue
         r = fila_dict(headers, fila)
         fecha = _fecha_iso(r.get("FECHA"))
-        if not fecha:
+        ser_num = r.get("SER-NUM")
+        if not fecha or not ser_num:
             continue
         out.append({
-            "ser_num": r.get("N°DCTO"),
-            "codigo": r.get("CODIGO") or None,
-            "tienda": r.get("TIENDA") or None,
-            "tipo_comprobante": r.get("DCTO") or None,
-            "cliente": r.get("CLIENTE") or None,
-            "mayorista": None,
+            "ser_num": ser_num,
+            "codigo": None,
+            "tienda": None,
+            "tipo_comprobante": r.get("COMPROBANTE") or None,
+            "cliente": _razon_social(fila[idx[COL_MINORISTA]]) if COL_MINORISTA in idx else None,
+            "mayorista": _razon_social(fila[idx[COL_MAYORISTA]]) if COL_MAYORISTA in idx else None,
             "fecha": fecha,
-            "moneda": r.get("MONEDA") or None,
-            "subtotal": _num(r.get("SUBTOTAL")),
-            "dscto": _num(r.get("DSCTO")),
-            "not_cre": _num(r.get("NOT.CRE.")),
-            "bi": _num(r.get("B.I.")),
-            "igv": _num(r.get("IGV")),
+            "moneda": None,
+            "subtotal": None,
+            "dscto": None,
+            "not_cre": None,
+            "bi": None,
+            "igv": None,
             "total": _num(r.get("TOTAL")) or 0,
-            "efectivo": _num(r.get("EFECTIVO")),
-            "tarjeta": _num(r.get("TARJETA")),
-            "transferencia": _num(r.get("TRANSFERENCIA")),
-            "detalle_tarjeta": r.get("DETALLE VENTA CON TARJETA") or None,
-            "vendedor": r.get("VENDEDOR") or None,
-            "nc": r.get("NC") or None,
+            "efectivo": None,
+            "tarjeta": None,
+            "transferencia": None,
+            "detalle_tarjeta": None,
+            "vendedor": None,
+            "nc": None,
             "fuente": "erp",
         })
     return out
@@ -268,3 +276,41 @@ class handler(BaseHTTPRequestHandler):
             self._json(200, {"facturacion": facturacion, "ingresos": ingresos})
         except Exception as e:  # noqa: BLE001 — se reporta tal cual al caller
             self._json(500, {"error": str(e)})
+
+
+# --------------------------------------------------------------------------- #
+# Desarrollo local
+# --------------------------------------------------------------------------- #
+# `vercel dev` NO sirve esta función: en un proyecto Next.js delega todas las
+# rutas a `next dev`, que no conoce api/*.py, y /api/sincronizar responde 404
+# (en producción sí se construye, ahí no hay problema). Por eso en local el
+# server action no hace fetch sino que ejecuta este archivo como script:
+#
+#     python3 api/sincronizar.py --json    # scrapea y escribe el JSON a stdout
+#
+# Sin servidor ni secreto de por medio: la autorización ya la hizo requireRole
+# en el server action. Las credenciales salen de .env.local, el mismo archivo
+# que lee Next.
+def _main_json() -> None:
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env_local = os.path.join(raiz, ".env.local")
+    if os.path.exists(env_local):
+        with open(env_local, encoding="utf-8") as f:
+            for linea in f:
+                linea = linea.strip()
+                if linea and not linea.startswith("#") and "=" in linea:
+                    clave, valor = linea.split("=", 1)
+                    os.environ.setdefault(clave.strip(), valor.strip().strip('"').strip("'"))
+
+    s = crear_sesion()
+    login(s)
+    # stdout tiene que quedar limpio: sólo JSON, que es lo que parsea el caller.
+    json.dump(
+        {"facturacion": scrapear_facturacion(s), "ingresos": scrapear_ingresos(s)},
+        sys.stdout,
+        ensure_ascii=False,
+    )
+
+
+if __name__ == "__main__":
+    _main_json()

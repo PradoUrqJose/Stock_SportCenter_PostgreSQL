@@ -19,11 +19,49 @@ type SincronizarResponse = {
 // propio SSO — un fetch ahí devuelve un 302 a vercel.com/sso-api y termina en
 // HTML, no JSON. VERCEL_PROJECT_PRODUCTION_URL es el dominio estable de
 // producción (stock-sc.vercel.app), que no tiene esa protección.
-// En local, correr con `vercel dev` (no `next dev`) para que esa ruta exista.
+// Sólo se usa en Vercel: en local se ejecuta el script (ver scrapearEnLocal).
 function urlSincronizar(): string {
   const host = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
   const base = host ? `https://${host}` : "http://localhost:3000";
   return `${base}/api/sincronizar`;
+}
+
+// Fuera de Vercel no existe la ruta /api/sincronizar: `next dev` no conoce
+// api/*.py y `vercel dev` tampoco la construye (delega todo a next dev), así
+// que un fetch ahí da 404 o "fetch failed". En local se ejecuta el mismo
+// archivo como script y se lee el JSON de su stdout — no hace falta servidor
+// aparte ni SYNC_SECRET, porque el requireRole de arriba ya autorizó.
+async function scrapearEnLocal(): Promise<SincronizarResponse> {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const { join } = await import("node:path");
+  const script = join(process.cwd(), "api", "sincronizar.py");
+  const { stdout } = await promisify(execFile)(
+    process.env.PYTHON_BIN ?? "python3",
+    [script, "--json"],
+    // El JSON ronda 600 KB y el scrape tarda ~20s; los defaults (1 MB, sin
+    // timeout) quedan justos.
+    { maxBuffer: 64 * 1024 * 1024, timeout: 180_000 }
+  );
+  return JSON.parse(stdout);
+}
+
+async function pedirDatos(): Promise<SincronizarResponse> {
+  if (!process.env.VERCEL) return scrapearEnLocal();
+
+  const secreto = process.env.SYNC_SECRET;
+  if (!secreto) throw new Error("Falta SYNC_SECRET en las variables de entorno.");
+
+  const res = await fetch(urlSincronizar(), {
+    method: "POST",
+    headers: { "X-Sync-Secret": secreto },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? `El scraper respondió ${res.status}`);
+  }
+  return res.json();
 }
 
 export async function sincronizarErp(): Promise<
@@ -32,19 +70,7 @@ export async function sincronizarErp(): Promise<
   try {
     await requireRole("admin", "administrador_general");
 
-    const secreto = process.env.SYNC_SECRET;
-    if (!secreto) throw new Error("Falta SYNC_SECRET en las variables de entorno.");
-
-    const res = await fetch(urlSincronizar(), {
-      method: "POST",
-      headers: { "X-Sync-Secret": secreto },
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error ?? `El scraper respondió ${res.status}`);
-    }
-    const { facturacion, ingresos }: SincronizarResponse = await res.json();
+    const { facturacion, ingresos } = await pedirDatos();
 
     const [factRes, ingRes] = await Promise.all([
       uploadFacturacionBatch(facturacion),
@@ -58,9 +84,12 @@ export async function sincronizarErp(): Promise<
       finalizeIngresosUpload(ingresos.length),
     ]);
 
+    const corregidas = factRes.data?.corregidas ?? 0;
     return {
       success: true,
-      msg: `${factRes.data?.insertadas ?? 0} facturas y ${ingRes.data?.insertadas ?? 0} ingresos nuevos`,
+      msg:
+        `${factRes.data?.insertadas ?? 0} facturas y ${ingRes.data?.insertadas ?? 0} ingresos nuevos` +
+        (corregidas > 0 ? ` (${corregidas} facturas con la fecha corregida)` : ""),
       data: {
         facturacionNuevas: factRes.data?.insertadas ?? 0,
         ingresosNuevos: ingRes.data?.insertadas ?? 0,

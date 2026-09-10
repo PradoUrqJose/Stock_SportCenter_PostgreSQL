@@ -41,46 +41,20 @@ const COLUMNS: ColDef<FacturacionRow>[] = [
     cell: (r) => <span className="text-sm">{r.tipo_comprobante ?? "—"}</span>,
   },
   {
+    key: "mayorista",
+    header: "Mayorista",
+    width: 2,
+    sortable: true,
+    sortValue: (r) => r.mayorista ?? "",
+    cell: (r) => <span className="text-sm">{r.mayorista ?? "—"}</span>,
+  },
+  {
     key: "cliente",
-    header: "Cliente",
+    header: "Minorista",
     width: 2.5,
     sortable: true,
     sortValue: (r) => r.cliente ?? "",
     cell: (r) => <span className="text-sm">{r.cliente ?? "—"}</span>,
-  },
-  {
-    key: "tienda",
-    header: "Tienda",
-    width: 0.7,
-    sortable: true,
-    sortValue: (r) => r.tienda ?? "",
-    cell: (r) => <span className="text-sm">{r.tienda ?? "—"}</span>,
-  },
-  {
-    key: "vendedor",
-    header: "Vendedor",
-    width: 1.2,
-    sortable: true,
-    sortValue: (r) => r.vendedor ?? "",
-    cell: (r) => <span className="text-sm">{r.vendedor ?? "—"}</span>,
-  },
-  {
-    key: "subtotal",
-    header: "Subtotal",
-    width: 1,
-    align: "right",
-    sortable: true,
-    sortValue: (r) => r.subtotal ?? 0,
-    cell: (r) => <span className="text-sm">{money(r.subtotal)}</span>,
-  },
-  {
-    key: "igv",
-    header: "IGV",
-    width: 1,
-    align: "right",
-    sortable: true,
-    sortValue: (r) => r.igv ?? 0,
-    cell: (r) => <span className="text-sm">{money(r.igv)}</span>,
   },
   {
     key: "total",
@@ -94,8 +68,8 @@ const COLUMNS: ColDef<FacturacionRow>[] = [
 ];
 
 const FILTERS: SelectFilterDef<FacturacionRow>[] = [
-  { key: "tienda", label: "Tienda", getValue: (r) => r.tienda },
-  { key: "vendedor", label: "Vendedor", getValue: (r) => r.vendedor },
+  { key: "mayorista", label: "Mayorista", getValue: (r) => r.mayorista },
+  { key: "cliente", label: "Minorista", getValue: (r) => r.cliente },
   { key: "tipo_comprobante", label: "Comprobante", getValue: (r) => r.tipo_comprobante },
 ];
 
@@ -109,7 +83,7 @@ export function FacturacionTable({ facturacion }: { facturacion: FacturacionRow[
         data={facturacion}
         filters={FILTERS}
         searchPlaceholder="Buscar por N° documento o cliente…"
-        getSearchText={(r) => `${r.ser_num} ${r.cliente ?? ""} ${r.codigo ?? ""}`}
+        getSearchText={(r) => `${r.ser_num} ${r.cliente ?? ""} ${r.mayorista ?? ""}`}
         actions={
           <>
             <SincronizarButton />

@@ -53,7 +53,7 @@ export async function GET() {
   rows.forEach((record, index) => {
     const row = sheet.addRow({
       numero: index + 1,
-      mayorista: "JORKEL SPORT S.A.C.",
+      mayorista: record.mayorista ?? "—",
       minorista: record.cliente ?? "—",
       comprobante: record.tipo_comprobante ?? "—",
       fecha: toDateValue(record.fecha),
