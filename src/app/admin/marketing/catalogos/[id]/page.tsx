@@ -1,0 +1,125 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
+import { db } from "@/lib/db";
+import { enlacesCatalogo, requireMarketing } from "@/lib/marketing";
+import type { Borrador, FiltrosCatalogo } from "@/lib/marketing-catalogo";
+import { EnlaceCatalogo, PublicarCatalogo } from "@/components/admin/marketing/acciones-catalogo";
+
+type Catalogo = {
+  id: string;
+  slug: string;
+  titulo: string;
+  filtros: string;
+  borrador: string;
+  version_publicada: number | null;
+  created_at: string;
+};
+type Version = { version: number; paginas: number; publicado_at: string; nombre: string | null };
+
+function Dato({ etiqueta, valor, nota }: { etiqueta: string; valor: string; nota?: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-card px-4 py-3">
+      <p className="text-xs text-muted-foreground">{etiqueta}</p>
+      <p className="mt-1 text-lg font-semibold text-foreground">{valor}</p>
+      {nota && <p className="mt-0.5 text-xs text-muted-foreground">{nota}</p>}
+    </div>
+  );
+}
+
+export default async function CatalogoDetallePage({ params }: { params: Promise<{ id: string }> }) {
+  await requireMarketing();
+  const { id } = await params;
+
+  const c = await db.execute({
+    sql: "SELECT id, slug, titulo, filtros, borrador, version_publicada, created_at FROM mk_catalogos WHERE id = ?",
+    args: [id],
+  });
+  if (c.rows.length === 0) notFound();
+  const cat = c.rows[0] as unknown as Catalogo;
+  const borrador = JSON.parse(cat.borrador) as Borrador;
+  const filtros = JSON.parse(cat.filtros) as FiltrosCatalogo;
+  const r = borrador.resumen;
+
+  const v = await db.execute({
+    sql: `SELECT v.version, v.paginas, v.publicado_at, u.nombre
+          FROM mk_catalogo_versiones v LEFT JOIN users u ON u.id = v.publicado_por
+          WHERE v.catalogo_id = ? ORDER BY v.version DESC`,
+    args: [id],
+  });
+  const versiones = v.rows as unknown as Version[];
+  const enlaces = cat.version_publicada ? await enlacesCatalogo(cat.slug) : null;
+
+  const filtrosTexto = [
+    filtros.marca && `Marca: ${filtros.marca}`,
+    filtros.grupo && `Grupo: ${filtros.grupo}`,
+    filtros.genero && `Género: ${filtros.genero}`,
+    `Almacenes: ${filtros.almacenes.join(", ")}`,
+  ].filter(Boolean);
+
+  return (
+    <div className="p-4 md:p-8">
+      <Link href="/admin/marketing/catalogos" className="mb-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <ChevronLeft className="h-3.5 w-3.5" /> Catálogos
+      </Link>
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold text-foreground">{cat.titulo}</h1>
+        <p className="mt-1 text-xs text-muted-foreground">{filtrosTexto.join(" · ")}</p>
+      </div>
+
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Dato etiqueta="Páginas" valor={r.paginas.toLocaleString("en-US")} nota="Una por producto, ordenadas por marca" />
+        <Dato etiqueta="Sin imagen" valor={r.sin_imagen.length.toLocaleString("en-US")} nota="No entran al catálogo" />
+        <Dato etiqueta="Sin stock o precio" valor={r.sin_stock.toLocaleString("en-US")} nota="No entran al catálogo" />
+        <Dato etiqueta="Códigos repetidos" valor={r.duplicados.toLocaleString("en-US")} nota="Se conserva la primera fila" />
+      </div>
+
+      {r.sin_imagen.length > 0 && (
+        <details className="mb-6 rounded-lg border border-border px-4 py-3 text-sm">
+          <summary className="cursor-pointer font-medium text-foreground">Ver códigos sin imagen ({r.sin_imagen.length})</summary>
+          <p className="mt-2 break-words font-mono text-xs text-muted-foreground">
+            {r.sin_imagen.slice(0, 200).join(", ")}
+            {r.sin_imagen.length > 200 && ` … y ${r.sin_imagen.length - 200} más`}
+          </p>
+        </details>
+      )}
+
+      <section className="mb-8 space-y-4">
+        <h2 className="text-sm font-semibold text-foreground">Publicación</h2>
+        <PublicarCatalogo id={cat.id} version={cat.version_publicada} />
+        {enlaces ? (
+          <div className="max-w-2xl space-y-3">
+            <EnlaceCatalogo etiqueta="Enlace para clientes" url={enlaces.principal} />
+            {enlaces.alterno !== enlaces.principal && (
+              <EnlaceCatalogo etiqueta="Alternativo (mismo servidor; útil desde el celular en la misma red)" url={enlaces.alterno} />
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Aún no está publicado: al publicar se crea el enlace fijo para los clientes.</p>
+        )}
+      </section>
+
+      {versiones.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-foreground">Historial de versiones</h2>
+          <ul className="divide-y divide-border rounded-lg border border-border text-sm">
+            {versiones.map((x) => (
+              <li key={x.version} className="flex items-center justify-between gap-4 px-4 py-2.5">
+                <span className="font-medium text-foreground">
+                  v{x.version}
+                  {x.version === cat.version_publicada && (
+                    <span className="ml-2 rounded-full bg-green-500/15 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">vigente</span>
+                  )}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {x.paginas.toLocaleString("en-US")} páginas · {x.publicado_at.slice(0, 16).replace("T", " ")}
+                  {x.nombre && ` · ${x.nombre}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+}

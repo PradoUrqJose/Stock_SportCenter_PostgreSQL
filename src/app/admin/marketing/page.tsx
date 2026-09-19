@@ -24,11 +24,14 @@ export default async function MarketingPage() {
           <p className="mt-1 text-xs text-muted-foreground">Ver y buscar las imágenes de producto guardadas en R2.</p>
         </Link>
 
-        <div className="rounded-lg border border-dashed border-border p-4 opacity-60">
+        <Link
+          href="/admin/marketing/catalogos"
+          className="rounded-lg border border-border bg-card p-4 transition-shadow hover:shadow-md"
+        >
           <LayoutTemplate className="h-5 w-5 text-muted-foreground" />
           <p className="mt-3 text-sm font-medium text-foreground">Catálogos</p>
-          <p className="mt-1 text-xs text-muted-foreground">Próximamente.</p>
-        </div>
+          <p className="mt-1 text-xs text-muted-foreground">Generar, publicar y compartir catálogos con clientes.</p>
+        </Link>
       </div>
     </div>
   );
