@@ -2,10 +2,11 @@ import { headers } from "next/headers";
 import { getSession, requireRole, requireModule, type SessionUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
-// Base pública del bucket R2 `stock-sc-catalogo`. Hoy es `r2.dev` (sin caché,
-// pensado para desarrollo); pasar a dominio propio es cambiar esta variable.
+// Base pública del bucket R2 `stock-sc-catalogo`: dominio propio con la caché de
+// Cloudflare (img.sportcenterpe.com). `r2.dev` queda solo como respaldo manual:
+// no tiene caché y solo permite 6 descargas simultáneas.
 const R2_PUBLIC_URL = (
-  process.env.R2_PUBLIC_URL ?? "https://pub-d552bc6cdf204353a02e1f8afd4c87ed.r2.dev"
+  process.env.R2_PUBLIC_URL ?? "https://img.sportcenterpe.com"
 ).replace(/\/+$/, "");
 
 /** Base pública de las imágenes (el visor la recibe dentro del snapshot). */
