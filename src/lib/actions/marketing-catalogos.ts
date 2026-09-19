@@ -5,7 +5,7 @@ import { revalidatePath, updateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
 import { IMAGENES_BASE, enlacesCatalogo, sesionMarketing } from "@/lib/marketing";
-import { plantillasPorId, sincronizarVersiones } from "@/lib/marketing-catalogos-datos";
+import { borradorDeVersion, plantillasPorId, sincronizarVersiones } from "@/lib/marketing-catalogos-datos";
 import { consultarCatalogoErp } from "@/lib/marketing-erp";
 import { etiquetaCatalogo } from "@/lib/marketing-publico";
 import {
@@ -100,20 +100,29 @@ export async function generarCatalogo(input: {
 }
 
 /**
- * Guarda las páginas del editor en el BORRADOR. Los clientes no ven nada hasta
- * que se publica: esto solo actualiza mk_catalogos.borrador.
+ * Guarda las páginas del editor en el BORRADOR: el de la versión que se está
+ * editando (`version`) o, en un catálogo aún sin publicar, el inicial. Los
+ * clientes no ven nada hasta que se publica.
  */
 export async function guardarEdicion(
   id: string,
+  version: number | null,
   entrada: { paginas: unknown; quitadas: unknown }
 ): Promise<ActionResult> {
   const sesion = await sesionMarketing();
   if (!sesion) return { success: false, msg: "Sin permisos" };
 
   try {
-    const c = await db.execute({ sql: "SELECT borrador FROM mk_catalogos WHERE id = ?", args: [id] });
-    if (c.rows.length === 0) return { success: false, msg: "El catálogo no existe" };
-    const borrador = JSON.parse(c.rows[0].borrador as string) as Borrador;
+    let borrador: Borrador;
+    if (version === null) {
+      const c = await db.execute({ sql: "SELECT borrador FROM mk_catalogos WHERE id = ?", args: [id] });
+      if (c.rows.length === 0) return { success: false, msg: "El catálogo no existe" };
+      borrador = JSON.parse(c.rows[0].borrador as string) as Borrador;
+    } else {
+      const base = await borradorDeVersion(id, version);
+      if (!base) return { success: false, msg: "La versión no existe" };
+      borrador = base.borrador;
+    }
 
     const plantillas = await db.execute("SELECT id FROM mk_plantillas");
     const ids = new Set(plantillas.rows.map((f) => f.id as string));
@@ -127,12 +136,14 @@ export async function guardarEdicion(
 
     const paginas = todas.slice(0, paginasEnt.length);
     const quitadas = todas.slice(paginasEnt.length);
-    const nuevo: Borrador = { ...borrador, paginas, quitadas, resumen: { ...borrador.resumen, paginas: paginas.length } };
+    const nuevo = JSON.stringify({ ...borrador, paginas, quitadas, resumen: { ...borrador.resumen, paginas: paginas.length } } satisfies Borrador);
 
-    await db.execute({
-      sql: "UPDATE mk_catalogos SET borrador = ?, updated_at = now_text() WHERE id = ?",
-      args: [JSON.stringify(nuevo), id],
-    });
+    await db.batch([
+      version === null
+        ? { sql: "UPDATE mk_catalogos SET borrador = ?, updated_at = now_text() WHERE id = ?", args: [nuevo, id] }
+        : { sql: "UPDATE mk_catalogo_versiones SET borrador = ? WHERE catalogo_id = ? AND version = ?", args: [nuevo, id, version] },
+      ...(version === null ? [] : [{ sql: "UPDATE mk_catalogos SET updated_at = now_text() WHERE id = ?", args: [id] }]),
+    ]);
     return { success: true, msg: "Guardado" };
   } catch (e) {
     console.error("[marketing] guardarEdicion falló:", e);
@@ -140,8 +151,14 @@ export async function guardarEdicion(
   }
 }
 
+/**
+ * Publica una versión NUEVA a partir de la edición de `base` (la versión que se
+ * abrió en el editor) o, si el catálogo nunca se publicó, de su borrador inicial.
+ * El enlace de los clientes pasa a mostrar la versión nueva; las anteriores no se tocan.
+ */
 export async function publicarCatalogo(
-  id: string
+  id: string,
+  base: number | null = null
 ): Promise<ActionResult<{ version: number; enlaces: { principal: string; alterno: string } }>> {
   const sesion = await sesionMarketing();
   if (!sesion) return { success: false, msg: "Sin permisos" };
@@ -150,8 +167,17 @@ export async function publicarCatalogo(
     const c = await db.execute({ sql: "SELECT slug, titulo, borrador FROM mk_catalogos WHERE id = ?", args: [id] });
     if (c.rows.length === 0) return { success: false, msg: "El catálogo no existe" };
     const { slug, titulo, borrador: crudo } = c.rows[0] as { slug: string; titulo: string; borrador: string };
+
+    let partida: Borrador;
+    if (base === null) {
+      partida = JSON.parse(crudo) as Borrador;
+    } else {
+      const v = await borradorDeVersion(id, base);
+      if (!v) return { success: false, msg: "La versión no existe" };
+      partida = v.borrador;
+    }
     // Imágenes reemplazadas desde que se generó el catálogo: se toma la versión vigente.
-    const borrador = await sincronizarVersiones(JSON.parse(crudo) as Borrador);
+    const borrador = await sincronizarVersiones(partida);
     if (borrador.paginas.length === 0) return { success: false, msg: "El catálogo no tiene páginas" };
 
     const ids = [...new Set(borrador.paginas.flatMap((p) => (p.tipo === "producto" ? [p.plantilla] : [])))];
@@ -167,16 +193,20 @@ export async function publicarCatalogo(
     });
     const version = v.rows[0].siguiente as number;
 
-    // updated_at no se toca: solo cuenta las ediciones, y así el editor sabe si hay cambios sin publicar.
     await db.batch([
       {
         sql: `INSERT INTO mk_catalogo_versiones (catalogo_id, version, snapshot, paginas, publicado_por)
               VALUES (?, ?, ?, ?, ?)`,
         args: [id, version, snapshot, borrador.paginas.length, sesion.id],
       },
+      // La edición de la versión de partida ya salió publicada: esa versión vuelve a verse tal como estaba.
+      ...(base === null
+        ? []
+        : [{ sql: "UPDATE mk_catalogo_versiones SET borrador = NULL WHERE catalogo_id = ? AND version = ?", args: [id, base] }]),
       {
-        sql: "UPDATE mk_catalogos SET version_publicada = ?, borrador = ? WHERE id = ?",
-        args: [version, JSON.stringify(borrador), id],
+        // El borrador inicial solo sigue a la publicación mientras no hay versiones; después cada versión lleva el suyo.
+        sql: `UPDATE mk_catalogos SET version_publicada = ?, updated_at = now_text()${base === null ? ", borrador = ?" : ""} WHERE id = ?`,
+        args: base === null ? [version, JSON.stringify(borrador), id] : [version, id],
       },
     ]);
 

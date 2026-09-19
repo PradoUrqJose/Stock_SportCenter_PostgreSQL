@@ -1,7 +1,7 @@
 // Lecturas de servidor compartidas por las acciones de catálogos y las páginas
 // del editor: plantillas y versiones de imagen al día.
 import { db } from "@/lib/db";
-import type { Borrador, PlantillaSnap } from "@/lib/marketing-catalogo";
+import type { Borrador, PlantillaSnap, Snapshot } from "@/lib/marketing-catalogo";
 
 type PlantillaFila = { id: string; ancho: number; alto: number; fondo_key: string; zonas: string };
 
@@ -36,5 +36,32 @@ export async function sincronizarVersiones(b: Borrador): Promise<Borrador> {
       const v = vigente.get(p.cod);
       return v !== undefined && v !== p.v ? { ...p, v } : p;
     }),
+  };
+}
+
+/**
+ * Contenido editable de una versión publicada: su edición en curso si la hay y,
+ * si no, el snapshot tal como se publicó (que ya lleva solo lo que usa, sin las
+ * páginas quitadas). `null` si la versión no existe.
+ */
+export async function borradorDeVersion(
+  catalogoId: string,
+  version: number
+): Promise<{ borrador: Borrador; conCambios: boolean } | null> {
+  const r = await db.execute({
+    sql: `SELECT v.snapshot, v.borrador AS edicion, c.borrador AS generado
+          FROM mk_catalogo_versiones v JOIN mk_catalogos c ON c.id = v.catalogo_id
+          WHERE v.catalogo_id = ? AND v.version = ?`,
+    args: [catalogoId, version],
+  });
+  if (r.rows.length === 0) return null;
+  const f = r.rows[0] as unknown as { snapshot: string; edicion: string | null; generado: string };
+  if (f.edicion) return { borrador: JSON.parse(f.edicion) as Borrador, conCambios: true };
+
+  const snap = JSON.parse(f.snapshot) as Snapshot;
+  const { resumen } = JSON.parse(f.generado) as Borrador;
+  return {
+    borrador: { productos: snap.productos, paginas: snap.paginas, quitadas: [], resumen: { ...resumen, paginas: snap.paginas.length } },
+    conCambios: false,
   };
 }

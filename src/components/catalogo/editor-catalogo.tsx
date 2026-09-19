@@ -11,6 +11,7 @@
 //    un guardado por arrastre, para no agotar las conexiones de la base.
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowDown,
   ArrowLeft,
@@ -118,7 +119,10 @@ type Props = {
   productosIniciales: ProductoCat[];
   paginasIniciales: PaginaCat[];
   quitadasIniciales: PaginaCat[];
-  versionInicial: number | null;
+  /** Versión que se está editando (null = borrador inicial de un catálogo sin publicar). */
+  versionBase: number | null;
+  /** Versión que hoy ven los clientes en el enlace. */
+  versionVigente: number | null;
   sinPublicarInicial: boolean;
   enlacesIniciales: { principal: string; alterno: string } | null;
   /** Aviso al llegar (ej. «Versión 5 publicada»), cuando se viene de publicar desde el detalle. */
@@ -134,11 +138,13 @@ export function EditorCatalogo({
   productosIniciales,
   paginasIniciales,
   quitadasIniciales,
-  versionInicial,
+  versionBase,
+  versionVigente,
   sinPublicarInicial,
   enlacesIniciales,
   mensajeInicial,
 }: Props) {
+  const router = useRouter();
   // Estado de partida (estable): sirve también para saber si el usuario ya cambió algo.
   const [inicial] = useState<Estado>(() => ({ paginas: paginasIniciales, quitadas: quitadasIniciales }));
   const [{ e, pasado, futuro }, despachar] = useReducer(reductor, { e: inicial, pasado: [], futuro: [] });
@@ -149,9 +155,8 @@ export function EditorCatalogo({
   const [guardadoDe, setGuardadoDe] = useState<Estado>(inicial);
   const [guardando, setGuardando] = useState(false);
   const [errorGuardado, setErrorGuardado] = useState(false);
-  const [version, setVersion] = useState(versionInicial);
   const [sinPublicar, setSinPublicar] = useState(sinPublicarInicial);
-  const [enlaces, setEnlaces] = useState(enlacesIniciales);
+  const enlaces = enlacesIniciales;
   const [publicando, setPublicando] = useState(false);
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(
     mensajeInicial ? { ok: true, texto: mensajeInicial } : null
@@ -199,7 +204,7 @@ export function EditorCatalogo({
     const turno = cola.current.then(async () => {
       const enviado = ultimo.current;
       setGuardando(true);
-      const r = await guardarEdicion(id, { paginas: enviado.paginas, quitadas: enviado.quitadas });
+      const r = await guardarEdicion(id, versionBase, { paginas: enviado.paginas, quitadas: enviado.quitadas });
       setGuardando(false);
       if (r.success) {
         setGuardadoDe(enviado);
@@ -212,7 +217,7 @@ export function EditorCatalogo({
     });
     cola.current = turno.then(() => undefined);
     return turno;
-  }, [id]);
+  }, [id, versionBase]);
 
   // Cada cambio programa un guardado 1 s después del último (por lotes, no uno por arrastre).
   useEffect(() => {
@@ -316,14 +321,12 @@ export function EditorCatalogo({
       setMensaje({ ok: false, texto: "No se publicó: los cambios no se pudieron guardar. Reintenta." });
       return;
     }
-    const r = await publicarCatalogo(id);
-    setPublicando(false);
+    const r = await publicarCatalogo(id, versionBase);
     if (r.success && r.data) {
-      setVersion(r.data.version);
-      setEnlaces(r.data.enlaces);
-      setSinPublicar(false);
-      setMensaje({ ok: true, texto: `Versión ${r.data.version} publicada: los clientes ya la ven en el mismo enlace.` });
+      // La versión nueva pasa a ser la que se edita; la de partida vuelve a verse como se publicó.
+      router.replace(`/admin/marketing/catalogos/${id}/editar?version=${r.data.version}&publicado=${r.data.version}`);
     } else {
+      setPublicando(false);
       setMensaje({ ok: false, texto: r.msg });
     }
   }
@@ -369,14 +372,21 @@ export function EditorCatalogo({
           <span
             className={cn(
               "rounded-full px-2.5 py-0.5 text-xs font-medium",
-              !version
+              versionBase === null || (versionBase !== versionVigente && !sinPublicar)
                 ? "bg-white/10 text-[#9aa0ab]"
                 : sinPublicar
                   ? "bg-amber-500/15 text-amber-400"
                   : "bg-green-500/15 text-green-400"
             )}
+            title={versionVigente ? `Los clientes ven la v${versionVigente}` : undefined}
           >
-            {!version ? "Sin publicar" : sinPublicar ? `Cambios sin publicar · v${version} vigente` : `Publicado v${version} · al día`}
+            {versionBase === null
+              ? "Sin publicar"
+              : sinPublicar
+                ? `Editando v${versionBase} · cambios sin publicar`
+                : versionBase === versionVigente
+                  ? `v${versionBase} · vigente`
+                  : `v${versionBase} · versión anterior`}
           </span>
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
             <Button variant="outline" size="icon" aria-label="Deshacer" title="Deshacer (⌘Z)" disabled={pasado.length === 0} onClick={deshacer}>
@@ -397,7 +407,7 @@ export function EditorCatalogo({
               </a>
             )}
             <Button size="sm" onClick={publicar} disabled={publicando || paginas.length === 0}>
-              {publicando ? "Publicando…" : version ? "Publicar cambios" : "Publicar"}
+              {publicando ? "Publicando…" : versionBase ? "Publicar como versión nueva" : "Publicar"}
             </Button>
           </div>
         </div>

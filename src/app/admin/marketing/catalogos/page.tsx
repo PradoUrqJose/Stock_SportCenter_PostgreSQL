@@ -17,10 +17,11 @@ export default async function CatalogosPage() {
   await requireMarketing();
 
   const r = await db.execute(
-    `SELECT id, titulo, version_publicada, updated_at,
-            (borrador::jsonb -> 'resumen' ->> 'paginas')::int AS paginas
-     FROM mk_catalogos
-     ORDER BY created_at DESC`
+    `SELECT c.id, c.titulo, c.version_publicada, c.updated_at,
+            COALESCE(v.paginas, (c.borrador::jsonb -> 'resumen' ->> 'paginas')::int) AS paginas
+     FROM mk_catalogos c
+     LEFT JOIN mk_catalogo_versiones v ON v.catalogo_id = c.id AND v.version = c.version_publicada
+     ORDER BY c.created_at DESC`
   );
   const catalogos = r.rows as unknown as Fila[];
 
@@ -30,7 +31,7 @@ export default async function CatalogosPage() {
         <div>
           <h1 className="text-xl font-semibold text-foreground">Catálogos</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Un clic abre el editor. Cada catálogo tiene un enlace fijo para los clientes: al publicar una versión nueva, el mismo enlace la muestra.
+            Un clic abre el catálogo con sus versiones, y desde ahí eliges cuál editar. Cada catálogo tiene un enlace fijo para los clientes: al publicar una versión nueva, el mismo enlace la muestra.
           </p>
         </div>
         <Link href="/admin/marketing/catalogos/nuevo" className={cn(buttonVariants())}>
@@ -46,7 +47,7 @@ export default async function CatalogosPage() {
         <ul className="divide-y divide-border rounded-lg border border-border">
           {catalogos.map((c) => (
             <li key={c.id}>
-              <Link href={`/admin/marketing/catalogos/${c.id}/editar`} className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted/50">
+              <Link href={`/admin/marketing/catalogos/${c.id}`} className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted/50">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-foreground">{c.titulo}</p>
                   <p className="text-xs text-muted-foreground">

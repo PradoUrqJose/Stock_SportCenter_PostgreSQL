@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, PencilRuler } from "lucide-react";
+import { ChevronRight, ChevronLeft } from "lucide-react";
 import { db } from "@/lib/db";
 import { enlacesCatalogo, requireMarketing } from "@/lib/marketing";
 import type { Borrador, FiltrosCatalogo } from "@/lib/marketing-catalogo";
 import { EnlaceCatalogo, PublicarCatalogo } from "@/components/admin/marketing/acciones-catalogo";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
 type Catalogo = {
   id: string;
@@ -17,7 +15,7 @@ type Catalogo = {
   version_publicada: number | null;
   created_at: string;
 };
-type Version = { version: number; paginas: number; publicado_at: string; nombre: string | null };
+type Version = { version: number; paginas: number; publicado_at: string; nombre: string | null; con_cambios: boolean };
 
 function Dato({ etiqueta, valor, nota }: { etiqueta: string; valor: string; nota?: string }) {
   return (
@@ -44,12 +42,13 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
   const r = borrador.resumen;
 
   const v = await db.execute({
-    sql: `SELECT v.version, v.paginas, v.publicado_at, u.nombre
+    sql: `SELECT v.version, v.paginas, v.publicado_at, u.nombre, (v.borrador IS NOT NULL) AS con_cambios
           FROM mk_catalogo_versiones v LEFT JOIN users u ON u.id = v.publicado_por
           WHERE v.catalogo_id = ? ORDER BY v.version DESC`,
     args: [id],
   });
   const versiones = v.rows as unknown as Version[];
+  const paginasVigentes = versiones.find((x) => x.version === cat.version_publicada)?.paginas ?? r.paginas;
   const enlaces = cat.version_publicada ? await enlacesCatalogo(cat.slug) : null;
 
   const filtrosTexto = [
@@ -69,13 +68,10 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
           <h1 className="text-xl font-semibold text-foreground">{cat.titulo}</h1>
           <p className="mt-1 text-xs text-muted-foreground">{filtrosTexto.join(" · ")}</p>
         </div>
-        <Link href={`/admin/marketing/catalogos/${cat.id}/editar`} className={cn(buttonVariants())}>
-          <PencilRuler data-icon="inline-start" /> Editar catálogo
-        </Link>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Dato etiqueta="Páginas" valor={r.paginas.toLocaleString("en-US")} nota="Una por producto y género, ordenadas por marca" />
+        <Dato etiqueta="Páginas" valor={paginasVigentes.toLocaleString("en-US")} nota="Una por producto y género, ordenadas por marca" />
         <Dato etiqueta="Sin imagen" valor={r.sin_imagen.length.toLocaleString("en-US")} nota="No entran al catálogo" />
         <Dato etiqueta="Sin stock o precio" valor={r.sin_stock.toLocaleString("en-US")} nota="No entran al catálogo" />
         {r.multi_genero === undefined ? (
@@ -101,41 +97,70 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
       )}
 
       <section className="mb-8 space-y-4">
-        <h2 className="text-sm font-semibold text-foreground">Publicación</h2>
-        <PublicarCatalogo id={cat.id} version={cat.version_publicada} />
+        <h2 className="text-sm font-semibold text-foreground">Enlace para clientes</h2>
         {enlaces ? (
           <div className="max-w-2xl space-y-3">
-            <EnlaceCatalogo etiqueta="Enlace para clientes" url={enlaces.principal} />
+            <EnlaceCatalogo etiqueta="Siempre muestra la versión vigente" url={enlaces.principal} />
             {enlaces.alterno !== enlaces.principal && (
               <EnlaceCatalogo etiqueta="Alternativo (mismo servidor; útil desde el celular en la misma red)" url={enlaces.alterno} />
             )}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Aún no está publicado: al publicar se crea el enlace fijo para los clientes.</p>
+          <>
+            <p className="text-sm text-muted-foreground">Aún no está publicado: al publicar se crea el enlace fijo para los clientes.</p>
+            <PublicarCatalogo id={cat.id} version={null} />
+          </>
         )}
       </section>
 
-      {versiones.length > 0 && (
-        <section>
-          <h2 className="mb-2 text-sm font-semibold text-foreground">Historial de versiones</h2>
-          <ul className="divide-y divide-border rounded-lg border border-border text-sm">
-            {versiones.map((x) => (
-              <li key={x.version} className="flex items-center justify-between gap-4 px-4 py-2.5">
+      <section>
+        <h2 className="text-sm font-semibold text-foreground">Versiones</h2>
+        <p className="mb-2 mt-0.5 text-xs text-muted-foreground">
+          {versiones.length > 0
+            ? "Haz clic en una versión para editarla. Al publicar sale como una versión nueva y el enlace pasa a mostrarla; las anteriores se conservan."
+            : "Todavía no hay versiones: abre el borrador, ordénalo y publícalo."}
+        </p>
+        <ul className="divide-y divide-border rounded-lg border border-border text-sm">
+          {versiones.length === 0 && (
+            <li>
+              <Link href={`/admin/marketing/catalogos/${cat.id}/editar`} className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted/50">
                 <span className="font-medium text-foreground">
+                  Borrador
+                  <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">sin publicar</span>
+                </span>
+                <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                  {r.paginas.toLocaleString("en-US")} páginas <ChevronRight className="h-4 w-4" />
+                </span>
+              </Link>
+            </li>
+          )}
+          {versiones.map((x) => (
+            <li key={x.version}>
+              <Link
+                href={`/admin/marketing/catalogos/${cat.id}/editar?version=${x.version}`}
+                className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted/50"
+              >
+                <span className="flex flex-wrap items-center gap-2 font-medium text-foreground">
                   v{x.version}
                   {x.version === cat.version_publicada && (
-                    <span className="ml-2 rounded-full bg-green-500/15 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">vigente</span>
+                    <span className="rounded-full bg-green-500/15 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">vigente</span>
+                  )}
+                  {x.con_cambios && (
+                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400">cambios sin publicar</span>
                   )}
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  {x.paginas.toLocaleString("en-US")} páginas · {x.publicado_at.slice(0, 16).replace("T", " ")}
-                  {x.nombre && ` · ${x.nombre}`}
+                <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>
+                    {x.paginas.toLocaleString("en-US")} páginas · {x.publicado_at.slice(0, 16).replace("T", " ")}
+                    {x.nombre && ` · ${x.nombre}`}
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0" />
                 </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
     </div>
   );
 }
