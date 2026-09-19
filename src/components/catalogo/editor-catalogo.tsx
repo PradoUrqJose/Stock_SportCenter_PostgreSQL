@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import Link from "next/link";
 import {
   ArrowDown,
+  ArrowLeft,
   ArrowUp,
   Eye,
   ImagePlus,
@@ -24,6 +25,7 @@ import {
   Trash2,
   Undo2,
   Undo,
+  X,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -119,6 +121,8 @@ type Props = {
   versionInicial: number | null;
   sinPublicarInicial: boolean;
   enlacesIniciales: { principal: string; alterno: string } | null;
+  /** Aviso al llegar (ej. «Versión 5 publicada»), cuando se viene de publicar desde el detalle. */
+  mensajeInicial?: string;
 };
 
 export function EditorCatalogo({
@@ -133,6 +137,7 @@ export function EditorCatalogo({
   versionInicial,
   sinPublicarInicial,
   enlacesIniciales,
+  mensajeInicial,
 }: Props) {
   // Estado de partida (estable): sirve también para saber si el usuario ya cambió algo.
   const [inicial] = useState<Estado>(() => ({ paginas: paginasIniciales, quitadas: quitadasIniciales }));
@@ -148,7 +153,9 @@ export function EditorCatalogo({
   const [sinPublicar, setSinPublicar] = useState(sinPublicarInicial);
   const [enlaces, setEnlaces] = useState(enlacesIniciales);
   const [publicando, setPublicando] = useState(false);
-  const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(
+    mensajeInicial ? { ok: true, texto: mensajeInicial } : null
+  );
   const [dialogo, setDialogo] = useState<"quitadas" | "agregar" | "reemplazar" | null>(null);
   const [irA, setIrA] = useState("");
 
@@ -335,24 +342,23 @@ export function EditorCatalogo({
   );
 
   return (
-    // La tipografía del diseño (Montserrat Black) llega por herencia desde la página: aquí se vuelve a la de la interfaz.
-    // Los textos de cada página la piden por su cuenta.
-    <div className="pb-24 font-sans font-normal">
-      <div className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-2 backdrop-blur md:px-8">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+    // Pantalla completa y oscura, como el enlace de los clientes. La clase `dark` hace que los
+    // botones y campos usen su aspecto oscuro; la tipografía del diseño (Montserrat Black) llega por
+    // herencia desde la página y aquí se vuelve a la de la interfaz (los textos de cada página la piden por su cuenta).
+    <div className="dark min-h-screen bg-[#16181d] font-sans font-normal text-[#e8e8e8]">
+      <header className="sticky top-0 z-20 border-b border-[#2a2d35] bg-[#0e0f12]/90 backdrop-blur">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
+          <Link
+            href={`/admin/marketing/catalogos/${id}`}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "shrink-0")}
+            title="Volver al catálogo y sus versiones"
+          >
+            <ArrowLeft data-icon="inline-start" /> Catálogo y versiones
+          </Link>
           <div className="min-w-0">
-            <p className="mb-0.5 flex gap-3 text-xs text-muted-foreground">
-              <Link href="/admin/marketing/catalogos" className="hover:text-foreground hover:underline">
-                ← Catálogos
-              </Link>
-              <Link href={`/admin/marketing/catalogos/${id}`} className="hover:text-foreground hover:underline">
-                Detalle e historial
-              </Link>
-            </p>
-            <h1 className="truncate text-base font-semibold text-foreground">{titulo}</h1>
-            <p className="text-xs text-muted-foreground">
-              {cantidadTexto} ·{" "}
-              <span className={cn(errorGuardado && "text-destructive")}>{estadoTexto}</span>
+            <h1 className="truncate text-[15px] font-semibold">{titulo}</h1>
+            <p className="text-xs text-[#9aa0ab]">
+              {cantidadTexto} · <span className={cn(errorGuardado && "text-red-400")}>{estadoTexto}</span>
               {errorGuardado && (
                 <button type="button" className="ml-1 underline" onClick={() => void guardarUltimo()}>
                   reintentar
@@ -364,10 +370,10 @@ export function EditorCatalogo({
             className={cn(
               "rounded-full px-2.5 py-0.5 text-xs font-medium",
               !version
-                ? "bg-muted text-muted-foreground"
+                ? "bg-white/10 text-[#9aa0ab]"
                 : sinPublicar
-                  ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
-                  : "bg-green-500/15 text-green-700 dark:text-green-400"
+                  ? "bg-amber-500/15 text-amber-400"
+                  : "bg-green-500/15 text-green-400"
             )}
           >
             {!version ? "Sin publicar" : sinPublicar ? `Cambios sin publicar · v${version} vigente` : `Publicado v${version} · al día`}
@@ -396,76 +402,22 @@ export function EditorCatalogo({
           </div>
         </div>
 
-        {/* Herramientas de la página seleccionada */}
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border pt-2 text-xs">
-          {paginaSel ? (
-            <>
-              <span className="mr-1 text-muted-foreground">
-                Página <strong className="text-foreground">{indice + 1}</strong>
-                {productoSel && (
-                  <>
-                    {" · "}
-                    <span className="font-mono text-foreground">{productoSel.cod}</span> {productoSel.genero}
-                  </>
-                )}
-                {paginaSel.tipo === "fija" && " · página con imagen"}
-              </span>
-              {paginaSel.tipo === "producto" && (
-                <>
-                  <Button variant="outline" size="icon-sm" aria-label="Achicar" title="Achicar (−)" onClick={() => escalar(1 / 1.03)}>
-                    <Minus />
-                  </Button>
-                  <Button variant="outline" size="icon-sm" aria-label="Agrandar" title="Agrandar (+)" onClick={() => escalar(1.03)}>
-                    <Plus />
-                  </Button>
-                  <Button variant="outline" size="sm" disabled={esNeutro(ajusteSel)} onClick={restablecer} title="Volver a la posición del diseño (0)">
-                    <RotateCcw data-icon="inline-start" /> Restablecer
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setDialogo("reemplazar")}>
-                    <Replace data-icon="inline-start" /> Reemplazar imagen
-                  </Button>
-                </>
-              )}
-              <Button variant="outline" size="icon-sm" aria-label="Subir una posición" disabled={indice === 0} onClick={() => mover(-1)}>
-                <ArrowUp />
-              </Button>
-              <Button variant="outline" size="icon-sm" aria-label="Bajar una posición" disabled={indice === paginas.length - 1} onClick={() => mover(1)}>
-                <ArrowDown />
-              </Button>
-              <form
-                className="flex items-center gap-1"
-                onSubmit={(ev) => {
-                  ev.preventDefault();
-                  irAPosicion();
-                }}
-              >
-                <Input value={irA} onChange={(ev) => setIrA(ev.target.value.replace(/\D/g, ""))} placeholder="Mover a…" inputMode="numeric" className="h-7 w-24 text-xs" aria-label="Mover a la posición" />
-              </form>
-              <Button variant="destructive" size="sm" onClick={quitarSel}>
-                <Trash2 data-icon="inline-start" /> Quitar
-              </Button>
-            </>
-          ) : (
-            <span className="text-muted-foreground">
-              Toca una página para editarla: arrastra la zapatilla, usa las flechas del teclado, + y −, o los botones. Los clientes no ven nada hasta que pulses «Publicar».
-            </span>
-          )}
-        </div>
-
         {mensaje && (
-          <p className={cn("mt-2 text-sm", mensaje.ok ? "text-green-600 dark:text-green-400" : "text-destructive")}>{mensaje.texto}</p>
-        )}
-        {enlaces && mensaje?.ok && (
-          <div className="mt-2 max-w-2xl space-y-2">
-            <EnlaceCatalogo etiqueta="Enlace para clientes" url={enlaces.principal} />
-            {enlaces.alterno !== enlaces.principal && <EnlaceCatalogo etiqueta="Alternativo (misma red)" url={enlaces.alterno} />}
+          <div className="space-y-2 border-t border-[#2a2d35] px-4 py-2.5">
+            <p className={cn("text-sm", mensaje.ok ? "text-green-400" : "text-red-400")}>{mensaje.texto}</p>
+            {enlaces && mensaje.ok && (
+              <div className="max-w-2xl space-y-2">
+                <EnlaceCatalogo etiqueta="Enlace para clientes" url={enlaces.principal} />
+                {enlaces.alterno !== enlaces.principal && <EnlaceCatalogo etiqueta="Alternativo (misma red)" url={enlaces.alterno} />}
+              </div>
+            )}
           </div>
         )}
-      </div>
+      </header>
 
-      <main className="mx-auto p-4 md:px-8" style={{ maxWidth: ANCHO_MAX + 64 }}>
+      <main className="mx-auto p-4 pb-32" style={{ maxWidth: ANCHO_MAX + 32 }}>
         {paginas.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+          <p className="rounded-lg border border-dashed border-[#2a2d35] p-8 text-center text-sm text-[#9aa0ab]">
             No quedan páginas. Restaura las quitadas o agrega una página con imagen.
           </p>
         ) : (
@@ -488,6 +440,66 @@ export function EditorCatalogo({
           </div>
         )}
       </main>
+
+      {/* Barra flotante: las herramientas aparecen al seleccionar una página */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        {paginaSel ? (
+          <div className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-2xl border border-[#2a2d35] bg-[#0e0f12]/95 px-3 py-2 text-xs shadow-2xl backdrop-blur">
+            <span className="mr-1 text-[#9aa0ab]">
+              Página <strong className="text-[#e8e8e8]">{indice + 1}</strong>
+              {productoSel && (
+                <>
+                  {" · "}
+                  <span className="font-mono text-[#e8e8e8]">{productoSel.cod}</span> {productoSel.genero}
+                </>
+              )}
+              {paginaSel.tipo === "fija" && " · página con imagen"}
+            </span>
+            {paginaSel.tipo === "producto" && (
+              <>
+                <Button variant="outline" size="icon-sm" aria-label="Achicar" title="Achicar (−)" onClick={() => escalar(1 / 1.03)}>
+                  <Minus />
+                </Button>
+                <Button variant="outline" size="icon-sm" aria-label="Agrandar" title="Agrandar (+)" onClick={() => escalar(1.03)}>
+                  <Plus />
+                </Button>
+                <Button variant="outline" size="sm" disabled={esNeutro(ajusteSel)} onClick={restablecer} title="Volver a la posición del diseño (0)">
+                  <RotateCcw data-icon="inline-start" /> Restablecer
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setDialogo("reemplazar")}>
+                  <Replace data-icon="inline-start" /> Reemplazar imagen
+                </Button>
+              </>
+            )}
+            <Button variant="outline" size="icon-sm" aria-label="Subir una posición" disabled={indice === 0} onClick={() => mover(-1)}>
+              <ArrowUp />
+            </Button>
+            <Button variant="outline" size="icon-sm" aria-label="Bajar una posición" disabled={indice === paginas.length - 1} onClick={() => mover(1)}>
+              <ArrowDown />
+            </Button>
+            <form
+              className="flex items-center gap-1"
+              onSubmit={(ev) => {
+                ev.preventDefault();
+                irAPosicion();
+              }}
+            >
+              <Input value={irA} onChange={(ev) => setIrA(ev.target.value.replace(/\D/g, ""))} placeholder="Mover a…" inputMode="numeric" className="h-7 w-24 text-xs" aria-label="Mover a la posición" />
+            </form>
+            <Button variant="destructive" size="sm" onClick={quitarSel}>
+              <Trash2 data-icon="inline-start" /> Quitar
+            </Button>
+            <Button variant="ghost" size="icon-sm" aria-label="Dejar de editar esta página" title="Cerrar herramientas" onClick={() => setSel(null)}>
+              <X />
+            </Button>
+          </div>
+        ) : (
+          <p className="rounded-full bg-[#0e0f12]/90 px-4 py-1.5 text-center text-xs text-[#9aa0ab] backdrop-blur">
+            Toca una página para editarla
+            <span className="hidden sm:inline"> · arrastra la zapatilla o usa las flechas, + y −. Los clientes ven los cambios solo al publicar.</span>
+          </p>
+        )}
+      </div>
 
       {/* Reemplazar la imagen del producto seleccionado */}
       <Dialog open={dialogo === "reemplazar" && !!productoSel} onOpenChange={(o) => !o && setDialogo(null)}>

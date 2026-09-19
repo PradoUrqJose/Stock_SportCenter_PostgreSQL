@@ -78,11 +78,16 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
         <Dato etiqueta="Páginas" valor={r.paginas.toLocaleString("en-US")} nota="Una por producto y género, ordenadas por marca" />
         <Dato etiqueta="Sin imagen" valor={r.sin_imagen.length.toLocaleString("en-US")} nota="No entran al catálogo" />
         <Dato etiqueta="Sin stock o precio" valor={r.sin_stock.toLocaleString("en-US")} nota="No entran al catálogo" />
-        <Dato
-          etiqueta="Códigos en varios géneros"
-          valor={(r.multi_genero ?? 0).toLocaleString("en-US")}
-          nota={`Una página por género${r.duplicados > 0 ? ` · ${r.duplicados} fila(s) idéntica(s) omitida(s)` : ""}`}
-        />
+        {r.multi_genero === undefined ? (
+          // Catálogos generados antes de «una página por género»: se conservó una sola fila por código.
+          <Dato etiqueta="Códigos repetidos" valor={r.duplicados.toLocaleString("en-US")} nota="Se conservó la primera fila (generado antes del cambio por género)" />
+        ) : (
+          <Dato
+            etiqueta="Códigos en varios géneros"
+            valor={r.multi_genero.toLocaleString("en-US")}
+            nota={`Una página por género${r.duplicados > 0 ? ` · ${r.duplicados} fila(s) idéntica(s) omitida(s)` : ""}`}
+          />
+        )}
       </div>
 
       {r.sin_imagen.length > 0 && (

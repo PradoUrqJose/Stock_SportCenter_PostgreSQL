@@ -17,7 +17,8 @@ export function PublicarCatalogo({ id, version }: { id: string; version: number 
     iniciar(async () => {
       const r = await publicarCatalogo(id);
       setMensaje({ ok: r.success, texto: r.msg });
-      if (r.success) router.refresh();
+      // Tras publicar se abre el editor a pantalla completa, con el enlace para los clientes.
+      if (r.success && r.data) router.push(`/admin/marketing/catalogos/${id}/editar?publicado=${r.data.version}`);
     });
   }
 

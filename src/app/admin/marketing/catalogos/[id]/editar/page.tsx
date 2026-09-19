@@ -19,10 +19,17 @@ type Fila = {
 };
 
 /** Editor del catálogo (borrador). Solo para usuarios con el módulo MARKETING. */
-export default async function EditarCatalogoPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditarCatalogoPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ publicado?: string }>;
+}) {
   await requireMarketing();
   preconnect(ORIGEN_IMAGENES);
   const { id } = await params;
+  const { publicado } = await searchParams;
 
   const c = await db.execute({
     sql: "SELECT slug, titulo, borrador, version_publicada, updated_at FROM mk_catalogos WHERE id = ?",
@@ -62,6 +69,11 @@ export default async function EditarCatalogoPage({ params }: { params: Promise<{
         versionInicial={cat.version_publicada}
         sinPublicarInicial={sinPublicar}
         enlacesIniciales={cat.version_publicada ? await enlacesCatalogo(cat.slug) : null}
+        mensajeInicial={
+          publicado && publicado === String(cat.version_publicada)
+            ? `Versión ${publicado} publicada: los clientes ya la ven en el mismo enlace.`
+            : undefined
+        }
       />
     </div>
   );
