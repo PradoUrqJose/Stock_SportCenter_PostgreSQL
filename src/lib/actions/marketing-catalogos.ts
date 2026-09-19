@@ -4,16 +4,17 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { revalidatePath, updateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
-import { IMAGENES_BASE, sesionMarketing } from "@/lib/marketing";
+import { IMAGENES_BASE, enlacesCatalogo, sesionMarketing } from "@/lib/marketing";
+import { plantillasPorId, sincronizarVersiones } from "@/lib/marketing-catalogos-datos";
 import { consultarCatalogoErp } from "@/lib/marketing-erp";
 import { etiquetaCatalogo } from "@/lib/marketing-publico";
 import {
   ALMACENES,
   armarSnapshot,
   construirBorrador,
+  validarPaginas,
   type Borrador,
   type FiltrosCatalogo,
-  type PlantillaSnap,
 } from "@/lib/marketing-catalogo";
 import type { ActionResult } from "@/types";
 
@@ -98,7 +99,50 @@ export async function generarCatalogo(input: {
   }
 }
 
-export async function publicarCatalogo(id: string): Promise<ActionResult<{ version: number }>> {
+/**
+ * Guarda las páginas del editor en el BORRADOR. Los clientes no ven nada hasta
+ * que se publica: esto solo actualiza mk_catalogos.borrador.
+ */
+export async function guardarEdicion(
+  id: string,
+  entrada: { paginas: unknown; quitadas: unknown }
+): Promise<ActionResult> {
+  const sesion = await sesionMarketing();
+  if (!sesion) return { success: false, msg: "Sin permisos" };
+
+  try {
+    const c = await db.execute({ sql: "SELECT borrador FROM mk_catalogos WHERE id = ?", args: [id] });
+    if (c.rows.length === 0) return { success: false, msg: "El catálogo no existe" };
+    const borrador = JSON.parse(c.rows[0].borrador as string) as Borrador;
+
+    const plantillas = await db.execute("SELECT id FROM mk_plantillas");
+    const ids = new Set(plantillas.rows.map((f) => f.id as string));
+
+    // Se validan juntas para que los identificadores no se repitan entre páginas y quitadas.
+    const paginasEnt = Array.isArray(entrada.paginas) ? entrada.paginas : null;
+    const quitadasEnt = Array.isArray(entrada.quitadas) ? entrada.quitadas : null;
+    if (!paginasEnt || !quitadasEnt) return { success: false, msg: "Formato inválido" };
+    const todas = validarPaginas([...paginasEnt, ...quitadasEnt], borrador.productos.length, ids);
+    if (typeof todas === "string") return { success: false, msg: todas };
+
+    const paginas = todas.slice(0, paginasEnt.length);
+    const quitadas = todas.slice(paginasEnt.length);
+    const nuevo: Borrador = { ...borrador, paginas, quitadas, resumen: { ...borrador.resumen, paginas: paginas.length } };
+
+    await db.execute({
+      sql: "UPDATE mk_catalogos SET borrador = ?, updated_at = now_text() WHERE id = ?",
+      args: [JSON.stringify(nuevo), id],
+    });
+    return { success: true, msg: "Guardado" };
+  } catch (e) {
+    console.error("[marketing] guardarEdicion falló:", e);
+    return { success: false, msg: "No se pudo guardar" };
+  }
+}
+
+export async function publicarCatalogo(
+  id: string
+): Promise<ActionResult<{ version: number; enlaces: { principal: string; alterno: string } }>> {
   const sesion = await sesionMarketing();
   if (!sesion) return { success: false, msg: "Sin permisos" };
 
@@ -106,17 +150,12 @@ export async function publicarCatalogo(id: string): Promise<ActionResult<{ versi
     const c = await db.execute({ sql: "SELECT slug, titulo, borrador FROM mk_catalogos WHERE id = ?", args: [id] });
     if (c.rows.length === 0) return { success: false, msg: "El catálogo no existe" };
     const { slug, titulo, borrador: crudo } = c.rows[0] as { slug: string; titulo: string; borrador: string };
-    const borrador = JSON.parse(crudo) as Borrador;
+    // Imágenes reemplazadas desde que se generó el catálogo: se toma la versión vigente.
+    const borrador = await sincronizarVersiones(JSON.parse(crudo) as Borrador);
+    if (borrador.paginas.length === 0) return { success: false, msg: "El catálogo no tiene páginas" };
 
-    const ids = [...new Set(borrador.paginas.map((p) => p.plantilla))];
-    const pl = await db.execute({
-      sql: "SELECT id, ancho, alto, fondo_key, zonas FROM mk_plantillas WHERE id = ANY(?)",
-      args: [ids],
-    });
-    const plantillas: Record<string, PlantillaSnap> = {};
-    for (const f of pl.rows as unknown as PlantillaFila[]) {
-      plantillas[f.id] = { ancho: f.ancho, alto: f.alto, fondo: f.fondo_key, zonas: JSON.parse(f.zonas) };
-    }
+    const ids = [...new Set(borrador.paginas.flatMap((p) => (p.tipo === "producto" ? [p.plantilla] : [])))];
+    const plantillas = await plantillasPorId(ids);
     const faltan = ids.filter((i) => !plantillas[i]);
     if (faltan.length > 0) return { success: false, msg: `Falta la plantilla ${faltan.join(", ")}` };
 
@@ -128,6 +167,7 @@ export async function publicarCatalogo(id: string): Promise<ActionResult<{ versi
     });
     const version = v.rows[0].siguiente as number;
 
+    // updated_at no se toca: solo cuenta las ediciones, y así el editor sabe si hay cambios sin publicar.
     await db.batch([
       {
         sql: `INSERT INTO mk_catalogo_versiones (catalogo_id, version, snapshot, paginas, publicado_por)
@@ -135,8 +175,8 @@ export async function publicarCatalogo(id: string): Promise<ActionResult<{ versi
         args: [id, version, snapshot, borrador.paginas.length, sesion.id],
       },
       {
-        sql: "UPDATE mk_catalogos SET version_publicada = ?, updated_at = now_text() WHERE id = ?",
-        args: [version, id],
+        sql: "UPDATE mk_catalogos SET version_publicada = ?, borrador = ? WHERE id = ?",
+        args: [version, JSON.stringify(borrador), id],
       },
     ]);
 
@@ -144,7 +184,7 @@ export async function publicarCatalogo(id: string): Promise<ActionResult<{ versi
     updateTag(etiquetaCatalogo(slug));
     revalidatePath(`/admin/marketing/catalogos/${id}`);
     revalidatePath("/admin/marketing/catalogos");
-    return { success: true, msg: `Versión ${version} publicada`, data: { version } };
+    return { success: true, msg: `Versión ${version} publicada`, data: { version, enlaces: await enlacesCatalogo(slug) } };
   } catch (e) {
     console.error("[marketing] publicarCatalogo falló:", e);
     return { success: false, msg: e instanceof Error ? e.message : "No se pudo publicar" };

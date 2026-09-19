@@ -15,11 +15,13 @@ type Props = {
   codigo: string;
   /** PNG original vigente, para mostrarlo como «Actual». */
   urlActual: string;
-  /** Se llama tras reemplazar con éxito (cierra el diálogo). */
-  onHecho: () => void;
+  /** Se llama tras reemplazar con éxito, con la versión nueva de la imagen. */
+  onHecho: (version: number) => void;
+  /** Vuelve a leer la página del servidor tras reemplazar (por defecto sí). */
+  refrescar?: boolean;
 };
 
-export function ReemplazarImagen({ codigo, urlActual, onHecho }: Props) {
+export function ReemplazarImagen({ codigo, urlActual, onHecho, refrescar = true }: Props) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [fase, setFase] = useState<"reposo" | "procesando" | "vista" | "subiendo">("reposo");
@@ -51,8 +53,8 @@ export function ReemplazarImagen({ codigo, urlActual, onHecho }: Props) {
       setFase("vista");
       return;
     }
-    router.refresh();
-    onHecho();
+    if (refrescar) router.refresh();
+    onHecho(r.version);
   }
 
   function descartar() {

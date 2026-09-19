@@ -32,7 +32,7 @@ export function FormNuevoCatalogo({ opciones }: { opciones: Opciones }) {
     setError(null);
     iniciar(async () => {
       const r = await generarCatalogo({ titulo, almacenes, grupo, marca, genero });
-      if (r.success && r.data) router.push(`/admin/marketing/catalogos/${r.data.id}`);
+      if (r.success && r.data) router.push(`/admin/marketing/catalogos/${r.data.id}/editar`);
       else setError(r.msg);
     });
   }

@@ -15,17 +15,33 @@ export type ProductoCat = {
   v: number;
   marca: string;
   modelo: string;
+  /** HOMBRE, MUJER, JUNIOR…: un mismo código puede tener una página por género (tallas distintas). */
+  genero?: string;
   tallas: string[];
   precio: number;
 };
 
-export type PaginaCat = {
+/** Una zapatilla sobre el diseño de su marca. `ajuste` es la posición corregida en el editor. */
+export type PaginaProducto = {
   id: string;
   tipo: "producto";
   plantilla: string;
+  /** Índice en `productos`. */
   prod: number;
   ajuste?: Ajuste;
 };
+
+/** Página de imagen completa (portada, divisor, redes…) subida desde el editor. */
+export type PaginaFija = {
+  id: string;
+  tipo: "fija";
+  /** Ruta en el bucket sin extensión: `<imagen>.webp`. */
+  imagen: string;
+  ancho: number;
+  alto: number;
+};
+
+export type PaginaCat = PaginaProducto | PaginaFija;
 
 export type PlantillaSnap = {
   ancho: number;
@@ -55,8 +71,10 @@ export type FiltrosCatalogo = {
 export type ResumenGeneracion = {
   /** Filas que devolvió el ERP. */
   erp_items: number;
-  /** Códigos repetidos en el ERP (mismo código en varios géneros): se conserva el primero. */
+  /** Filas repetidas en el ERP (mismo código Y mismo género): se conserva la primera. */
   duplicados: number;
+  /** Códigos que aparecen en más de un género: cada género tiene su propia página. */
+  multi_genero?: number;
   /** Códigos del ERP sin imagen en R2: no entran al catálogo. */
   sin_imagen: string[];
   /** Filas descartadas por no tener tallas con stock o precio. */
@@ -67,6 +85,8 @@ export type ResumenGeneracion = {
 export type Borrador = {
   productos: ProductoCat[];
   paginas: PaginaCat[];
+  /** Páginas que se sacaron en el editor; se pueden restaurar. */
+  quitadas?: PaginaCat[];
   resumen: ResumenGeneracion;
 };
 
@@ -111,7 +131,8 @@ function numero(v: number | string | null | undefined): number | null {
 /**
  * Arma el borrador desde lo que devolvió el ERP: descarta lo que no se puede
  * mostrar (sin imagen, sin stock/precio), quita duplicados, ordena SIEMPRE por
- * marca (luego modelo y código) y crea una página por producto.
+ * marca (luego modelo, código y género) y crea una página por producto y género:
+ * el mismo código en dos géneros da dos páginas (cada una con sus tallas).
  *
  * @param versiones   cod_universal (MAYÚSCULAS) → versión de su imagen en R2
  * @param plantillaDe id de la plantilla que corresponde a una marca
@@ -122,6 +143,7 @@ export function construirBorrador(
   plantillaDe: (marca: string) => string
 ): Borrador {
   const vistos = new Set<string>();
+  const generosPorCodigo = new Map<string, Set<string>>();
   const sinImagen = new Set<string>();
   const productos: ProductoCat[] = [];
   let duplicados = 0;
@@ -130,11 +152,14 @@ export function construirBorrador(
   for (const it of items) {
     const cod = it.cod_universal?.trim().toUpperCase();
     if (!cod) continue;
-    if (vistos.has(cod)) {
+    const genero = (it.genero ?? "").trim().toUpperCase();
+    const clave = `${cod}|${genero}`;
+    if (vistos.has(clave)) {
       duplicados++;
       continue;
     }
-    vistos.add(cod);
+    vistos.add(clave);
+    (generosPorCodigo.get(cod) ?? generosPorCodigo.set(cod, new Set()).get(cod)!).add(genero);
 
     const tallas = ordenarTallas(it.tallas ?? {});
     const precio = numero(it.precio_venta);
@@ -152,16 +177,21 @@ export function construirBorrador(
       v,
       marca: (it.marca ?? "").trim().toUpperCase(),
       modelo: (it.modelo ?? "").trim().toUpperCase(),
+      genero,
       tallas,
       precio,
     });
   }
 
   productos.sort(
-    (a, b) => a.marca.localeCompare(b.marca) || a.modelo.localeCompare(b.modelo) || a.cod.localeCompare(b.cod)
+    (a, b) =>
+      a.marca.localeCompare(b.marca) ||
+      a.modelo.localeCompare(b.modelo) ||
+      a.cod.localeCompare(b.cod) ||
+      (a.genero ?? "").localeCompare(b.genero ?? "")
   );
 
-  const paginas: PaginaCat[] = productos.map((p, i) => ({
+  const paginas: PaginaProducto[] = productos.map((p, i) => ({
     id: `p${i + 1}`,
     tipo: "producto",
     plantilla: plantillaDe(p.marca),
@@ -174,6 +204,7 @@ export function construirBorrador(
     resumen: {
       erp_items: items.length,
       duplicados,
+      multi_genero: [...generosPorCodigo.values()].filter((g) => g.size > 1).length,
       sin_imagen: [...sinImagen].sort(),
       sin_stock: sinStock,
       paginas: paginas.length,
@@ -181,20 +212,84 @@ export function construirBorrador(
   };
 }
 
-/** Snapshot público a partir del borrador: solo las plantillas realmente usadas. */
+/**
+ * Snapshot público a partir del borrador. Solo lleva las plantillas y los
+ * productos que las páginas usan de verdad (las páginas quitadas no viajan) y
+ * los índices `prod` se reasignan a la lista compacta.
+ */
 export function armarSnapshot(
   titulo: string,
   borrador: Borrador,
   plantillas: Record<string, PlantillaSnap>,
   imagenesBase: string
 ): Snapshot {
-  const usadas = new Set(borrador.paginas.map((p) => p.plantilla));
+  const productos: ProductoCat[] = [];
+  const nuevoIndice = new Map<number, number>();
+  const usadas = new Set<string>();
+  const paginas: PaginaCat[] = borrador.paginas.map((p) => {
+    if (p.tipo === "fija") return p;
+    let n = nuevoIndice.get(p.prod);
+    if (n === undefined) {
+      n = productos.length;
+      productos.push(borrador.productos[p.prod]);
+      nuevoIndice.set(p.prod, n);
+    }
+    usadas.add(p.plantilla);
+    return { ...p, prod: n };
+  });
   return {
     titulo,
     generado: new Date().toISOString(),
     imagenes_base: imagenesBase,
     plantillas: Object.fromEntries(Object.entries(plantillas).filter(([id]) => usadas.has(id))),
-    productos: borrador.productos,
-    paginas: borrador.paginas,
+    productos,
+    paginas,
   };
+}
+
+/**
+ * Valida las páginas que llegan del editor (datos del navegador: nunca se
+ * confía en ellos). Devuelve las páginas normalizadas o un mensaje de error.
+ */
+export function validarPaginas(
+  entrada: unknown,
+  nProductos: number,
+  plantillas: ReadonlySet<string>
+): PaginaCat[] | string {
+  if (!Array.isArray(entrada)) return "Formato de páginas inválido";
+  if (entrada.length > 3000) return "Demasiadas páginas";
+  const ids = new Set<string>();
+  const salida: PaginaCat[] = [];
+  for (const p of entrada) {
+    if (typeof p !== "object" || p === null) return "Página inválida";
+    const o = p as Record<string, unknown>;
+    if (typeof o.id !== "string" || !/^[A-Za-z0-9_-]{1,40}$/.test(o.id) || ids.has(o.id)) {
+      return "Identificador de página inválido o repetido";
+    }
+    ids.add(o.id);
+
+    if (o.tipo === "producto") {
+      const prod = o.prod;
+      if (typeof prod !== "number" || !Number.isInteger(prod) || prod < 0 || prod >= nProductos) return "Producto inexistente";
+      if (typeof o.plantilla !== "string" || !plantillas.has(o.plantilla)) return "Plantilla inexistente";
+      let ajuste: Ajuste | undefined;
+      if (o.ajuste !== undefined) {
+        const a = (o.ajuste ?? {}) as Record<string, unknown>;
+        const dx = Number(a.dx), dy = Number(a.dy), sc = Number(a.s);
+        if (![dx, dy, sc].every(Number.isFinite) || Math.abs(dx) > 3000 || Math.abs(dy) > 3000 || sc < 0.2 || sc > 5) {
+          return "Ajuste fuera de rango";
+        }
+        if (!(dx === 0 && dy === 0 && sc === 1)) ajuste = { dx: Math.round(dx), dy: Math.round(dy), s: Math.round(sc * 1000) / 1000 };
+      }
+      salida.push({ id: o.id, tipo: "producto", plantilla: o.plantilla, prod, ...(ajuste ? { ajuste } : {}) });
+    } else if (o.tipo === "fija") {
+      if (typeof o.imagen !== "string" || !/^paginas-fijas\/[A-Za-z0-9-]{8,60}$/.test(o.imagen)) return "Imagen de página inválida";
+      const ancho = Number(o.ancho), alto = Number(o.alto);
+      if (!(ancho >= 100 && ancho <= 6000 && alto >= 100 && alto <= 6000)) return "Tamaño de página inválido";
+      salida.push({ id: o.id, tipo: "fija", imagen: o.imagen, ancho: Math.round(ancho), alto: Math.round(alto) });
+    } else {
+      return "Tipo de página desconocido";
+    }
+  }
+  return salida;
 }

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, PencilRuler } from "lucide-react";
 import { db } from "@/lib/db";
 import { enlacesCatalogo, requireMarketing } from "@/lib/marketing";
 import type { Borrador, FiltrosCatalogo } from "@/lib/marketing-catalogo";
 import { EnlaceCatalogo, PublicarCatalogo } from "@/components/admin/marketing/acciones-catalogo";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type Catalogo = {
   id: string;
@@ -62,16 +64,25 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
       <Link href="/admin/marketing/catalogos" className="mb-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
         <ChevronLeft className="h-3.5 w-3.5" /> Catálogos
       </Link>
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-foreground">{cat.titulo}</h1>
-        <p className="mt-1 text-xs text-muted-foreground">{filtrosTexto.join(" · ")}</p>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">{cat.titulo}</h1>
+          <p className="mt-1 text-xs text-muted-foreground">{filtrosTexto.join(" · ")}</p>
+        </div>
+        <Link href={`/admin/marketing/catalogos/${cat.id}/editar`} className={cn(buttonVariants())}>
+          <PencilRuler data-icon="inline-start" /> Editar catálogo
+        </Link>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Dato etiqueta="Páginas" valor={r.paginas.toLocaleString("en-US")} nota="Una por producto, ordenadas por marca" />
+        <Dato etiqueta="Páginas" valor={r.paginas.toLocaleString("en-US")} nota="Una por producto y género, ordenadas por marca" />
         <Dato etiqueta="Sin imagen" valor={r.sin_imagen.length.toLocaleString("en-US")} nota="No entran al catálogo" />
         <Dato etiqueta="Sin stock o precio" valor={r.sin_stock.toLocaleString("en-US")} nota="No entran al catálogo" />
-        <Dato etiqueta="Códigos repetidos" valor={r.duplicados.toLocaleString("en-US")} nota="Se conserva la primera fila" />
+        <Dato
+          etiqueta="Códigos en varios géneros"
+          valor={(r.multi_genero ?? 0).toLocaleString("en-US")}
+          nota={`Una página por género${r.duplicados > 0 ? ` · ${r.duplicados} fila(s) idéntica(s) omitida(s)` : ""}`}
+        />
       </div>
 
       {r.sin_imagen.length > 0 && (

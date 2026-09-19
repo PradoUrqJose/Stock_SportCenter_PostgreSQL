@@ -20,3 +20,39 @@ export async function enviarImagen(
     return { ok: false, error: "Sin conexión con el servidor" };
   }
 }
+
+export type ResultadoPaginaFija =
+  | { ok: true; imagen: string; ancho: number; alto: number }
+  | { ok: false; error: string };
+
+/** Reduce una imagen a ≤ 2000 px de ancho y la convierte a WebP para subirla como página completa. */
+export async function prepararPaginaFija(archivo: File): Promise<Blob> {
+  const bmp = await createImageBitmap(archivo);
+  try {
+    const escala = Math.min(1, 2000 / bmp.width);
+    const lienzo = document.createElement("canvas");
+    lienzo.width = Math.round(bmp.width * escala);
+    lienzo.height = Math.round(bmp.height * escala);
+    lienzo.getContext("2d")!.drawImage(bmp, 0, 0, lienzo.width, lienzo.height);
+    const blob = await new Promise<Blob | null>((res) => lienzo.toBlob(res, "image/webp", 0.9));
+    if (!blob) throw new Error("No se pudo convertir la imagen");
+    return blob;
+  } finally {
+    bmp.close();
+  }
+}
+
+export async function enviarPaginaFija(imagen: Blob): Promise<ResultadoPaginaFija> {
+  try {
+    const res = await fetch("/api/marketing/paginas-fijas", {
+      method: "POST",
+      headers: { "Content-Type": imagen.type || "image/webp" },
+      body: imagen,
+    });
+    const json = (await res.json().catch(() => null)) as { error?: string; imagen?: string; ancho?: number; alto?: number } | null;
+    if (!res.ok || !json?.imagen) return { ok: false, error: json?.error ?? `Error ${res.status}` };
+    return { ok: true, imagen: json.imagen, ancho: json.ancho ?? 2000, alto: json.alto ?? 1141 };
+  } catch {
+    return { ok: false, error: "Sin conexión con el servidor" };
+  }
+}

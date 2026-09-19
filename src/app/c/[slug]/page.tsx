@@ -28,7 +28,8 @@ export default async function CatalogoPublicoPage({ params }: { params: Promise<
 
   // Abre la conexión a R2 y pide el fondo antes de que el navegador ejecute el visor.
   preconnect(new URL(snapshot.imagenes_base).origin);
-  const primera = snapshot.plantillas[snapshot.paginas[0]?.plantilla];
+  const primeraProducto = snapshot.paginas.find((p) => p.tipo === "producto");
+  const primera = primeraProducto?.tipo === "producto" ? snapshot.plantillas[primeraProducto.plantilla] : undefined;
   if (primera) preload(`${snapshot.imagenes_base}/${primera.fondo}.webp`, { as: "image" });
 
   return (
