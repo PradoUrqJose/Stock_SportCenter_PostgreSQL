@@ -80,8 +80,11 @@ export async function ejecutarGeneracion(id: string): Promise<void> {
         `Ningún producto se puede mostrar: el ERP devolvió ${r.erp_items}, ${r.sin_imagen.length} sin imagen, ${r.sin_stock} sin stock o precio${fuera}${sinPl}`
       );
     }
-    // Portada al inicio y términos al final, según el tipo de catálogo (se pueden quitar en el editor).
-    const borrador = conFijasAutomaticas(sinFijas, tipoEfectivo(filtros), (await fijasDeBiblioteca()) as FijaBiblioteca[]);
+    // Portada al inicio (la elegida o la del tipo), separadores elegidos y términos al final (se pueden quitar en el editor).
+    const borrador = conFijasAutomaticas(sinFijas, tipoEfectivo(filtros), (await fijasDeBiblioteca()) as FijaBiblioteca[], {
+      portada: filtros.portada,
+      separadores: filtros.separadores,
+    });
 
     await etapa(id, "guardando");
     const catalogoId = randomUUID();

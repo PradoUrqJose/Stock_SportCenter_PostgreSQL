@@ -5,15 +5,16 @@ import { db } from "@/lib/db";
 import { sesionMarketing } from "@/lib/marketing";
 import { r2Configurado, r2Subir } from "@/lib/r2";
 import { MAX_BYTES_IMAGEN } from "@/lib/marketing-codigos";
-import { MARCA_GENERICA } from "@/lib/marketing-catalogo";
+import { MARCA_GENERICA, TIPOS_IDS } from "@/lib/marketing-catalogo";
 import { plantillasGestion } from "@/lib/marketing-catalogos-datos";
+import { claveNombre } from "@/lib/marketing-disenos-nombres";
 
 export const maxDuration = 30;
 
 const error = (mensaje: string, status: number) => NextResponse.json({ error: mensaje }, { status });
 const TIPOS_IMAGEN = new Set(["image/webp", "image/png", "image/jpeg"]);
 const TIPOS_FIJA = new Set(["portada", "separador", "cierre", "otra"]);
-const TIPOS_CATALOGO = new Set(["hombre", "mujer", "ninos", "futbol", "*"]);
+const TIPOS_CATALOGO = new Set([...TIPOS_IDS, "*"]);
 const ANCHO = 2000;
 const CACHE = "public, max-age=31536000, immutable";
 
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
       const alto = Math.round((ANCHO * meta.height) / meta.width);
       const parteMarca = marca === MARCA_GENERICA ? "generica" : slug(marca);
       // Mismo nombre y marca = se reemplaza el fondo de esa plantilla (conserva sus zonas y si es la predeterminada).
-      const existente = todas.find((p) => p.marca === marca && p.nombre.trim().toLowerCase() === nombre.toLowerCase());
+      const existente = todas.find((p) => p.marca === marca && claveNombre(p.nombre) === claveNombre(nombre));
       const id = existente?.id ?? `${parteMarca}-${slug(nombre)}-${hash}`.slice(0, 80);
       const clave = `plantillas/${parteMarca}/${slug(nombre)}-${hash}`;
       const fondo = sharp(cuerpo).resize(ANCHO, alto);
@@ -107,11 +108,11 @@ export async function POST(req: NextRequest) {
       if (!["", "inicio", "final"].includes(posicion)) return error("Posición no válida", 400);
       if (posicion !== "" && aplica.length === 0) return error("Elige en qué catálogos se usa antes de fijar su posición", 400);
 
-      const existente = await db.execute({
-        sql: "SELECT id FROM mk_paginas_fijas WHERE tipo = ? AND lower(nombre) = lower(?) LIMIT 1",
-        args: [tipoFija, nombre],
-      });
-      const id = (existente.rows[0]?.id as string | undefined) ?? `${slug(nombre)}-${hash}`.slice(0, 60);
+      // Mismo diseño = mismo nombre sin contar tildes, mayúsculas ni símbolos.
+      const delTipo = await db.execute({ sql: "SELECT id, nombre FROM mk_paginas_fijas WHERE tipo = ?", args: [tipoFija] });
+      const previa = delTipo.rows.find((r) => claveNombre(r.nombre as string) === claveNombre(nombre));
+      const existente = { rows: previa ? [previa] : [] };
+      const id = (previa?.id as string | undefined) ?? `${slug(nombre)}-${hash}`.slice(0, 60);
       const clave = `paginas-fijas/${slug(nombre)}-${hash}`;
       const { data, info } = await sharp(cuerpo)
         .resize({ width: ANCHO, withoutEnlargement: true })

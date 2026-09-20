@@ -69,14 +69,14 @@ const PLANTILLAS = [
 // ---------- páginas fijas ----------
 // auto: [tipo de catálogo o '*', 'inicio' | 'final'] = la generación la pone sola.
 const FIJAS = [
-  { id: "portada-hombres", nombre: "Portada Hombres", tipo: "portada", archivo: "PORTADA CATALOGO HOMBRES.jpg.jpeg", auto: ["hombre", "inicio"] },
-  { id: "portada-mujeres", nombre: "Portada Mujeres", tipo: "portada", archivo: "PORTADA CATALOGO MUJERES FINAL.jpg.jpeg", auto: ["mujer", "inicio"] },
-  { id: "portada-ninos", nombre: "Portada Niños", tipo: "portada", archivo: "PORTADA CATALOGO NIÑOS.jpg.jpeg", auto: ["ninos", "inicio"] },
-  { id: "portada-accesorios", nombre: "Portada Accesorios", tipo: "portada", archivo: "PORTADA CATALOGO ACCESORIOS_.jpg.jpeg" },
-  { id: "portada-sandalias", nombre: "Portada Sandalias", tipo: "portada", archivo: "PORTADA CATALOGO SANDALIAS.jpg.jpeg" },
-  { id: "portada-ropa", nombre: "Portada Ropa", tipo: "portada", archivo: "PORTADA ROPA.jpg.jpeg" },
-  { id: "portada-ropa-hombre", nombre: "Portada Ropa Hombre", tipo: "portada", archivo: "PORTADA CATALOGO ROPA HOMBRE.jpg.jpeg" },
-  { id: "portada-ropa-mujer", nombre: "Portada Ropa Mujer", tipo: "portada", archivo: "PORTADA CATALOGO ROPA MUJER.jpg.jpeg" },
+  { id: "portada-hombres", nombre: "Portada Hombres", tipo: "portada", archivo: "PORTADA CATALOGO HOMBRES.jpg.jpeg" , auto: ["hombre,futbol", "inicio"] },
+  { id: "portada-mujeres", nombre: "Portada Mujeres", tipo: "portada", archivo: "PORTADA CATALOGO MUJERES FINAL.jpg.jpeg" , auto: ["mujer", "inicio"] },
+  { id: "portada-ninos", nombre: "Portada Niños", tipo: "portada", archivo: "PORTADA CATALOGO NIÑOS.jpg.jpeg" , auto: ["ninos", "inicio"] },
+  { id: "portada-accesorios", nombre: "Portada Accesorios", tipo: "portada", archivo: "PORTADA CATALOGO ACCESORIOS_.jpg.jpeg" , auto: ["accesorios", "inicio"] },
+  { id: "portada-sandalias", nombre: "Portada Sandalias", tipo: "portada", archivo: "PORTADA CATALOGO SANDALIAS.jpg.jpeg" , auto: ["sandalias", "inicio"] },
+  { id: "portada-ropa", nombre: "Portada Ropa", tipo: "portada", archivo: "PORTADA ROPA.jpg.jpeg" , auto: ["ropa", "inicio"] },
+  { id: "portada-ropa-hombre", nombre: "Portada Ropa Hombre", tipo: "portada", archivo: "PORTADA CATALOGO ROPA HOMBRE.jpg.jpeg" , auto: ["ropa-hombre", "inicio"] },
+  { id: "portada-ropa-mujer", nombre: "Portada Ropa Mujer", tipo: "portada", archivo: "PORTADA CATALOGO ROPA MUJER.jpg.jpeg" , auto: ["ropa-mujer", "inicio"] },
   { id: "separador-grass-natural", nombre: "Fútbol · Grass natural", tipo: "separador", archivo: "SEPARADOR CATALOGO FUTBOL GRASS NATURAL.jpg.jpeg", auto: ["futbol", null] },
   { id: "separador-grass-sintetico-marcas", nombre: "Fútbol · Grass sintético (con marcas)", tipo: "separador", archivo: "SEPARADOR CATALOGO FUTBOL GRASS SINTETICO.jpg.jpeg", auto: ["futbol", null] },
   { id: "separador-grass-sintetico", nombre: "Fútbol · Grass sintético (sin marcas)", tipo: "separador", archivo: "SEPARADOR CATALOGO FUTBOL GRASS SINTÉTICO.jpg.jpeg", auto: ["futbol", null] },

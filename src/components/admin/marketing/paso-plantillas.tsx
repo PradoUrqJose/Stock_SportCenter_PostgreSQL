@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { AlertTriangle, ChevronLeft, ChevronRight, ExternalLink, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { MarcaAfectada } from "@/lib/actions/marketing-disenos";
 import { MARCA_GENERICA, TIPOS_CATALOGO, type FijaBiblioteca } from "@/lib/marketing-catalogo";
@@ -66,7 +67,7 @@ export function PasoPlantillas({
         <div>
           <h2 className="text-lg font-semibold text-foreground">Plantillas</h2>
           <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-            Solo lo que corresponde a estos filtros{nombreTipo ? ` (${nombreTipo})` : ""}. Cada marca usa su plantilla predeterminada; puedes elegir otra. El Preview muestra el documento completo.
+            Solo lo que corresponde a estos filtros{nombreTipo ? ` (${nombreTipo})` : ""}. Cada marca usa su plantilla predeterminada; puedes elegir otra. La portada va asociada al tipo de catálogo. El Preview muestra el documento completo.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -76,7 +77,7 @@ export function PasoPlantillas({
           <Button variant="outline" onClick={() => setPreview(true)}>
             <Eye data-icon="inline-start" /> Preview
           </Button>
-          <Button onClick={alAvanzar}>
+          <Button onClick={alAvanzar} disabled={documento.portadaPendiente}>
             Avanzar <ChevronRight data-icon="inline-end" />
           </Button>
         </div>
@@ -149,23 +150,78 @@ export function PasoPlantillas({
         )}
       </div>
 
-      {/* Portada, separadores y cierres que corresponden a estos filtros */}
-      <div className="space-y-6">
+      {/* Portada, separadores opcionales y cierres que corresponden a estos filtros */}
+      <div className="space-y-7">
         <div>
-          <h3 className="mb-2 text-sm font-medium text-foreground">Al inicio</h3>
-          {documento.inicio.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Sin portada automática para estos filtros; puedes agregar una en el editor.</p>
-          ) : (
-            <ul className="flex flex-wrap gap-3">{documento.inicio.map((f) => miniatura(f, "Portada · se pone sola"))}</ul>
-          )}
+          <h3 className="mb-1 text-sm font-medium text-foreground">Portada</h3>
+          <p className={cn("mb-2 text-xs", documento.portadaPendiente ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>
+            {documento.portadaPendiente
+              ? "Con filtros personalizados, elige una portada o «Sin portada» para continuar."
+              : documento.portadaDelTipo && nombreTipo
+                ? `La portada asociada a ${nombreTipo} ya está elegida; puedes cambiarla.`
+                : "Este tipo no tiene una portada asociada: elige una o déjalo sin portada."}
+          </p>
+          <ul className="flex flex-wrap gap-3">
+            <li className="w-40">
+              <button
+                type="button"
+                onClick={() => cambiar({ portada: null })}
+                aria-pressed={!documento.portadaPendiente && documento.portada === null}
+                className={cn(
+                  "flex aspect-video w-full items-center justify-center rounded-lg border text-xs transition-all hover:-translate-y-0.5",
+                  !documento.portadaPendiente && documento.portada === null ? "border-foreground bg-muted font-medium" : "border-dashed border-border text-muted-foreground hover:bg-muted/50"
+                )}
+              >
+                Sin portada
+              </button>
+            </li>
+            {documento.portadas.map((f) => {
+              const elegida = documento.portada?.id === f.id;
+              return (
+                <li key={f.id} className="w-40 animate-in fade-in zoom-in-95 fill-mode-both duration-500">
+                  <div className={cn("overflow-hidden rounded-lg border transition-all hover:-translate-y-0.5 hover:shadow-md", elegida ? "border-foreground ring-2 ring-foreground/70" : "border-border")}>
+                    <button type="button" onClick={() => cambiar({ portada: f.id })} aria-pressed={elegida} className="block w-full text-left" aria-label={`Elegir ${f.nombre}`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`${base}/${f.imagen}-min.webp`} alt="" loading="lazy" className="aspect-video w-full object-cover" />
+                      <span className="block truncate px-2 pt-1 text-[11px] font-medium text-foreground">{f.nombre}</span>
+                    </button>
+                    <div className="flex items-center justify-between px-2 pb-1.5">
+                      <span className="text-[10px] text-muted-foreground">{elegida ? (documento.portadaDelTipo?.id === f.id ? "Asociada al tipo" : "Elegida") : " "}</span>
+                      <button type="button" onClick={() => setGrande({ src: `${base}/${f.imagen}.webp`, titulo: f.nombre })} className="text-[10px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+                        Ver
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </div>
-        {documento.sugeridas.length > 0 && (
+
+        {documento.separadores.length > 0 && (
           <div>
-            <h3 className="mb-1 text-sm font-medium text-foreground">Separadores</h3>
-            <p className="mb-2 text-xs text-muted-foreground">Se sugieren para este tipo de catálogo; los ubicas donde corresponda en el editor.</p>
-            <ul className="flex flex-wrap gap-3">{documento.sugeridas.map((f) => miniatura(f, "Se ubica en el editor"))}</ul>
+            <h3 className="mb-1 text-sm font-medium text-foreground">Separadores (opcional)</h3>
+            <p className="mb-2 text-xs text-muted-foreground">Marca los que quieras: entran al principio del catálogo y los ubicas donde corresponda en el editor.</p>
+            <ul className="flex flex-wrap gap-3">
+              {documento.separadores.map((f) => {
+                const marcado = (datos.separadores ?? []).includes(f.id);
+                return (
+                  <li key={f.id} className="w-40">
+                    <label className={cn("block cursor-pointer overflow-hidden rounded-lg border transition-all hover:-translate-y-0.5 hover:shadow-md", marcado ? "border-foreground ring-2 ring-foreground/70" : "border-border")}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`${base}/${f.imagen}-min.webp`} alt="" loading="lazy" className="aspect-video w-full object-cover" />
+                      <span className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-medium text-foreground">
+                        <Checkbox checked={marcado} onCheckedChange={(v) => cambiar({ separadores: v === true ? [...(datos.separadores ?? []), f.id] : (datos.separadores ?? []).filter((x) => x !== f.id) })} />
+                        <span className="truncate">{f.nombre}</span>
+                      </span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
+
         <div>
           <h3 className="mb-2 text-sm font-medium text-foreground">Al final</h3>
           {documento.final.length === 0 ? (
@@ -192,7 +248,7 @@ export function PasoPlantillas({
           base={base}
           hojas={documento.hojas}
           alCerrar={() => setPreview(false)}
-          alSiguiente={() => {
+          alSiguiente={documento.portadaPendiente ? undefined : () => {
             setPreview(false);
             alAvanzar();
           }}

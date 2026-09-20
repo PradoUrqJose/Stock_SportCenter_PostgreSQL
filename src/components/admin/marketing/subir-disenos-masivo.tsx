@@ -9,8 +9,8 @@ import { AlertTriangle, Check, ImagePlus, Loader2, Upload, X } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MARCA_GENERICA } from "@/lib/marketing-catalogo";
-import { interpretarNombreDiseno, type DisenoInterpretado } from "@/lib/marketing-disenos-nombres";
+import { MARCA_GENERICA, TIPOS_CATALOGO } from "@/lib/marketing-catalogo";
+import { claveNombre, interpretarNombreDiseno, type DisenoInterpretado } from "@/lib/marketing-disenos-nombres";
 import { enviarDiseno, prepararPaginaFija } from "@/lib/subir-imagen-cliente";
 import { cn } from "@/lib/utils";
 
@@ -39,14 +39,7 @@ const CLASES: { valor: Clase; texto: string }[] = [
   { valor: "cierre", texto: "Cierre (términos, redes)" },
   { valor: "otra", texto: "Otra" },
 ];
-const USOS = [
-  { valor: "", texto: "A mano" },
-  { valor: "hombre", texto: "Hombre" },
-  { valor: "mujer", texto: "Mujer" },
-  { valor: "ninos", texto: "Niños" },
-  { valor: "futbol", texto: "Fútbol" },
-  { valor: "*", texto: "Todos" },
-];
+const USOS = [{ valor: "", texto: "A mano" }, ...TIPOS_CATALOGO.map((t) => ({ valor: t.id as string, texto: t.nombre as string })), { valor: "*", texto: "Todos" }];
 
 function aFila(id: number, archivo: File, marcas: string[]): Fila {
   const d: DisenoInterpretado = interpretarNombreDiseno(archivo.name, marcas);
@@ -125,7 +118,10 @@ export function SubirDisenosMasivo({ marcas, className }: { marcas: string[]; cl
   }
 
   const porSubir = filas.filter((f) => f.estado === "pendiente" || f.estado === "error");
-  const invalida = (f: Fila) => f.nombre.trim().length < 2 || (f.clase === "plantilla" && !f.marca.trim());
+  // Dos archivos de la lista con el mismo nombre serían el mismo diseño (el segundo reemplazaría al primero).
+  const identidad = (f: Fila) => `${f.clase === "plantilla" ? `p:${f.marca}` : `f:${f.clase}`}|${claveNombre(f.nombre)}`;
+  const repetida = (f: Fila) => filas.filter((x) => identidad(x) === identidad(f)).length > 1;
+  const invalida = (f: Fila) => f.nombre.trim().length < 2 || (f.clase === "plantilla" && !f.marca.trim()) || repetida(f);
   const hechas = filas.filter((f) => f.estado === "ok" || f.estado === "reemplazo").length;
   const hayGenerica = filas.some((f) => f.clase === "plantilla" && f.marca === MARCA_GENERICA);
 
@@ -188,11 +184,11 @@ export function SubirDisenosMasivo({ marcas, className }: { marcas: string[]; cl
                   <img src={f.miniatura} alt="" className="aspect-video w-20 rounded object-cover sm:w-full" />
                   <div className="min-w-0 space-y-1">
                     <Input value={f.nombre} onChange={(e) => cambiar(f.id, { nombre: e.target.value })} maxLength={60} disabled={subiendo || f.estado === "ok" || f.estado === "reemplazo"} aria-label="Nombre" />
-                    <p className="truncate text-[11px] text-muted-foreground" title={f.archivo.name}>
-                      {f.archivo.name}
+                    <p className={cn("truncate text-[11px]", repetida(f) ? "text-destructive" : "text-muted-foreground")} title={f.archivo.name}>
+                      {repetida(f) ? "Nombre repetido en la lista: cámbialo para que sean diseños distintos" : f.archivo.name}
                     </p>
                   </div>
-                  <select className={SELECT} value={f.clase} onChange={(e) => cambiar(f.id, { clase: e.target.value as Clase })} disabled={subiendo || f.estado === "ok" || f.estado === "reemplazo"} aria-label="Clase de diseño">
+                  <select className={SELECT} value={f.clase} onChange={(e) => cambiar(f.id, { clase: e.target.value as Clase, ...(e.target.value === "portada" && f.aplica ? { posicion: "inicio" as const } : {}) })} disabled={subiendo || f.estado === "ok" || f.estado === "reemplazo"} aria-label="Clase de diseño">
                     {CLASES.map((c) => (
                       <option key={c.valor} value={c.valor}>
                         {c.texto}
@@ -216,7 +212,7 @@ export function SubirDisenosMasivo({ marcas, className }: { marcas: string[]; cl
                         <select
                           className={SELECT}
                           value={f.aplica}
-                          onChange={(e) => cambiar(f.id, { aplica: e.target.value, posicion: e.target.value === "" ? "" : f.posicion })}
+                          onChange={(e) => cambiar(f.id, { aplica: e.target.value, posicion: e.target.value === "" ? "" : f.clase === "portada" ? "inicio" : f.posicion })}
                           disabled={subiendo || f.estado === "ok" || f.estado === "reemplazo"}
                           aria-label="Se usa en"
                           title="Se usa en"
@@ -231,7 +227,7 @@ export function SubirDisenosMasivo({ marcas, className }: { marcas: string[]; cl
                           className={SELECT}
                           value={f.posicion}
                           onChange={(e) => cambiar(f.id, { posicion: e.target.value as Fila["posicion"] })}
-                          disabled={subiendo || f.aplica === "" || f.estado === "ok" || f.estado === "reemplazo"}
+                          disabled={subiendo || f.aplica === "" || f.clase === "portada" || f.estado === "ok" || f.estado === "reemplazo"}
                           aria-label="Posición"
                           title="Posición"
                         >
@@ -265,7 +261,7 @@ export function SubirDisenosMasivo({ marcas, className }: { marcas: string[]; cl
                 {subiendo ? "Subiendo…" : `Subir ${porSubir.length} diseño${porSubir.length === 1 ? "" : "s"}`}
               </Button>
               {hechas > 0 && !subiendo && <p className="text-sm text-muted-foreground">{hechas} listo{hechas === 1 ? "" : "s"}.</p>}
-              {porSubir.some(invalida) && <p className="text-xs text-destructive">Revisa el nombre y la marca de cada plantilla.</p>}
+              {porSubir.some(invalida) && <p className="text-xs text-destructive">Revisa los nombres (sin repetir) y la marca de cada plantilla.</p>}
               {hayGenerica && <p className="text-xs text-muted-foreground">La genérica se usará con las marcas que no tengan plantilla propia.</p>}
               {hechas > 0 && porSubir.length === 0 && (
                 <Button variant="outline" className="ml-auto" onClick={cerrar}>

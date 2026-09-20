@@ -75,47 +75,45 @@ export type FiltrosCatalogo = {
   precio_max: number | null;
   /** Plantilla elegida por marca (marca → id); la clave «*» es la genérica. Sin elegir = la predeterminada. */
   plantillas: Record<string, string>;
+  /** Portada elegida (id de página fija); null = sin portada; sin definir = la asociada al tipo de catálogo. */
+  portada?: string | null;
+  /** Separadores elegidos (ids de páginas fijas): entran al principio y se ubican a mano en el editor. */
+  separadores?: string[];
 };
 
+/** Grupos del ERP que son ropa y grupos que son accesorios (los demás: calzado, sandalias, bebidas…). */
+const GRUPOS_ROPA = ["POLOS", "POLERA", "SHORT", "CASACAS", "CAMISETAS", "BUZOS", "CONJUNTOS", "LEGGINS", "CANGUROS", "BIVIDIS"];
+const GRUPOS_ACCESORIOS = [
+  "PELOTAS", "GORRAS", "MOCHILAS", "CANILLERAS", "MEDIAS", "GUANTES", "MALETINES", "MITONES", "TOMATODO", "GORROS", "LENTES",
+  "MORRAL", "RODILLERA", "MUSLERA", "BOLSOS", "CINTA ELASTICA", "SOGA PARA SALTAR", "BOLSAS", "CHIMPUNERA", "BILLETERAS", "MUÑEQUERAS",
+];
+
 /**
- * Tipos de catálogo: llenan los filtros de un clic (después se pueden ajustar).
- * Los géneros UNISEX van con HOMBRE y con MUJER; el fútbol incluye accesorios
- * (pelotas, canilleras…), que en el ERP son UNISEX, por eso no filtra grupo.
+ * Tipos de catálogo: llenan los filtros de un clic (después se pueden ajustar) y cada uno tiene su PORTADA fija
+ * asociada (ver `portadaDelTipo`). Los géneros UNISEX van con HOMBRE y con MUJER; el fútbol incluye accesorios
+ * (pelotas, canilleras…), que en el ERP son UNISEX, por eso no filtra grupo. Género vacío = todos.
  */
 export const TIPOS_CATALOGO = [
+  { id: "hombre", nombre: "Hombres", descripcion: "Zapatillas de hombre y unisex", categorias: [], grupos: ["ZAPATILLAS"], generos: ["HOMBRE", "UNISEX"] },
+  { id: "mujer", nombre: "Mujeres", descripcion: "Zapatillas de mujer y unisex", categorias: [], grupos: ["ZAPATILLAS"], generos: ["MUJER", "UNISEX"] },
+  { id: "ninos", nombre: "Niños", descripcion: "Zapatillas de junior, preescolar e infante", categorias: [], grupos: ["ZAPATILLAS"], generos: ["JUNIOR", "PRESCO", "INFANTE"] },
   {
     id: "futbol",
-    nombre: "Hombre y niño fútbol",
-    descripcion: "Todo lo de fútbol: zapatillas, chimpunes, pelotas y accesorios, de hombre y de niño",
+    nombre: "Fútbol",
+    descripcion: "Hombres y niños con categoría fútbol: zapatillas, chimpunes, pelotas y accesorios",
     categorias: ["FUTBOL"],
-    grupos: [] as string[],
+    grupos: [],
     generos: ["HOMBRE", "JUNIOR", "PRESCO", "INFANTE", "UNISEX"],
   },
-  {
-    id: "hombre",
-    nombre: "Hombre",
-    descripcion: "Zapatillas de hombre y unisex",
-    categorias: [] as string[],
-    grupos: ["ZAPATILLAS"],
-    generos: ["HOMBRE", "UNISEX"],
-  },
-  {
-    id: "mujer",
-    nombre: "Mujer",
-    descripcion: "Zapatillas de mujer y unisex",
-    categorias: [] as string[],
-    grupos: ["ZAPATILLAS"],
-    generos: ["MUJER", "UNISEX"],
-  },
-  {
-    id: "ninos",
-    nombre: "Niños",
-    descripcion: "Zapatillas de junior, preescolar e infante",
-    categorias: [] as string[],
-    grupos: ["ZAPATILLAS"],
-    generos: ["JUNIOR", "PRESCO", "INFANTE"],
-  },
-] as const;
+  { id: "ropa-hombre", nombre: "Ropa hombre", descripcion: "Ropa de hombre y unisex", categorias: [], grupos: GRUPOS_ROPA, generos: ["HOMBRE", "UNISEX"] },
+  { id: "ropa-mujer", nombre: "Ropa mujer", descripcion: "Ropa de mujer y unisex", categorias: [], grupos: GRUPOS_ROPA, generos: ["MUJER", "UNISEX"] },
+  { id: "ropa", nombre: "Ropa general", descripcion: "Toda la ropa, de cualquier género", categorias: [], grupos: GRUPOS_ROPA, generos: [] },
+  { id: "sandalias", nombre: "Sandalias", descripcion: "Sandalias de cualquier género", categorias: [], grupos: ["SANDALIAS"], generos: [] },
+  { id: "accesorios", nombre: "Accesorios", descripcion: "Pelotas, gorras, mochilas, medias, canilleras y demás", categorias: [], grupos: GRUPOS_ACCESORIOS, generos: [] },
+] as const satisfies readonly { id: string; nombre: string; descripcion: string; categorias: readonly string[]; grupos: readonly string[]; generos: readonly string[] }[];
+
+/** Ids de los tipos de catálogo. */
+export const TIPOS_IDS: readonly string[] = TIPOS_CATALOGO.map((t) => t.id);
 
 const lista = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim().toUpperCase()) : [];
@@ -138,6 +136,8 @@ export function normalizarFiltros(crudo: unknown): FiltrosCatalogo {
       typeof o.plantillas === "object" && o.plantillas !== null
         ? Object.fromEntries(Object.entries(o.plantillas as Record<string, unknown>).filter(([, v]) => typeof v === "string") as [string, string][])
         : {},
+    ...(o.portada === null ? { portada: null } : typeof o.portada === "string" ? { portada: o.portada } : {}),
+    ...(Array.isArray(o.separadores) ? { separadores: o.separadores.filter((x): x is string => typeof x === "string") } : {}),
   };
 }
 
@@ -188,30 +188,37 @@ export type FijaBiblioteca = {
 };
 
 /**
- * Tipo de catálogo que corresponde a unos filtros: el elegido y, si se armó a mano, el que se deduce de
- * los géneros y la categoría (solo hombre/unisex → «hombre», solo niños → «ninos»…). "" si no encaja en ninguno.
+ * Tipo de catálogo de unos filtros: el que se eligió. Con filtros personalizados es "" y el asistente pide
+ * elegir la portada (o ninguna).
  */
-export function tipoEfectivo(f: { tipo: string; generos: string[]; categorias: string[] }): string {
-  if (f.tipo) return f.tipo;
-  if (f.categorias.length === 1 && f.categorias[0] === "FUTBOL") return "futbol";
-  const solo = (permitidos: string[], necesarios: string[]) =>
-    f.generos.length > 0 && f.generos.every((g) => permitidos.includes(g)) && necesarios.some((g) => f.generos.includes(g));
-  if (solo(["HOMBRE", "UNISEX"], ["HOMBRE"])) return "hombre";
-  if (solo(["MUJER", "UNISEX"], ["MUJER"])) return "mujer";
-  if (solo(["JUNIOR", "PRESCO", "INFANTE"], ["JUNIOR", "PRESCO", "INFANTE"])) return "ninos";
-  return "";
+export function tipoEfectivo(f: { tipo: string }): string {
+  return f.tipo;
+}
+
+const tiposDe = (f: FijaBiblioteca) => (f.auto_tipo ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+
+/**
+ * Portada asociada a un tipo de catálogo: entre las portadas activas que lo listan, la más específica (la que
+ * lista menos tipos) y, a igualdad, la subida más recientemente (la biblioteca viene en orden de subida).
+ */
+export function portadaDelTipo<T extends FijaBiblioteca>(tipo: string, biblioteca: readonly T[]): T | null {
+  if (tipo === "") return null;
+  const candidatas = biblioteca.filter((f) => f.tipo === "portada" && tiposDe(f).includes(tipo));
+  let mejor: T | null = null;
+  for (const f of candidatas) if (mejor === null || tiposDe(f).length <= tiposDe(mejor).length) mejor = f;
+  return mejor;
 }
 
 /**
- * Páginas fijas que corresponden a un tipo de catálogo: las que se ponen solas al inicio y al final, y las
- * «sugeridas» (separadores…), que se ubican a mano en el editor. `auto_tipo` es una lista de tipos o «*».
+ * Páginas fijas que corresponden a un tipo de catálogo, además de la portada: las que se ponen solas al inicio
+ * y al final (términos, redes…) y las «sugeridas» (separadores…), que solo entran si se eligen.
  */
-export function fijasAplicables(tipo: string, biblioteca: readonly FijaBiblioteca[]): { inicio: FijaBiblioteca[]; final: FijaBiblioteca[]; sugeridas: FijaBiblioteca[] } {
+export function fijasAplicables<T extends FijaBiblioteca>(tipo: string, biblioteca: readonly T[]): { inicio: T[]; final: T[]; sugeridas: T[] } {
   const aplica = (f: FijaBiblioteca) => {
-    const tipos = (f.auto_tipo ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+    const tipos = tiposDe(f);
     return tipos.includes("*") || (tipo !== "" && tipos.includes(tipo));
   };
-  const lista = biblioteca.filter(aplica);
+  const lista = biblioteca.filter((f) => f.tipo !== "portada" && aplica(f));
   return {
     inicio: lista.filter((f) => f.auto_posicion === "inicio"),
     final: lista.filter((f) => f.auto_posicion === "final"),
@@ -220,15 +227,24 @@ export function fijasAplicables(tipo: string, biblioteca: readonly FijaBibliotec
 }
 
 /**
- * Pone en el borrador las páginas fijas que corresponden al tipo de catálogo (portada al inicio, términos y
- * redes al final…). Se pueden quitar o mover en el editor. `tipo` es el ya deducido con `tipoEfectivo`.
+ * Pone en el borrador las páginas fijas: la portada (la elegida o, si no se eligió, la del tipo), los separadores
+ * elegidos, y los términos y redes al final. Se pueden quitar o mover en el editor.
+ * @param opciones.portada id de la portada; null = sin portada; sin definir = la asociada al tipo
  */
-export function conFijasAutomaticas(b: Borrador, tipo: string, biblioteca: FijaBiblioteca[]): Borrador {
+export function conFijasAutomaticas(
+  b: Borrador,
+  tipo: string,
+  biblioteca: FijaBiblioteca[],
+  opciones: { portada?: string | null; separadores?: string[] } = {}
+): Borrador {
   const pagina = (f: FijaBiblioteca): PaginaFija => ({ id: `f-${f.id}`, tipo: "fija", imagen: f.imagen, ancho: f.ancho, alto: f.alto });
+  const portada = opciones.portada === undefined ? portadaDelTipo(tipo, biblioteca) : (biblioteca.find((f) => f.id === opciones.portada && f.tipo === "portada") ?? null);
   const { inicio, final } = fijasAplicables(tipo, biblioteca);
-  if (inicio.length + final.length === 0) return b;
-  const paginas = [...inicio.map(pagina), ...b.paginas, ...final.map(pagina)];
-  return { ...b, paginas, resumen: { ...b.resumen, paginas: paginas.length, fijas: inicio.length + final.length } };
+  const separadores = (opciones.separadores ?? []).map((id) => biblioteca.find((f) => f.id === id && f.tipo === "separador")).filter((f): f is FijaBiblioteca => Boolean(f));
+  const delInicio = [...(portada ? [portada] : []), ...inicio, ...separadores];
+  if (delInicio.length + final.length === 0) return b;
+  const paginas = [...delInicio.map(pagina), ...b.paginas, ...final.map(pagina)];
+  return { ...b, paginas, resumen: { ...b.resumen, paginas: paginas.length, fijas: delInicio.length + final.length } };
 }
 
 /** Fecha de la base («2026-09-19 22:35:10», UTC) a hora de Lima («2026-09-19 17:35»); Perú no tiene horario de verano. */

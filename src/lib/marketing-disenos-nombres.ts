@@ -2,8 +2,9 @@
 //   PLANTILLA NIKE.jpg               → plantilla de zapatilla de Nike
 //   PLANTILLA NIKE NAVIDAD FINAL.jpg → otra plantilla de Nike, «Nike Navidad»
 //   PLANTILLA GENERICA.jpg           → plantilla genérica (sin marca)
-//   PORTADA CATALOGO HOMBRES.jpg     → portada; se usa sola en los catálogos de hombre
-//   SEPARADOR FUTBOL LOSA.jpg        → separador de fútbol (se sugiere; se ubica en el editor)
+//   PORTADA CATALOGO HOMBRES.jpg     → portada del tipo «Hombres» (también MUJERES, NIÑOS, ROPA HOMBRE, ROPA MUJER,
+//                                      ROPA, SANDALIAS, ACCESORIOS, FUTBOL)
+//   SEPARADOR FUTBOL LOSA.jpg        → separador de fútbol (opcional; se ubica en el editor)
 //   TERMINOS Y CONDICIONES.jpg / REDES.jpg / CIERRE… → cierre, al final de todos los catálogos
 // Lo que no encaje queda como «otra» a mano. Todo se puede corregir en la tabla antes de subir.
 import { MARCA_GENERICA, type FijaBiblioteca } from "./marketing-catalogo";
@@ -15,7 +16,7 @@ export type DisenoInterpretado = {
   /** Página fija: su tipo. */
   tipo: FijaBiblioteca["tipo"];
   nombre: string;
-  /** Tipos de catálogo en los que se usa (`hombre`, `mujer`, `ninos`, `futbol`), `["*"]` (todos) o vacío (a mano). */
+  /** Tipos de catálogo en los que se usa (`hombre`, `ropa-mujer`, `futbol`…), `["*"]` (todos) o vacío (a mano). */
   aplica: string[];
   posicion: "inicio" | "final" | "";
 };
@@ -70,9 +71,26 @@ export function interpretarNombreDiseno(archivo: string, marcasConocidas: readon
   const contiene = (...ps: string[]) => ps.some((p) => n.includes(p));
   if (primera === "PORTADA" || primera === "PORTADAS") {
     const nombre = titulo(o);
-    // Ropa, accesorios y sandalias no tienen un tipo de catálogo propio: se ubican a mano.
-    if (contiene("ROPA", "ACCESORIOS", "SANDALIAS")) return fija("portada", nombre, [], "");
-    const tipo = contiene("FUTBOL") ? "futbol" : contiene("HOMBRE", "HOMBRES") ? "hombre" : contiene("MUJER", "MUJERES") ? "mujer" : contiene("NINO", "NINOS", "NINAS") ? "ninos" : "";
+    // Cada portada es la de un tipo de catálogo; «ROPA HOMBRE» y «ROPA MUJER» antes que «HOMBRE» y «MUJER».
+    const tipo = contiene("FUTBOL")
+      ? "futbol"
+      : contiene("ROPA") && contiene("HOMBRE", "HOMBRES")
+        ? "ropa-hombre"
+        : contiene("ROPA") && contiene("MUJER", "MUJERES")
+          ? "ropa-mujer"
+          : contiene("ROPA")
+            ? "ropa"
+            : contiene("SANDALIAS")
+              ? "sandalias"
+              : contiene("ACCESORIOS")
+                ? "accesorios"
+                : contiene("HOMBRE", "HOMBRES")
+                  ? "hombre"
+                  : contiene("MUJER", "MUJERES")
+                    ? "mujer"
+                    : contiene("NINO", "NINOS", "NINAS")
+                      ? "ninos"
+                      : "";
     return fija("portada", nombre, tipo ? [tipo] : [], tipo ? "inicio" : "");
   }
   if (primera === "SEPARADOR" || primera === "SEPARADORES") {
@@ -82,4 +100,14 @@ export function interpretarNombreDiseno(archivo: string, marcasConocidas: readon
     return fija("cierre", titulo(o), ["*"], "final");
   }
   return fija("otra", titulo(o), [], "");
+}
+
+/**
+ * Identidad de un diseño por su nombre: sin tildes, mayúsculas, símbolos ni la palabra inicial «Separador», «Portada»
+ * o «Plantilla». Dos nombres con la misma clave son el mismo diseño («Términos y condiciones» = «Terminos y Condiciones»).
+ */
+export function claveNombre(nombre: string): string {
+  const palabras = sinTildes(nombre).replace(/[^A-Z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+  if (palabras.length > 1 && ["SEPARADOR", "PORTADA", "PLANTILLA"].includes(palabras[0])) palabras.shift();
+  return palabras.join(" ").toLowerCase();
 }

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { sesionMarketing } from "@/lib/marketing";
-import { type ZonasPlantilla } from "@/lib/marketing-catalogo";
+import { TIPOS_IDS, type ZonasPlantilla } from "@/lib/marketing-catalogo";
 import type { ActionResult } from "@/types";
 
 const ID = /^[a-z0-9-]{1,80}$/;
@@ -56,7 +56,7 @@ export async function activarDiseno(clase: "plantilla" | "fija", id: string, act
   }
 }
 
-const TIPOS_CATALOGO = new Set(["hombre", "mujer", "ninos", "futbol", "*"]);
+const TIPOS_CATALOGO = new Set([...TIPOS_IDS, "*"]);
 
 /**
  * Define en qué catálogos se usa una página fija y cómo: `aplica` vacío = a mano; con `posicion` inicio/final

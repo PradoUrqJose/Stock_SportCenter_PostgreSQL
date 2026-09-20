@@ -43,6 +43,10 @@ export type DatosCatalogo = {
   almacenes: string[];
   /** Plantilla elegida por marca (marca → id). */
   plantillas: Record<string, string>;
+  /** Portada elegida (id); null = sin portada; undefined = la del tipo (o pendiente con filtros personalizados). */
+  portada: string | null | undefined;
+  /** Separadores elegidos (ids). */
+  separadores: string[];
 };
 
 type Paso = "filtros" | "plantillas" | "final";
@@ -95,6 +99,8 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
     precioMax: "",
     almacenes: ALMACENES_POR_DEFECTO,
     plantillas: {},
+    portada: undefined,
+    separadores: [],
   });
   const [marcasCatalogo, setMarcasCatalogo] = useState<MarcaAfectada[] | null>(null);
 
@@ -131,6 +137,8 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
     const sugerido = `${t.nombre} — ${mesYAnio()}`;
     cambiar({
       tipo: id,
+      portada: undefined,
+      separadores: [],
       categorias: [...t.categorias],
       grupos: [...t.grupos],
       generos: [...t.generos],
@@ -139,7 +147,7 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
     });
   }
   // Cambiar a mano lo que define el tipo lo vuelve un catálogo «a mano».
-  const editar = (campo: "categorias" | "grupos" | "generos") => (v: string[]) => cambiar({ tipo: "", [campo]: v });
+  const editar = (campo: "categorias" | "grupos" | "generos") => (v: string[]) => cambiar({ tipo: "", portada: undefined, separadores: [], [campo]: v });
   const alternarAlmacen = (a: string, on: boolean) => cambiar({ almacenes: on ? [...datos.almacenes, a] : datos.almacenes.filter((x) => x !== a) });
 
   const indice = PASOS.findIndex((p) => p.id === paso);
@@ -196,7 +204,7 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
             <div className="space-y-7">
               <fieldset className={ENTRA} style={entrada(0)}>
                 <legend className="mb-2 text-sm font-medium">Tipo de catálogo</legend>
-                <div className="grid gap-2.5 sm:grid-cols-2">
+                <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
                   {TIPOS_CATALOGO.map((t) => (
                     <button
                       key={t.id}

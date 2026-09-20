@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { activarDiseno, guardarUsoFija, marcarPredeterminada } from "@/lib/actions/marketing-disenos";
-import { MARCA_GENERICA, type FijaBiblioteca, type PlantillaLista } from "@/lib/marketing-catalogo";
+import { MARCA_GENERICA, TIPOS_CATALOGO, type FijaBiblioteca, type PlantillaLista } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
 import { AccionMini, TarjetaDiseno } from "./tarjeta-diseno";
 import { SubirDisenosMasivo } from "./subir-disenos-masivo";
@@ -18,14 +18,7 @@ const TIPOS_FIJA: { tipo: FijaBiblioteca["tipo"]; plural: string }[] = [
   { tipo: "cierre", plural: "Cierres (términos, redes)" },
   { tipo: "otra", plural: "Otras" },
 ];
-const USOS = [
-  { valor: "", texto: "A mano" },
-  { valor: "hombre", texto: "Hombre" },
-  { valor: "mujer", texto: "Mujer" },
-  { valor: "ninos", texto: "Niños" },
-  { valor: "futbol", texto: "Fútbol" },
-  { valor: "*", texto: "Todos" },
-];
+const USOS = [{ valor: "", texto: "A mano" }, ...TIPOS_CATALOGO.map((t) => ({ valor: t.id as string, texto: t.nombre as string })), { valor: "*", texto: "Todos" }];
 const etiquetaMarca = (m: string) => (m === MARCA_GENERICA ? "Genérica (sin marca)" : m);
 
 function textoUso(f: FijaBiblioteca): string | false {
@@ -122,11 +115,11 @@ export function BibliotecaDisenos({
                       alAbrir={() => setGrande({ src: `${base}/${f.imagen}.webp`, titulo: f.nombre })}
                     >
                       <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                        Se usa en
+                        {f.tipo === "portada" ? "Portada de" : "Se usa en"}
                         <select
                           className={SELECT_MINI}
                           value={tipoUso}
-                          onChange={(e) => accion(() => guardarUsoFija(f.id, e.target.value ? [e.target.value] : [], e.target.value ? (f.auto_posicion ?? "") : ""))}
+                          onChange={(e) => accion(() => guardarUsoFija(f.id, e.target.value ? [e.target.value] : [], e.target.value ? (f.tipo === "portada" ? "inicio" : (f.auto_posicion ?? "")) : ""))}
                         >
                           {USOS.map((u) => (
                             <option key={u.valor} value={u.valor}>
@@ -135,7 +128,7 @@ export function BibliotecaDisenos({
                           ))}
                         </select>
                       </label>
-                      {tipoUso !== "" && (
+                      {tipoUso !== "" && f.tipo !== "portada" && (
                         <select
                           className={SELECT_MINI}
                           value={f.auto_posicion ?? ""}

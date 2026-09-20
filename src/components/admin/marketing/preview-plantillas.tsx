@@ -19,7 +19,7 @@ export function PreviewPlantillas({
   base: string;
   hojas: Hoja[];
   alCerrar: () => void;
-  alSiguiente: () => void;
+  alSiguiente?: () => void;
 }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === "Escape" && alCerrar();
@@ -42,9 +42,13 @@ export function PreviewPlantillas({
           <h2 className="truncate text-[15px] font-semibold">Preview del documento</h2>
           <p className="text-xs text-[#9aa0ab]">{hojas.length} hojas en el orden en que saldrán; las plantillas de marca se repiten con cada producto</p>
         </div>
-        <Button className="ml-auto" onClick={alSiguiente}>
-          Siguiente: acomodar la zapatilla <ArrowRight data-icon="inline-end" />
-        </Button>
+        {alSiguiente ? (
+          <Button className="ml-auto" onClick={alSiguiente}>
+            Siguiente: acomodar la zapatilla <ArrowRight data-icon="inline-end" />
+          </Button>
+        ) : (
+          <p className="ml-auto text-xs text-amber-400">Elige una portada (o «Sin portada») para continuar</p>
+        )}
       </header>
       <div className="mx-auto max-w-5xl space-y-9 px-4 py-8">
         {hojas.length === 0 && <p className="rounded-lg border border-dashed border-[#2a2d35] p-8 text-center text-sm text-[#9aa0ab]">No hay diseños para estos filtros: vuelve al paso anterior.</p>}

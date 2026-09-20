@@ -57,6 +57,10 @@ export async function iniciarGeneracion(input: {
   precio_max: number | null;
   /** Plantilla elegida por marca (marca → id); la clave «*» es la genérica. */
   plantillas?: Record<string, string>;
+  /** Portada elegida (id de página fija); null = sin portada; sin definir = la asociada al tipo. */
+  portada?: string | null;
+  /** Separadores elegidos (ids de páginas fijas). */
+  separadores?: string[];
 }): Promise<ActionResult<{ id: string }>> {
   const sesion = await sesionMarketing();
   if (!sesion) return { success: false, msg: "Sin permisos" };
@@ -86,6 +90,11 @@ export async function iniciarGeneracion(input: {
     if (/^[A-Z0-9 &.*-]{1,40}$/.test(marca) && /^[a-z0-9-]{1,80}$/.test(String(pid))) plantillas[marca] = String(pid);
   }
 
+  // Portada y separadores: ids de páginas fijas (la generación ignora los que no existan o no sean del tipo).
+  const ID_FIJA = /^[a-z0-9-]{1,60}$/;
+  if (input.portada != null && !ID_FIJA.test(String(input.portada))) return { success: false, msg: "Portada no válida" };
+  const separadores = (Array.isArray(input.separadores) ? input.separadores : []).filter((x) => ID_FIJA.test(String(x))).slice(0, 20).map(String);
+
   // Sin ningún filtro se traería todo el ERP (miles de filas): se evita por error.
   if (grupos.length + marcas.length + generos.length + categorias.length === 0) {
     return { success: false, msg: "Elige un tipo de catálogo o al menos una marca, un grupo, un género o una categoría" };
@@ -102,7 +111,19 @@ export async function iniciarGeneracion(input: {
       return { success: false, msg: `Ya hay una generación en curso («${activa.rows[0].titulo}»); espera a que termine` };
     }
 
-    const filtros: FiltrosCatalogo = { tipo, almacenes, grupos, marcas, generos, categorias, precio_min, precio_max, plantillas };
+    const filtros: FiltrosCatalogo = {
+      tipo,
+      almacenes,
+      grupos,
+      marcas,
+      generos,
+      categorias,
+      precio_min,
+      precio_max,
+      plantillas,
+      ...(input.portada === undefined ? {} : { portada: input.portada }),
+      ...(separadores.length > 0 ? { separadores } : {}),
+    };
     const id = randomUUID();
     await db.execute({
       sql: "INSERT INTO mk_generaciones (id, titulo, filtros, created_by) VALUES (?, ?, ?, ?)",

@@ -105,6 +105,9 @@ export function PasoFinal({
         precio_min: min !== null && Number.isNaN(min) ? null : min,
         precio_max: max !== null && Number.isNaN(max) ? null : max,
         plantillas: datos.plantillas,
+        // Lo que se ve en el Preview es lo que se genera.
+        portada: documento.portada ? documento.portada.id : null,
+        separadores: documento.separadoresElegidos.map((f) => f.id),
       });
       // La generación sigue en segundo plano: se pasa a la pantalla de avance.
       if (r.success && r.data) router.push(`/admin/marketing/catalogos/nuevo?generacion=${r.data.id}`);
