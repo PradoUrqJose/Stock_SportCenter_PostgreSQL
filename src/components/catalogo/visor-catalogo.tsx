@@ -201,7 +201,7 @@ function ContenidoProducto({
         onPointerCancel={editable ? () => (arrastre.current = null) : undefined}
       />
       {txt(z.codigo, t.codigo)}
-      {txt(z.tallas, t.tallas)}
+      {txt(z.tallas, t.tallas, true)}
       {txt(z.precio, t.precio, true)}
       <div className="absolute bottom-1.5 right-2 rounded-full bg-black/40 px-1.5 text-[11px] text-white/60">
         {i + 1} / {c.total}

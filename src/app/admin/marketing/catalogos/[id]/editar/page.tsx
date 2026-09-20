@@ -3,7 +3,7 @@ import { Montserrat } from "next/font/google";
 import { preconnect } from "react-dom";
 import { db } from "@/lib/db";
 import { IMAGENES_BASE, ORIGEN_IMAGENES, enlacesCatalogo, requireMarketing } from "@/lib/marketing";
-import { borradorDeVersion, plantillasPorId, sincronizarVersiones } from "@/lib/marketing-catalogos-datos";
+import { borradorDeVersion, fijasDeBiblioteca, plantillasPorId, sincronizarVersiones } from "@/lib/marketing-catalogos-datos";
 import type { Borrador } from "@/lib/marketing-catalogo";
 import { EditorCatalogo } from "@/components/catalogo/editor-catalogo";
 
@@ -63,7 +63,7 @@ export default async function EditarCatalogoPage({
   const quitadas = borrador.quitadas ?? [];
 
   const usadas = [...borrador.paginas, ...quitadas].flatMap((p) => (p.tipo === "producto" ? [p.plantilla] : []));
-  const plantillas = await plantillasPorId([...new Set(usadas)]);
+  const [plantillas, biblioteca] = await Promise.all([plantillasPorId([...new Set(usadas)]), fijasDeBiblioteca()]);
 
   return (
     <div className={montserrat.className}>
@@ -77,6 +77,7 @@ export default async function EditarCatalogoPage({
         productosIniciales={borrador.productos}
         paginasIniciales={borrador.paginas}
         quitadasIniciales={quitadas}
+        biblioteca={biblioteca}
         versionBase={versionBase}
         versionVigente={cat.version_publicada}
         sinPublicarInicial={sinPublicar}

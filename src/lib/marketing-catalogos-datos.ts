@@ -1,7 +1,7 @@
 // Lecturas de servidor compartidas por las acciones de catálogos y las páginas
 // del editor: plantillas y versiones de imagen al día.
 import { db } from "@/lib/db";
-import type { Borrador, PlantillaSnap, Snapshot } from "@/lib/marketing-catalogo";
+import type { Borrador, FijaBiblioteca, PlantillaSnap, Snapshot } from "@/lib/marketing-catalogo";
 
 type PlantillaFila = { id: string; ancho: number; alto: number; fondo_key: string; zonas: string };
 
@@ -64,4 +64,12 @@ export async function borradorDeVersion(
     borrador: { productos: snap.productos, paginas: snap.paginas, quitadas: [], resumen: { ...resumen, paginas: snap.paginas.length } },
     conCambios: false,
   };
+}
+
+/** Páginas fijas activas de la biblioteca, en su orden. */
+export async function fijasDeBiblioteca(): Promise<FijaBiblioteca[]> {
+  const r = await db.execute(
+    "SELECT id, nombre, tipo, imagen, ancho, alto, auto_tipo, auto_posicion FROM mk_paginas_fijas WHERE activa = 1 ORDER BY orden, id"
+  );
+  return r.rows as unknown as FijaBiblioteca[];
 }

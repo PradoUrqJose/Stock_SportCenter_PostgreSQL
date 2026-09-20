@@ -35,7 +35,7 @@ import { EnlaceCatalogo } from "@/components/admin/marketing/acciones-catalogo";
 import { ReemplazarImagen } from "@/components/admin/marketing/reemplazar-imagen";
 import { guardarEdicion, publicarCatalogo } from "@/lib/actions/marketing-catalogos";
 import { enviarPaginaFija, prepararPaginaFija } from "@/lib/subir-imagen-cliente";
-import type { Ajuste, PaginaCat, PaginaFija, PlantillaSnap, ProductoCat } from "@/lib/marketing-catalogo";
+import type { Ajuste, FijaBiblioteca, PaginaCat, PaginaFija, PlantillaSnap, ProductoCat } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
 import { ANCHO_MAX, PaginaShell, VisorCtx, useContextoVisor } from "./visor-catalogo";
 
@@ -127,6 +127,8 @@ type Props = {
   enlacesIniciales: { principal: string; alterno: string } | null;
   /** Aviso al llegar (ej. «Versión 5 publicada»), cuando se viene de publicar desde el detalle. */
   mensajeInicial?: string;
+  /** Páginas fijas de Marketing (portadas, separadores, términos…) para agregar con un clic. */
+  biblioteca: FijaBiblioteca[];
 };
 
 export function EditorCatalogo({
@@ -143,6 +145,7 @@ export function EditorCatalogo({
   sinPublicarInicial,
   enlacesIniciales,
   mensajeInicial,
+  biblioteca,
 }: Props) {
   const router = useRouter();
   // Estado de partida (estable): sirve también para saber si el usuario ya cambió algo.
@@ -577,6 +580,8 @@ export function EditorCatalogo({
 
       {/* Agregar una página con imagen */}
       <DialogoAgregar
+        base={base}
+        biblioteca={biblioteca}
         abierto={dialogo === "agregar"}
         alCerrar={() => setDialogo(null)}
         haySeleccion={indice >= 0}
@@ -597,12 +602,23 @@ export function EditorCatalogo({
 }
 
 // ---------- diálogo: agregar página con imagen ----------
+const TIPOS_FIJA: { tipo: FijaBiblioteca["tipo"]; titulo: string }[] = [
+  { tipo: "portada", titulo: "Portadas" },
+  { tipo: "separador", titulo: "Separadores" },
+  { tipo: "cierre", titulo: "Cierres" },
+  { tipo: "otra", titulo: "Otras" },
+];
+
 function DialogoAgregar({
+  base,
+  biblioteca,
   abierto,
   alCerrar,
   haySeleccion,
   alAgregar,
 }: {
+  base: string;
+  biblioteca: FijaBiblioteca[];
   abierto: boolean;
   alCerrar: () => void;
   haySeleccion: boolean;
@@ -631,21 +647,19 @@ function DialogoAgregar({
   }
 
   const opciones: [typeof donde, string, boolean][] = [
-    ["inicio", "Al inicio (portada)", true],
+    ["inicio", "Al inicio", true],
     ["despues", "Después de la página seleccionada", haySeleccion],
     ["final", "Al final", true],
   ];
 
   return (
     <Dialog open={abierto} onOpenChange={(o) => !o && estado === "reposo" && alCerrar()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Agregar página con imagen</DialogTitle>
-          <DialogDescription>
-            Sube la imagen de una página completa (portada, divisor de marca, redes…). Ideal en formato 16:9, por ejemplo 2000×1141. JPG, PNG o WebP de hasta 4 MB.
-          </DialogDescription>
+          <DialogTitle>Agregar página</DialogTitle>
+          <DialogDescription>Elige una página de la biblioteca de Marketing o sube una imagen nueva.</DialogDescription>
         </DialogHeader>
-        <fieldset className="space-y-1.5 text-sm" disabled={estado === "subiendo"}>
+        <fieldset className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm" disabled={estado === "subiendo"}>
           <legend className="mb-1 text-xs font-medium text-muted-foreground">Dónde agregarla</legend>
           {opciones.map(([valor, texto, activa]) => (
             <label key={valor} className={cn("flex items-center gap-2", !activa && "opacity-50")}>
@@ -654,26 +668,56 @@ function DialogoAgregar({
             </label>
           ))}
         </fieldset>
+
+        {TIPOS_FIJA.map(({ tipo, titulo }) => {
+          const lista = biblioteca.filter((f) => f.tipo === tipo);
+          if (lista.length === 0) return null;
+          return (
+            <section key={tipo} className="space-y-1.5">
+              <h3 className="text-xs font-medium text-muted-foreground">{titulo}</h3>
+              <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                {lista.map((f) => (
+                  <li key={f.id}>
+                    <button
+                      type="button"
+                      disabled={estado === "subiendo"}
+                      onClick={() => alAgregar({ id: nuevoId("f"), tipo: "fija", imagen: f.imagen, ancho: f.ancho, alto: f.alto }, donde)}
+                      className="group block w-full overflow-hidden rounded-lg border border-[#2a2d35] text-left transition-colors hover:border-white/50 focus-visible:border-white/70 focus-visible:outline-none"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={`${base}/${f.imagen}-min.webp`} alt="" loading="lazy" decoding="async" className="aspect-video w-full object-cover" />
+                      <span className="block truncate px-2 py-1.5 text-xs">{f.nombre}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        })}
+
         {error && <p className="text-sm text-destructive">{error}</p>}
-        <label
-          className={cn(
-            buttonVariants({ variant: "default" }),
-            "cursor-pointer justify-center",
-            estado === "subiendo" && "pointer-events-none opacity-60"
-          )}
-        >
-          {estado === "subiendo" ? "Subiendo…" : "Elegir imagen"}
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="hidden"
-            onChange={(ev) => {
-              const f = ev.target.files?.[0];
-              ev.target.value = "";
-              if (f) void subir(f);
-            }}
-          />
-        </label>
+        <div className="space-y-1.5 border-t border-[#2a2d35] pt-3">
+          <p className="text-xs text-muted-foreground">O sube una imagen nueva, solo para este catálogo (16:9, JPG, PNG o WebP de hasta 4 MB).</p>
+          <label
+            className={cn(
+              buttonVariants({ variant: "outline" }),
+              "cursor-pointer justify-center",
+              estado === "subiendo" && "pointer-events-none opacity-60"
+            )}
+          >
+            {estado === "subiendo" ? "Subiendo…" : "Subir imagen nueva"}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(ev) => {
+                const f = ev.target.files?.[0];
+                ev.target.value = "";
+                if (f) void subir(f);
+              }}
+            />
+          </label>
+        </div>
       </DialogContent>
     </Dialog>
   );

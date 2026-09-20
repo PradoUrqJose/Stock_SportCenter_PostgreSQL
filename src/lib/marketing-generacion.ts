@@ -6,7 +6,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { consultarCatalogoErp } from "@/lib/marketing-erp";
-import { construirBorrador, normalizarFiltros } from "@/lib/marketing-catalogo";
+import { conFijasAutomaticas, construirBorrador, normalizarFiltros, type FijaBiblioteca } from "@/lib/marketing-catalogo";
+import { fijasDeBiblioteca } from "@/lib/marketing-catalogos-datos";
 
 /** El ERP tiene un tope de 4 min; pasado este tiempo una generación en curso se da por perdida. */
 export const MINUTOS_ABANDONO = 6;
@@ -50,21 +51,24 @@ export async function ejecutarGeneracion(id: string): Promise<void> {
       for (const f of r.rows) versiones.set(f.cod_universal as string, f.version as number);
     }
 
-    // Plantilla de la marca; si no hay, la primera activa.
+    // Cada marca usa su plantilla; las marcas sin plantilla no entran (se avisan en el resumen).
     const porMarca = new Map(plantillas.map((p) => [p.marca.toUpperCase(), p.id]));
-    const borrador = construirBorrador(items, versiones, (marca) => porMarca.get(marca) ?? plantillas[0].id, {
+    const sinFijas = construirBorrador(items, versiones, (marca) => porMarca.get(marca) ?? null, {
       min: filtros.precio_min,
       max: filtros.precio_max,
     });
-    if (borrador.paginas.length === 0) {
-      const r = borrador.resumen;
+    if (sinFijas.paginas.length === 0) {
+      const r = sinFijas.resumen;
       const fuera = r.fuera_de_precio ? `, ${r.fuera_de_precio} fuera del rango de precio` : "";
+      const sinPl = r.sin_plantilla ? `, ${Object.values(r.sin_plantilla).reduce((a, b) => a + b, 0)} de marcas sin plantilla (${Object.keys(r.sin_plantilla).join(", ")})` : "";
       return await terminar(
         id,
         "error",
-        `Ningún producto se puede mostrar: el ERP devolvió ${r.erp_items}, ${r.sin_imagen.length} sin imagen, ${r.sin_stock} sin stock o precio${fuera}`
+        `Ningún producto se puede mostrar: el ERP devolvió ${r.erp_items}, ${r.sin_imagen.length} sin imagen, ${r.sin_stock} sin stock o precio${fuera}${sinPl}`
       );
     }
+    // Portada al inicio y términos al final, según el tipo de catálogo (se pueden quitar en el editor).
+    const borrador = conFijasAutomaticas(sinFijas, filtros.tipo, (await fijasDeBiblioteca()) as FijaBiblioteca[]);
 
     await etapa(id, "guardando");
     const catalogoId = randomUUID();
@@ -73,7 +77,13 @@ export async function ejecutarGeneracion(id: string): Promise<void> {
             VALUES (?, ?, ?, ?, ?, ?)`,
       args: [catalogoId, randomBytes(9).toString("base64url"), titulo, JSON.stringify(filtros), JSON.stringify(borrador), created_by],
     });
-    await terminar(id, "listo", `${borrador.paginas.length} páginas generadas`, catalogoId);
+    const nSinPlantilla = Object.values(borrador.resumen.sin_plantilla ?? {}).reduce((a, b) => a + b, 0);
+    await terminar(
+      id,
+      "listo",
+      `${borrador.paginas.length} páginas generadas${nSinPlantilla > 0 ? ` (${nSinPlantilla} productos sin plantilla de su marca quedaron fuera)` : ""}`,
+      catalogoId
+    );
   } catch (e) {
     console.error("[marketing] generación falló:", e);
     try {

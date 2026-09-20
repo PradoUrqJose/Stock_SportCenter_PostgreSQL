@@ -66,7 +66,7 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Dato etiqueta="Páginas" valor={paginasVigentes.toLocaleString("en-US")} nota="Una por producto y género, ordenadas por marca" />
+        <Dato etiqueta="Páginas" valor={paginasVigentes.toLocaleString("en-US")} nota={`Una por producto y género, ordenadas por marca${r.fijas ? ` · incluye ${r.fijas} fija(s)` : ""}`} />
         <Dato etiqueta="Sin imagen" valor={r.sin_imagen.length.toLocaleString("en-US")} nota="No entran al catálogo" />
         <Dato etiqueta="Sin stock o precio" valor={r.sin_stock.toLocaleString("en-US")} nota="No entran al catálogo" />
         {r.multi_genero === undefined ? (
@@ -81,6 +81,15 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
         )}
       </div>
 
+      {r.sin_plantilla && (
+        <p className="mb-6 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+          Quedaron fuera por no tener plantilla de su marca:{" "}
+          {Object.entries(r.sin_plantilla)
+            .map(([marca, n]) => `${marca} (${n})`)
+            .join(", ")}
+          . Con el diseño de esa marca entrarían.
+        </p>
+      )}
       {r.fuera_de_precio !== undefined && (
         <p className="mb-6 text-xs text-muted-foreground">
           {r.fuera_de_precio.toLocaleString("en-US")} fila(s) del ERP quedaron fuera del rango de precio pedido.

@@ -135,6 +135,34 @@ export function normalizarFiltros(crudo: unknown): FiltrosCatalogo {
   };
 }
 
+/** Página fija de la biblioteca (mk_paginas_fijas), tal como la usan el editor y la generación. */
+export type FijaBiblioteca = {
+  id: string;
+  nombre: string;
+  tipo: "portada" | "separador" | "cierre" | "otra";
+  /** Ruta en el bucket sin extensión; la miniatura es `<imagen>-min.webp`. */
+  imagen: string;
+  ancho: number;
+  alto: number;
+  auto_tipo: string | null;
+  auto_posicion: "inicio" | "final" | null;
+};
+
+/**
+ * Pone en el borrador las páginas fijas que corresponden al tipo de catálogo
+ * (portada al inicio, términos al final…). Se pueden quitar o mover en el editor.
+ */
+export function conFijasAutomaticas(b: Borrador, tipo: string, biblioteca: FijaBiblioteca[]): Borrador {
+  const pagina = (f: FijaBiblioteca): PaginaFija => ({ id: `f-${f.id}`, tipo: "fija", imagen: f.imagen, ancho: f.ancho, alto: f.alto });
+  const de = (pos: "inicio" | "final") =>
+    biblioteca.filter((f) => f.auto_posicion === pos && (f.auto_tipo === "*" || (tipo !== "" && f.auto_tipo === tipo))).map(pagina);
+  const inicio = de("inicio");
+  const final = de("final");
+  if (inicio.length + final.length === 0) return b;
+  const paginas = [...inicio, ...b.paginas, ...final];
+  return { ...b, paginas, resumen: { ...b.resumen, paginas: paginas.length, fijas: inicio.length + final.length } };
+}
+
 /** Fecha de la base («2026-09-19 22:35:10», UTC) a hora de Lima («2026-09-19 17:35»); Perú no tiene horario de verano. */
 export function fechaLima(utc: string): string {
   const d = new Date(`${utc.replace(" ", "T").slice(0, 19)}Z`);
@@ -177,6 +205,10 @@ export type ResumenGeneracion = {
   sin_stock: number;
   /** Filas fuera del rango de precio pedido (solo cuando se filtró por precio). */
   fuera_de_precio?: number;
+  /** Productos que no entran porque su marca no tiene plantilla: marca → cantidad. */
+  sin_plantilla?: Record<string, number>;
+  /** Páginas fijas (portada, términos…) que la generación puso sola; están contadas en `paginas`. */
+  fijas?: number;
   paginas: number;
 };
 
@@ -233,13 +265,13 @@ function numero(v: number | string | null | undefined): number | null {
  * el mismo código en dos géneros da dos páginas (cada una con sus tallas).
  *
  * @param versiones   cod_universal (MAYÚSCULAS) → versión de su imagen en R2
- * @param plantillaDe id de la plantilla que corresponde a una marca
+ * @param plantillaDe id de la plantilla de una marca; null si la marca no tiene (el producto no entra)
  * @param precio_rango los productos con precio lista fuera de este rango se descartan
  */
 export function construirBorrador(
   items: ItemErp[],
   versiones: Map<string, number>,
-  plantillaDe: (marca: string) => string,
+  plantillaDe: (marca: string) => string | null,
   precio_rango: { min: number | null; max: number | null } = { min: null, max: null }
 ): Borrador {
   const vistos = new Set<string>();
@@ -249,6 +281,7 @@ export function construirBorrador(
   let duplicados = 0;
   let sinStock = 0;
   let fueraDePrecio = 0;
+  const sinPlantilla: Record<string, number> = {};
 
   for (const it of items) {
     const cod = it.cod_universal?.trim().toUpperCase();
@@ -272,6 +305,12 @@ export function construirBorrador(
       fueraDePrecio++;
       continue;
     }
+    const marca = (it.marca ?? "").trim().toUpperCase();
+    // Sin diseño de su marca el producto no se muestra: con el de otra marca saldría el logo equivocado.
+    if (plantillaDe(marca) === null) {
+      sinPlantilla[marca || "(SIN MARCA)"] = (sinPlantilla[marca || "(SIN MARCA)"] ?? 0) + 1;
+      continue;
+    }
     const v = versiones.get(cod);
     if (v == null) {
       sinImagen.add(cod);
@@ -280,7 +319,7 @@ export function construirBorrador(
     productos.push({
       cod,
       v,
-      marca: (it.marca ?? "").trim().toUpperCase(),
+      marca,
       modelo: (it.modelo ?? "").trim().toUpperCase(),
       genero,
       tallas,
@@ -299,7 +338,7 @@ export function construirBorrador(
   const paginas: PaginaProducto[] = productos.map((p, i) => ({
     id: `p${i + 1}`,
     tipo: "producto",
-    plantilla: plantillaDe(p.marca),
+    plantilla: plantillaDe(p.marca) as string,
     prod: i,
   }));
 
@@ -313,6 +352,7 @@ export function construirBorrador(
       sin_imagen: [...sinImagen].sort(),
       sin_stock: sinStock,
       ...(precio_rango.min != null || precio_rango.max != null ? { fuera_de_precio: fueraDePrecio } : {}),
+      ...(Object.keys(sinPlantilla).length > 0 ? { sin_plantilla: sinPlantilla } : {}),
       paginas: paginas.length,
     },
   };
