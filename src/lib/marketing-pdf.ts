@@ -24,8 +24,12 @@ const ANCHO_PT = 1500;
 /** Píxeles del recorte de la zapatilla por px de diseño (0,9 ≈ 1800 px en un diseño de 2000). */
 const RESOLUCION = 0.9;
 const CALIDAD_JPEG = 0.8;
-/** Descargas de zapatillas en curso a la vez (R2 va por HTTP/2, aguanta bien). */
-const PARALELAS = 6;
+/**
+ * Zapatillas que se piden por adelantado mientras se arma la página actual. Cada imagen tarda ~200 ms en llegar
+ * (medido: 899 imágenes con 6 a la vez = 58 s en producción); como van por HTTP/2, pedir más a la vez lo baja casi
+ * en proporción. Cada una pesa ~50 KB, así que 24 por adelantado son ~1 MB en memoria.
+ */
+const PARALELAS = 24;
 /** Baseline de Montserrat dentro de una línea de alto 1,12 (ascent 0,968 y descent 0,251 → media interlínea). */
 const BASE_LINEA = 0.968 + (ALTO_LINEA - 1.219) / 2;
 
@@ -297,6 +301,9 @@ export async function generarPdf(
     promesa.catch(() => undefined); // el error se muestra al usarla; evita el aviso de promesa sin atender
     enCurso.set(clave, promesa);
   };
+  // Cronómetro por fases (ms): se muestra una vez al terminar en la consola, para saber dónde se va el tiempo.
+  const t = { espera: 0, decodificar: 0, componer: 0, jspdf: 0, texto: 0 };
+  const ahora = () => performance.now();
   const sinImagen: string[] = [];
   const cajas = new Map<
     string,
@@ -336,9 +343,12 @@ export async function generarPdf(
           );
 
           const clave = claveZapatilla(prod);
+          let t0 = ahora();
           const zapatilla = await enCurso.get(clave)!;
           enCurso.delete(clave);
+          t.espera += ahora() - t0;
           if (!zapatilla) sinImagen.push(prod.cod);
+          t0 = ahora();
           const bmp = zapatilla
             ? await createImageBitmap(
                 new Blob([zapatilla as BlobPart], { type: "image/webp" }),
@@ -347,6 +357,8 @@ export async function generarPdf(
           try {
             if (bmp && !cajas.has(clave)) cajas.set(clave, cajaOpaca(bmp));
             const caja = cajas.get(clave) ?? { x0: 0, y0: 0, x1: 1, y1: 1 };
+            t.decodificar += ahora() - t0;
+            t0 = ahora();
             // Misma geometría que el visor: la imagen ocupa la zona de la zapatilla y se corre/escala desde su centro.
             const z = pl.zonas.zapatilla;
             const a = pag.ajuste ?? { dx: 0, dy: 0, s: 1 };
@@ -387,8 +399,11 @@ export async function generarPdf(
                 lienzo.toBlob(ok, "image/jpeg", CALIDAD_JPEG),
               );
               if (!jpg) throw new Error("No se pudo componer la zapatilla");
+              const bytesJpg = new Uint8Array(await jpg.arrayBuffer());
+              t.componer += ahora() - t0;
+              t0 = ahora();
               d.addImage(
-                new Uint8Array(await jpg.arrayBuffer()),
+                bytesJpg,
                 "JPEG",
                 cx0 * S,
                 cy0 * S,
@@ -401,7 +416,10 @@ export async function generarPdf(
           } finally {
             bmp?.close();
           }
+          t.jspdf += ahora() - t0;
+          t0 = ahora();
           textosProducto(d, prod, pl, S);
+          t.texto += ahora() - t0;
         }
       }
     } catch (err) {
@@ -419,7 +437,14 @@ export async function generarPdf(
   }
 
   fondos.forEach((f) => f.bmp.close());
-  return { pdf: doc!.output("blob"), sinImagen };
+  const tSalida = ahora();
+  const pdf = doc!.output("blob");
+  console.info("[PDF] tiempos (ms)", {
+    paginas: total,
+    ...Object.fromEntries(Object.entries(t).map(([k, v]) => [k, Math.round(v)])),
+    salida: Math.round(ahora() - tSalida),
+  });
+  return { pdf, sinImagen };
 }
 
 async function paginaFija(
