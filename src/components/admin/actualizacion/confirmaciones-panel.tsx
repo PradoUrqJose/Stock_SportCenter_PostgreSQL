@@ -11,6 +11,7 @@ import { ExpandableList, ExpandableRow } from "@/components/ui/expandable-list";
 import { FilterBar, type SelectFilterDef } from "@/components/ui/filter-bar";
 import { cerrarLote, sincronizarConfirmaciones } from "@/lib/actions/descuentos";
 import { groupConfirmaciones } from "@/lib/product-groups";
+import { UniversalCodeLink } from "@/components/ui/universal-code-link";
 
 export type ConfirmacionFlatRow = {
   cod_universal: string;
@@ -214,8 +215,8 @@ export function ConfirmacionesPanel({ rows, loteId, loteEstado, publishedAt, hea
                     header={
                       <>
                         <div className="flex-1 min-w-0">
-                          <span className="select-text font-mono text-sm font-semibold text-foreground">
-                            {g.cod_universal}
+                          <span className="select-text font-semibold">
+                            <UniversalCodeLink codigo={g.cod_universal} />
                           </span>
                           <span className="select-text ml-2 text-xs text-muted-foreground">
                             {g.snap_marca ?? "—"} {g.snap_modelo ?? ""}

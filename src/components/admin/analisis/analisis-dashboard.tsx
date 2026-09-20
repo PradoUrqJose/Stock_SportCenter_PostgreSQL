@@ -11,6 +11,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { VentasUploadForm } from "@/components/admin/upload/ventas-upload-form";
 import { UnicosTable } from "@/components/admin/unicos/unicos-table";
+import { UniversalCodeLink } from "@/components/ui/universal-code-link";
 import { clasificarSalud, DIAS_MUERTO, DIAS_REZAGO, type SaludInfo } from "@/lib/analisis/clasificacion";
 import type {
   AnalisisKpis,
@@ -297,7 +298,7 @@ const codigoCol: ColDef<ProductoAnalisisRow> = {
   width: 1,
   sortable: true,
   sortValue: (r) => r.cod_universal,
-  cell: (r) => <span className="font-mono text-xs text-foreground">{r.cod_universal}</span>,
+  cell: (r) => <UniversalCodeLink codigo={r.cod_universal} />,
 };
 
 const marcaCol: ColDef<ProductoAnalisisRow> = {

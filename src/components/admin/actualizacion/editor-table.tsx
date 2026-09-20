@@ -38,6 +38,7 @@ import type {
   Desajuste,
 } from "@/app/admin/actualizacion/page";
 import { cn } from "@/lib/utils";
+import { UniversalCodeLink } from "@/components/ui/universal-code-link";
 
 const LS_KEY = "actualizacion-pendiente";
 
@@ -321,9 +322,7 @@ export function EditorTable({ productos, lote, lineas, lineasPublicadas, desajus
       sortable: true,
       width: 1,
       sortValue: (r) => r.cod_universal,
-      cell: (r) => (
-        <span className="font-mono text-xs text-foreground">{r.cod_universal}</span>
-      ),
+      cell: (r) => <UniversalCodeLink codigo={r.cod_universal} />,
     },
     {
       key: "genero",

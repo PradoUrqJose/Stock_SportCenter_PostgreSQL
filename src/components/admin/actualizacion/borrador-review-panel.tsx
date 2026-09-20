@@ -9,6 +9,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DataTable, type ColDef } from "@/components/ui/data-table";
 import { DiscountBadge } from "@/components/ui/discount-badge";
 import { publicarLote } from "@/lib/actions/descuentos";
+import { UniversalCodeLink } from "@/components/ui/universal-code-link";
 
 export type BorradorLineaRow = {
   cod_universal: string;
@@ -44,7 +45,7 @@ export function BorradorReviewPanel({ loteId, createdAt, lineas, headerExtra }: 
       sortable: true,
       width: 1,
       sortValue: (r) => r.cod_universal,
-      cell: (r) => <span className="font-mono text-xs text-foreground">{r.cod_universal}</span>,
+      cell: (r) => <UniversalCodeLink codigo={r.cod_universal} />,
     },
     {
       key: "genero",

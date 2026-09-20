@@ -12,6 +12,7 @@ import {
   BarChart3,
   TruckIcon,
   Receipt,
+  Images,
 } from "lucide-react";
 import { db } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth";
@@ -31,6 +32,7 @@ const ICONS: Record<string, React.ReactNode> = {
   analisis: <BarChart3 className="h-4 w-4" />,
   ingresos: <TruckIcon className="h-4 w-4" />,
   facturacion: <Receipt className="h-4 w-4" />,
+  marketing: <Images className="h-4 w-4" />,
   tiendas: <Store className="h-4 w-4" />,
   usuarios: <Users className="h-4 w-4" />,
   credenciales: <KeyRound className="h-4 w-4" />,

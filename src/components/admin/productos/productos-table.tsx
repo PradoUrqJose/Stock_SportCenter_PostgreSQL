@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable, type ColDef } from "@/components/ui/data-table";
 import { DiscountBadge } from "@/components/ui/discount-badge";
 import { FilterBar, type SelectFilterDef } from "@/components/ui/filter-bar";
+import { UniversalCodeLink } from "@/components/ui/universal-code-link";
 import {
   Dialog,
   DialogContent,
@@ -28,9 +29,7 @@ const COLUMNS: ColDef<ProductoRow>[] = [
     width: 1,
     sortable: true,
     sortValue: (r) => r.cod_universal,
-    cell: (r) => (
-      <span className="font-mono text-xs text-foreground">{r.cod_universal}</span>
-    ),
+    cell: (r) => <UniversalCodeLink codigo={r.cod_universal} />,
   },
   {
     key: "marca",

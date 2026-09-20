@@ -6,6 +6,7 @@ import { CheckCircle, Clock, XCircle, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DiscountBadge } from "@/components/ui/discount-badge";
 import { ExpandableList, ExpandableRow } from "@/components/ui/expandable-list";
+import { UniversalCodeLink } from "@/components/ui/universal-code-link";
 import type { LoteHistorialRow, LoteProductoResumen } from "@/lib/queries/lotes";
 
 export type LoteHistorialConProductos = LoteHistorialRow & {
@@ -140,7 +141,7 @@ export function LotesHistorialPanel({ lotes }: Props) {
                 <tbody className="divide-y divide-border">
                   {lote.productos.map((p) => (
                     <tr key={`${p.cod_universal}|${p.genero}`} className="hover:bg-card transition-colors">
-                      <td className="px-8 py-2 font-mono text-xs text-foreground">{p.cod_universal}</td>
+                      <td className="px-8 py-2"><UniversalCodeLink codigo={p.cod_universal} /></td>
                       <td className="px-3 py-2 text-muted-foreground">
                         {p.snap_marca ?? "—"} {p.snap_modelo ?? ""}
                         <Badge variant="outline" className="ml-2 text-xs">
