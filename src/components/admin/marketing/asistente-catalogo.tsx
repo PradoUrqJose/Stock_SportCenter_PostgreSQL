@@ -2,11 +2,11 @@
 
 // Asistente para crear un catálogo, por pasos y con transiciones:
 //   1. Filtros    — tipo de catálogo, filtros, precio y almacenes
-//   2. Plantillas — qué plantilla usa cada marca; subir y ver todos los diseños
+//   2. Plantillas — solo lo que corresponde a los filtros: plantilla de cada marca, portada, separadores, cierres; Preview del documento
 //   3. Final      — título, posición de la zapatilla en la plantilla y generar
 // El estado vive aquí; cada paso es una vista. El cambio de paso usa la API de View Transitions del
 // navegador (si no existe o el usuario pide menos movimiento, cambia sin animación).
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import { Check, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
 import { marcasAfectadas, type MarcaAfectada } from "@/lib/actions/marketing-disenos";
 import { ALMACENES, ALMACENES_POR_DEFECTO, TIPOS_CATALOGO, type FijaBiblioteca, type PlantillaLista } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
+import { documentoDelCatalogo } from "./documento-catalogo";
 import { PasoPlantillas } from "./paso-plantillas";
 import { PasoFinal } from "./paso-final";
 
@@ -142,6 +143,11 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
   const alternarAlmacen = (a: string, on: boolean) => cambiar({ almacenes: on ? [...datos.almacenes, a] : datos.almacenes.filter((x) => x !== a) });
 
   const indice = PASOS.findIndex((p) => p.id === paso);
+  // Lo que lleva el documento según los filtros: plantilla de cada marca, portada, separadores y cierres.
+  const documento = useMemo(
+    () => documentoDelCatalogo(datos, recursos.plantillas, recursos.fijas, marcasCatalogo),
+    [datos, recursos.plantillas, recursos.fijas, marcasCatalogo]
+  );
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -254,10 +260,10 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
         )}
 
         {paso === "plantillas" && (
-          <PasoPlantillas recursos={recursos} datos={datos} cambiar={cambiar} marcasCatalogo={marcasCatalogo} alVolver={() => ir("filtros")} alAvanzar={() => ir("final")} />
+          <PasoPlantillas recursos={recursos} datos={datos} cambiar={cambiar} marcasCatalogo={marcasCatalogo} documento={documento} alVolver={() => ir("filtros")} alAvanzar={() => ir("final")} />
         )}
 
-        {paso === "final" && <PasoFinal recursos={recursos} datos={datos} cambiar={cambiar} alVolver={() => ir("plantillas")} />}
+        {paso === "final" && <PasoFinal recursos={recursos} datos={datos} cambiar={cambiar} documento={documento} alVolver={() => ir("plantillas")} />}
       </div>
     </div>
   );

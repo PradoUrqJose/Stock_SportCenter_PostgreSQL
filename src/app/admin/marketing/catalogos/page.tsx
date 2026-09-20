@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Palette, Plus } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireMarketing } from "@/lib/marketing";
+import { SubirDisenosMasivo } from "@/components/admin/marketing/subir-disenos-masivo";
 import { cerrarGeneracionesAbandonadas } from "@/lib/marketing-generacion";
 import { fechaLima, normalizarFiltros, textoFiltros } from "@/lib/marketing-catalogo";
 import { buttonVariants } from "@/components/ui/button";
@@ -36,6 +37,7 @@ const ESTADO_GENERACION = {
 export default async function CatalogosPage() {
   await requireMarketing();
   await cerrarGeneracionesAbandonadas();
+  const marcas = (await db.execute("SELECT marca FROM productos WHERE marca IS NOT NULL GROUP BY 1 ORDER BY COUNT(*) DESC, 1")).rows.map((r) => r.marca as string);
 
   const r = await db.execute(
     `SELECT c.id, c.titulo, c.version_publicada, c.updated_at,
@@ -63,9 +65,15 @@ export default async function CatalogosPage() {
             Un clic abre el catálogo con sus versiones, y desde ahí eliges cuál editar. Cada catálogo tiene un enlace fijo para los clientes: al publicar una versión nueva, el mismo enlace la muestra.
           </p>
         </div>
-        <Link href="/admin/marketing/catalogos/nuevo" className={cn(buttonVariants())}>
-          <Plus data-icon="inline-start" /> Nuevo catálogo
-        </Link>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <Link href="/admin/marketing/catalogos/disenos" className={cn(buttonVariants({ variant: "ghost" }))}>
+            <Palette data-icon="inline-start" /> Diseños
+          </Link>
+          <SubirDisenosMasivo marcas={marcas} />
+          <Link href="/admin/marketing/catalogos/nuevo" className={cn(buttonVariants())}>
+            <Plus data-icon="inline-start" /> Nuevo catálogo
+          </Link>
+        </div>
       </div>
 
       {catalogos.length === 0 ? (

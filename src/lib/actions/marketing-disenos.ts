@@ -22,6 +22,7 @@ export async function marcarPredeterminada(id: string): Promise<ActionResult> {
       { sql: "UPDATE mk_plantillas SET predeterminada = 1 WHERE id = ?", args: [id] },
     ]);
     revalidatePath("/admin/marketing/catalogos/nuevo");
+    revalidatePath("/admin/marketing/catalogos/disenos");
     return { success: true, msg: "Plantilla predeterminada" };
   } catch (e) {
     console.error("[marketing] marcarPredeterminada falló:", e);
@@ -47,10 +48,36 @@ export async function activarDiseno(clase: "plantilla" | "fija", id: string, act
       await db.execute({ sql: "UPDATE mk_paginas_fijas SET activa = ? WHERE id = ?", args: [activa ? 1 : 0, id] });
     }
     revalidatePath("/admin/marketing/catalogos/nuevo");
+    revalidatePath("/admin/marketing/catalogos/disenos");
     return { success: true, msg: activa ? "Diseño activado" : "Diseño desactivado" };
   } catch (e) {
     console.error("[marketing] activarDiseno falló:", e);
     return { success: false, msg: "No se pudo cambiar el diseño" };
+  }
+}
+
+const TIPOS_CATALOGO = new Set(["hombre", "mujer", "ninos", "futbol", "*"]);
+
+/**
+ * Define en qué catálogos se usa una página fija y cómo: `aplica` vacío = a mano; con `posicion` inicio/final
+ * se pone sola al generar; con `posicion` vacía solo se sugiere (Preview) y se ubica en el editor.
+ */
+export async function guardarUsoFija(id: string, aplica: string[], posicion: "" | "inicio" | "final"): Promise<ActionResult> {
+  if (!(await sesionMarketing())) return { success: false, msg: "Sin permisos" };
+  if (!ID.test(id)) return { success: false, msg: "Página no válida" };
+  if (!Array.isArray(aplica) || !aplica.every((t) => TIPOS_CATALOGO.has(t))) return { success: false, msg: "Tipo de catálogo no válido" };
+  if (!["", "inicio", "final"].includes(posicion)) return { success: false, msg: "Posición no válida" };
+  if (aplica.length === 0 && posicion !== "") return { success: false, msg: "Elige en qué catálogos se usa" };
+  try {
+    await db.execute({
+      sql: "UPDATE mk_paginas_fijas SET auto_tipo = ?, auto_posicion = ? WHERE id = ?",
+      args: [aplica.length > 0 ? aplica.join(",") : null, posicion || null, id],
+    });
+    revalidatePath("/admin/marketing/catalogos/disenos");
+    return { success: true, msg: "Guardado" };
+  } catch (e) {
+    console.error("[marketing] guardarUsoFija falló:", e);
+    return { success: false, msg: "No se pudo guardar" };
   }
 }
 

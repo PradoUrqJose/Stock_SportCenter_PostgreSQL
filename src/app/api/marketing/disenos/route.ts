@@ -13,6 +13,7 @@ export const maxDuration = 30;
 const error = (mensaje: string, status: number) => NextResponse.json({ error: mensaje }, { status });
 const TIPOS_IMAGEN = new Set(["image/webp", "image/png", "image/jpeg"]);
 const TIPOS_FIJA = new Set(["portada", "separador", "cierre", "otra"]);
+const TIPOS_CATALOGO = new Set(["hombre", "mujer", "ninos", "futbol", "*"]);
 const ANCHO = 2000;
 const CACHE = "public, max-age=31536000, immutable";
 
@@ -29,7 +30,9 @@ const slug = (t: string) =>
 /**
  * POST /api/marketing/disenos — sube un diseño de Marketing.
  *   ?clase=plantilla&marca=NIKE&nombre=Nike Navidad      (marca=* → plantilla genérica)
- *   ?clase=fija&tipo=portada|separador|cierre|otra&nombre=Portada Hombres
+ *   ?clase=fija&tipo=portada|separador|cierre|otra&nombre=Portada Hombres&aplica=hombre,mujer|*&posicion=inicio|final
+ *      (aplica y posicion vacíos = página a mano; con aplica y sin posicion = solo se sugiere en esos catálogos)
+ * Si ya existe un diseño con ese nombre (y la misma marca o tipo), se REEMPLAZA su imagen y se conserva lo demás.
  * Cuerpo: la imagen (WebP, PNG o JPEG, hasta 4 MB), en formato 16:9.
  * La plantilla nueva copia las zonas (código, tallas, precio, zapatilla) de la plantilla de referencia:
  * una de la misma marca o, si no hay, la primera activa; se retocan después en «posición de la zapatilla».
@@ -73,41 +76,61 @@ export async function POST(req: NextRequest) {
 
       const alto = Math.round((ANCHO * meta.height) / meta.width);
       const parteMarca = marca === MARCA_GENERICA ? "generica" : slug(marca);
-      const id = `${parteMarca}-${slug(nombre)}-${hash}`.slice(0, 80);
-      const clave = `plantillas/${parteMarca}/${id}`;
+      // Mismo nombre y marca = se reemplaza el fondo de esa plantilla (conserva sus zonas y si es la predeterminada).
+      const existente = todas.find((p) => p.marca === marca && p.nombre.trim().toLowerCase() === nombre.toLowerCase());
+      const id = existente?.id ?? `${parteMarca}-${slug(nombre)}-${hash}`.slice(0, 80);
+      const clave = `plantillas/${parteMarca}/${slug(nombre)}-${hash}`;
       const fondo = sharp(cuerpo).resize(ANCHO, alto);
       await r2Subir(`${clave}.webp`, await fondo.clone().webp({ quality: 84, effort: 5 }).toBuffer(), "image/webp", CACHE);
       await r2Subir(`${clave}.jpg`, await fondo.clone().jpeg({ quality: 88, mozjpeg: true }).toBuffer(), "image/jpeg", CACHE);
 
+      if (existente) {
+        await db.execute({ sql: "UPDATE mk_plantillas SET fondo_key = ?, ancho = ?, alto = ?, activa = 1 WHERE id = ?", args: [clave, ANCHO, alto, id] });
+        return NextResponse.json({ id, reemplazo: true });
+      }
       // Sin otra activa en la marca, la nueva pasa a ser la predeterminada.
       const primera = !activas.some((p) => p.marca === marca);
       await db.execute({
         sql: `INSERT INTO mk_plantillas (id, marca, nombre, ancho, alto, fondo_key, zonas, predeterminada, created_by)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-              ON CONFLICT (id) DO UPDATE SET nombre = excluded.nombre, activa = 1`,
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [id, marca, nombre, ANCHO, alto, clave, JSON.stringify(referencia.zonas), primera ? 1 : 0, sesion.id],
       });
-      return NextResponse.json({ id, predeterminada: primera });
+      return NextResponse.json({ id, predeterminada: primera, reemplazo: false });
     }
 
     if (clase === "fija") {
       const tipoFija = q.get("tipo") ?? "";
       if (!TIPOS_FIJA.has(tipoFija)) return error("Tipo de página no válido", 400);
-      const id = `${slug(nombre)}-${hash}`.slice(0, 60);
-      const clave = `paginas-fijas/${id}`;
+      const aplica = (q.get("aplica") ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+      if (!aplica.every((t) => TIPOS_CATALOGO.has(t))) return error("Tipo de catálogo no válido", 400);
+      const posicion = q.get("posicion") ?? "";
+      if (!["", "inicio", "final"].includes(posicion)) return error("Posición no válida", 400);
+      if (posicion !== "" && aplica.length === 0) return error("Elige en qué catálogos se usa antes de fijar su posición", 400);
+
+      const existente = await db.execute({
+        sql: "SELECT id FROM mk_paginas_fijas WHERE tipo = ? AND lower(nombre) = lower(?) LIMIT 1",
+        args: [tipoFija, nombre],
+      });
+      const id = (existente.rows[0]?.id as string | undefined) ?? `${slug(nombre)}-${hash}`.slice(0, 60);
+      const clave = `paginas-fijas/${slug(nombre)}-${hash}`;
       const { data, info } = await sharp(cuerpo)
         .resize({ width: ANCHO, withoutEnlargement: true })
         .webp({ quality: 86, effort: 5 })
         .toBuffer({ resolveWithObject: true });
       await r2Subir(`${clave}.webp`, data, "image/webp", CACHE);
       await r2Subir(`${clave}-min.webp`, await sharp(cuerpo).resize({ width: 480 }).webp({ quality: 72, effort: 5 }).toBuffer(), "image/webp", CACHE);
+
+      if (existente.rows.length > 0) {
+        // Reemplazo: solo cambia la imagen; dónde se usa y su posición se conservan.
+        await db.execute({ sql: "UPDATE mk_paginas_fijas SET imagen = ?, ancho = ?, alto = ?, activa = 1 WHERE id = ?", args: [clave, info.width, info.height, id] });
+        return NextResponse.json({ id, reemplazo: true });
+      }
       await db.execute({
-        sql: `INSERT INTO mk_paginas_fijas (id, nombre, tipo, imagen, ancho, alto, orden)
-              VALUES (?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(orden), 0) + 1 FROM mk_paginas_fijas))
-              ON CONFLICT (id) DO UPDATE SET nombre = excluded.nombre, tipo = excluded.tipo, activa = 1`,
-        args: [id, nombre, tipoFija, clave, info.width, info.height],
+        sql: `INSERT INTO mk_paginas_fijas (id, nombre, tipo, imagen, ancho, alto, auto_tipo, auto_posicion, orden)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(orden), 0) + 1 FROM mk_paginas_fijas))`,
+        args: [id, nombre, tipoFija, clave, info.width, info.height, aplica.length > 0 ? aplica.join(",") : null, posicion || null],
       });
-      return NextResponse.json({ id });
+      return NextResponse.json({ id, reemplazo: false });
     }
 
     return error("Clase de diseño no válida", 400);

@@ -181,22 +181,53 @@ export type FijaBiblioteca = {
   imagen: string;
   ancho: number;
   alto: number;
+  /** Tipos de catálogo a los que aplica, separados por coma, o «*» (todos). */
   auto_tipo: string | null;
+  /** inicio/final = se pone sola al generar; null = solo se sugiere (se ubica a mano). */
   auto_posicion: "inicio" | "final" | null;
 };
 
 /**
- * Pone en el borrador las páginas fijas que corresponden al tipo de catálogo
- * (portada al inicio, términos al final…). Se pueden quitar o mover en el editor.
+ * Tipo de catálogo que corresponde a unos filtros: el elegido y, si se armó a mano, el que se deduce de
+ * los géneros y la categoría (solo hombre/unisex → «hombre», solo niños → «ninos»…). "" si no encaja en ninguno.
+ */
+export function tipoEfectivo(f: { tipo: string; generos: string[]; categorias: string[] }): string {
+  if (f.tipo) return f.tipo;
+  if (f.categorias.length === 1 && f.categorias[0] === "FUTBOL") return "futbol";
+  const solo = (permitidos: string[], necesarios: string[]) =>
+    f.generos.length > 0 && f.generos.every((g) => permitidos.includes(g)) && necesarios.some((g) => f.generos.includes(g));
+  if (solo(["HOMBRE", "UNISEX"], ["HOMBRE"])) return "hombre";
+  if (solo(["MUJER", "UNISEX"], ["MUJER"])) return "mujer";
+  if (solo(["JUNIOR", "PRESCO", "INFANTE"], ["JUNIOR", "PRESCO", "INFANTE"])) return "ninos";
+  return "";
+}
+
+/**
+ * Páginas fijas que corresponden a un tipo de catálogo: las que se ponen solas al inicio y al final, y las
+ * «sugeridas» (separadores…), que se ubican a mano en el editor. `auto_tipo` es una lista de tipos o «*».
+ */
+export function fijasAplicables(tipo: string, biblioteca: readonly FijaBiblioteca[]): { inicio: FijaBiblioteca[]; final: FijaBiblioteca[]; sugeridas: FijaBiblioteca[] } {
+  const aplica = (f: FijaBiblioteca) => {
+    const tipos = (f.auto_tipo ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+    return tipos.includes("*") || (tipo !== "" && tipos.includes(tipo));
+  };
+  const lista = biblioteca.filter(aplica);
+  return {
+    inicio: lista.filter((f) => f.auto_posicion === "inicio"),
+    final: lista.filter((f) => f.auto_posicion === "final"),
+    sugeridas: lista.filter((f) => f.auto_posicion === null),
+  };
+}
+
+/**
+ * Pone en el borrador las páginas fijas que corresponden al tipo de catálogo (portada al inicio, términos y
+ * redes al final…). Se pueden quitar o mover en el editor. `tipo` es el ya deducido con `tipoEfectivo`.
  */
 export function conFijasAutomaticas(b: Borrador, tipo: string, biblioteca: FijaBiblioteca[]): Borrador {
   const pagina = (f: FijaBiblioteca): PaginaFija => ({ id: `f-${f.id}`, tipo: "fija", imagen: f.imagen, ancho: f.ancho, alto: f.alto });
-  const de = (pos: "inicio" | "final") =>
-    biblioteca.filter((f) => f.auto_posicion === pos && (f.auto_tipo === "*" || (tipo !== "" && f.auto_tipo === tipo))).map(pagina);
-  const inicio = de("inicio");
-  const final = de("final");
+  const { inicio, final } = fijasAplicables(tipo, biblioteca);
   if (inicio.length + final.length === 0) return b;
-  const paginas = [...inicio, ...b.paginas, ...final];
+  const paginas = [...inicio.map(pagina), ...b.paginas, ...final.map(pagina)];
   return { ...b, paginas, resumen: { ...b.resumen, paginas: paginas.length, fijas: inicio.length + final.length } };
 }
 

@@ -57,12 +57,12 @@ export async function enviarPaginaFija(imagen: Blob): Promise<ResultadoPaginaFij
   }
 }
 
-export type ResultadoDiseno = { ok: true; id: string } | { ok: false; error: string };
+export type ResultadoDiseno = { ok: true; id: string; reemplazo: boolean } | { ok: false; error: string };
 
 /** Sube un diseño (plantilla de una marca o página fija) ya reducido con `prepararPaginaFija`. */
 export async function enviarDiseno(
   imagen: Blob,
-  datos: { clase: "plantilla"; marca: string; nombre: string } | { clase: "fija"; tipo: string; nombre: string }
+  datos: { clase: "plantilla"; marca: string; nombre: string } | { clase: "fija"; tipo: string; nombre: string; aplica: string; posicion: string }
 ): Promise<ResultadoDiseno> {
   try {
     const params = new URLSearchParams(datos as Record<string, string>);
@@ -71,9 +71,9 @@ export async function enviarDiseno(
       headers: { "Content-Type": imagen.type || "image/webp" },
       body: imagen,
     });
-    const json = (await res.json().catch(() => null)) as { error?: string; id?: string } | null;
+    const json = (await res.json().catch(() => null)) as { error?: string; id?: string; reemplazo?: boolean } | null;
     if (!res.ok || !json?.id) return { ok: false, error: json?.error ?? `Error ${res.status}` };
-    return { ok: true, id: json.id };
+    return { ok: true, id: json.id, reemplazo: json.reemplazo === true };
   } catch {
     return { ok: false, error: "Sin conexión con el servidor" };
   }

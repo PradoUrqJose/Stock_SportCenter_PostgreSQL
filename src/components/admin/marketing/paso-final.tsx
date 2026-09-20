@@ -15,6 +15,7 @@ import { guardarPosicionZapatilla } from "@/lib/actions/marketing-disenos";
 import { MARCA_GENERICA } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
 import type { DatosCatalogo, Recursos } from "./asistente-catalogo";
+import type { DocumentoCatalogo } from "./documento-catalogo";
 
 type Pos = { x: number; y: number; w: number };
 const iguales = (a: Pos, b: Pos) => a.x === b.x && a.y === b.y && a.w === b.w;
@@ -23,17 +24,22 @@ export function PasoFinal({
   recursos,
   datos,
   cambiar,
+  documento,
   alVolver,
 }: {
   recursos: Recursos;
   datos: DatosCatalogo;
   cambiar: (parte: Partial<DatosCatalogo>) => void;
+  documento: DocumentoCatalogo;
   alVolver: () => void;
 }) {
   const router = useRouter();
   const [pendiente, iniciar] = useTransition();
   const { base, ejemplo } = recursos;
-  const activas = recursos.plantillas.filter((p) => p.activa);
+  const todasActivas = recursos.plantillas.filter((p) => p.activa);
+  // Solo las plantillas de este catálogo (las de sus marcas); si aún no se conocen, las predeterminadas.
+  const delCatalogo = documento.plantillas.map((d) => d.plantilla);
+  const activas = delCatalogo.length > 0 ? delCatalogo : todasActivas.filter((p) => p.predeterminada);
   const guardada = (id: string): Pos => {
     const z = recursos.plantillas.find((p) => p.id === id)?.zonas.zapatilla;
     return z ? { x: z.x, y: z.y, w: z.w } : { x: 0, y: 0, w: 1000 };
@@ -70,7 +76,7 @@ export function PasoFinal({
 
   function guardar(): Promise<boolean> {
     if (!plantilla) return Promise.resolve(true);
-    const ids = aTodas ? activas.map((p) => p.id) : [sel];
+    const ids = aTodas ? todasActivas.map((p) => p.id) : [sel];
     return guardarPosicionZapatilla(ids, pos).then((r) => {
       setMensaje({ ok: r.success, texto: r.success ? (aTodas ? "Posición guardada en todas las plantillas" : "Posición guardada en esta plantilla") : r.msg });
       if (r.success) {
@@ -127,7 +133,7 @@ export function PasoFinal({
 
       {activas.length === 0 || !ejemplo ? (
         <p className="mb-6 rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-          {activas.length === 0 ? "No hay plantillas activas: vuelve al paso anterior y sube una." : "No hay ninguna imagen de zapatilla para usar de ejemplo."}
+          {activas.length === 0 ? "No hay plantillas para estos filtros: vuelve al paso anterior." : "No hay ninguna imagen de zapatilla para usar de ejemplo."}
         </p>
       ) : (
         <div className="mb-6 grid gap-4 animate-in fade-in slide-in-from-bottom-3 fill-mode-both delay-100 duration-500 lg:grid-cols-[1fr_16rem]">
@@ -208,7 +214,7 @@ export function PasoFinal({
               <Checkbox checked={aTodas} onCheckedChange={(v) => setATodas(v === true)} className="mt-0.5" />
               <span>
                 Aplicar a todas las plantillas
-                <span className="block text-xs text-muted-foreground">Sirve cuando comparten la misma composición.</span>
+                <span className="block text-xs text-muted-foreground">Incluye las de otras marcas. Sirve cuando comparten la misma composición.</span>
               </span>
             </label>
 

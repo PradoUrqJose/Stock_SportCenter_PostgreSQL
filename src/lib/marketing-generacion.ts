@@ -12,6 +12,7 @@ import {
   construirBorrador,
   normalizarFiltros,
   plantillaDeMarca,
+  tipoEfectivo,
   type FijaBiblioteca,
 } from "@/lib/marketing-catalogo";
 import { fijasDeBiblioteca, plantillasGestion } from "@/lib/marketing-catalogos-datos";
@@ -80,7 +81,7 @@ export async function ejecutarGeneracion(id: string): Promise<void> {
       );
     }
     // Portada al inicio y términos al final, según el tipo de catálogo (se pueden quitar en el editor).
-    const borrador = conFijasAutomaticas(sinFijas, filtros.tipo, (await fijasDeBiblioteca()) as FijaBiblioteca[]);
+    const borrador = conFijasAutomaticas(sinFijas, tipoEfectivo(filtros), (await fijasDeBiblioteca()) as FijaBiblioteca[]);
 
     await etapa(id, "guardando");
     const catalogoId = randomUUID();
