@@ -35,7 +35,7 @@ for item in "${VARIABLES[@]}"; do
   if [[ -z "$v" ]]; then printf '  %-22s SIN VALOR en .env.local: no se puede cargar\n' "$nombre"; FALLOS=1; continue; fi
   if [[ $APLICAR == 0 ]]; then printf '  %-22s se agregaría (%s, %s)\n' "$nombre" "$([[ $sensible == si ]] && echo 'sensible, valor oculto' || echo "valor: $v")" "Production"; continue; fi
   bandera=(); [[ "$sensible" == si ]] && bandera=(--sensitive)
-  if printf '%s' "$v" | vercel env add "$nombre" production "${bandera[@]}" >/dev/null 2>&1; then printf '  %-22s agregada\n' "$nombre"; else printf '  %-22s ERROR al agregarla\n' "$nombre"; FALLOS=1; fi
+  if printf '%s' "$v" | vercel env add "$nombre" production ${bandera[@]+"${bandera[@]}"} >/dev/null 2>&1; then printf '  %-22s agregada\n' "$nombre"; else printf '  %-22s ERROR al agregarla\n' "$nombre"; FALLOS=1; fi
 done
 echo
 [[ $FALLOS == 0 ]] && echo "Listo." || { echo "Hubo problemas; revisa lo de arriba."; exit 1; }
