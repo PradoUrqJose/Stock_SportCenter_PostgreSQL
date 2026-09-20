@@ -21,34 +21,15 @@ import type {
   Snapshot,
   Zona,
 } from "@/lib/marketing-catalogo";
+import { ajustar, type Medir, type TextoAjustado } from "@/lib/marketing-texto";
+import { BotonPdf } from "./boton-pdf";
 import { cn } from "@/lib/utils";
 
 const ANCHO_MAX = 1400;
 
 // ---------- medida y ajuste de texto ----------
-type Medir = (texto: string, px: number) => number;
+// (`ajustar` vive en marketing-texto.ts: también lo usa el PDF)
 
-// Devuelve el tamaño más grande (≤ zona.max) en que el texto entra en la zona,
-// partiéndolo en líneas por los separadores cuando hace falta.
-function ajustar(partes: string[], zona: Zona, sep: string, medir: Medir): { px: number; lineas: string[] } {
-  for (let px = zona.max ?? 40; px >= 14; px -= 2) {
-    const lineas: string[] = [];
-    let actual = "";
-    for (const p of partes) {
-      const prueba = actual ? actual + sep + p : p;
-      if (medir(prueba, px) <= zona.w || !actual) actual = prueba;
-      else {
-        lineas.push(actual);
-        actual = p;
-      }
-    }
-    if (actual) lineas.push(actual);
-    if (lineas.every((l) => medir(l, px) <= zona.w) && lineas.length * px * 1.12 <= zona.h) return { px, lineas };
-  }
-  return { px: 14, lineas: [partes.join(sep)] };
-}
-
-type TextoAjustado = { px: number; lineas: string[] };
 type Textos = { codigo: TextoAjustado; tallas: TextoAjustado; precio: TextoAjustado };
 
 // ---------- contexto compartido por todas las páginas ----------
@@ -376,6 +357,10 @@ export function VisorCatalogo({ snapshot, fuente }: { snapshot: Snapshot; fuente
       <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[#2a2d35] bg-[#0e0f12]/90 px-4 py-2.5 backdrop-blur">
         <h1 className="text-[15px] font-semibold">{snapshot.titulo}</h1>
         <span className="text-xs text-[#9aa0ab]">{snapshot.paginas.length.toLocaleString("en-US")} páginas</span>
+        <BotonPdf
+          className="ml-auto"
+          entrada={{ titulo: snapshot.titulo, base: snapshot.imagenes_base, paginas: snapshot.paginas, productos: snapshot.productos, plantillas: snapshot.plantillas }}
+        />
       </header>
       <main className="mx-auto p-4" style={{ maxWidth: ANCHO_MAX + 32 }}>
         <div ref={listaRef} className="flex flex-col gap-3.5">
