@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ChevronRight, ChevronLeft } from "lucide-react";
 import { db } from "@/lib/db";
 import { enlacesCatalogo, requireMarketing } from "@/lib/marketing";
-import type { Borrador, FiltrosCatalogo } from "@/lib/marketing-catalogo";
+import { fechaLima, normalizarFiltros, textoFiltros, type Borrador } from "@/lib/marketing-catalogo";
 import { EnlaceCatalogo, PublicarCatalogo } from "@/components/admin/marketing/acciones-catalogo";
 
 type Catalogo = {
@@ -38,7 +38,7 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
   if (c.rows.length === 0) notFound();
   const cat = c.rows[0] as unknown as Catalogo;
   const borrador = JSON.parse(cat.borrador) as Borrador;
-  const filtros = JSON.parse(cat.filtros) as FiltrosCatalogo;
+  const filtros = normalizarFiltros(JSON.parse(cat.filtros));
   const r = borrador.resumen;
 
   const v = await db.execute({
@@ -51,12 +51,7 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
   const paginasVigentes = versiones.find((x) => x.version === cat.version_publicada)?.paginas ?? r.paginas;
   const enlaces = cat.version_publicada ? await enlacesCatalogo(cat.slug) : null;
 
-  const filtrosTexto = [
-    filtros.marca && `Marca: ${filtros.marca}`,
-    filtros.grupo && `Grupo: ${filtros.grupo}`,
-    filtros.genero && `Género: ${filtros.genero}`,
-    `Almacenes: ${filtros.almacenes.join(", ")}`,
-  ].filter(Boolean);
+  const filtrosTexto = textoFiltros(filtros);
 
   return (
     <div className="p-4 md:p-8">
@@ -85,6 +80,12 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
           />
         )}
       </div>
+
+      {r.fuera_de_precio !== undefined && (
+        <p className="mb-6 text-xs text-muted-foreground">
+          {r.fuera_de_precio.toLocaleString("en-US")} fila(s) del ERP quedaron fuera del rango de precio pedido.
+        </p>
+      )}
 
       {r.sin_imagen.length > 0 && (
         <details className="mb-6 rounded-lg border border-border px-4 py-3 text-sm">
@@ -151,7 +152,7 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
                 </span>
                 <span className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>
-                    {x.paginas.toLocaleString("en-US")} páginas · {x.publicado_at.slice(0, 16).replace("T", " ")}
+                    {x.paginas.toLocaleString("en-US")} páginas · {fechaLima(x.publicado_at)}
                     {x.nombre && ` · ${x.nombre}`}
                   </span>
                   <ChevronRight className="h-4 w-4 shrink-0" />

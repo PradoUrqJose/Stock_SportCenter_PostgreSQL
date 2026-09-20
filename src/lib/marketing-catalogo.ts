@@ -62,11 +62,107 @@ export type Snapshot = {
 };
 
 export type FiltrosCatalogo = {
+  /** Tipo de catálogo elegido (id de TIPOS_CATALOGO); "" = filtros a mano. */
+  tipo: string;
   almacenes: string[];
-  grupo: string;
-  marca: string;
-  genero: string;
+  /** Cada lista vacía = sin filtro (todos). Varios valores = cualquiera de ellos. */
+  grupos: string[];
+  marcas: string[];
+  generos: string[];
+  categorias: string[];
+  /** Precio lista en soles; null = sin límite. */
+  precio_min: number | null;
+  precio_max: number | null;
 };
+
+/**
+ * Tipos de catálogo: llenan los filtros de un clic (después se pueden ajustar).
+ * Los géneros UNISEX van con HOMBRE y con MUJER; el fútbol incluye accesorios
+ * (pelotas, canilleras…), que en el ERP son UNISEX, por eso no filtra grupo.
+ */
+export const TIPOS_CATALOGO = [
+  {
+    id: "futbol",
+    nombre: "Hombre y niño fútbol",
+    descripcion: "Todo lo de fútbol: zapatillas, chimpunes, pelotas y accesorios, de hombre y de niño",
+    categorias: ["FUTBOL"],
+    grupos: [] as string[],
+    generos: ["HOMBRE", "JUNIOR", "PRESCO", "INFANTE", "UNISEX"],
+  },
+  {
+    id: "hombre",
+    nombre: "Hombre",
+    descripcion: "Zapatillas de hombre y unisex",
+    categorias: [] as string[],
+    grupos: ["ZAPATILLAS"],
+    generos: ["HOMBRE", "UNISEX"],
+  },
+  {
+    id: "mujer",
+    nombre: "Mujer",
+    descripcion: "Zapatillas de mujer y unisex",
+    categorias: [] as string[],
+    grupos: ["ZAPATILLAS"],
+    generos: ["MUJER", "UNISEX"],
+  },
+  {
+    id: "ninos",
+    nombre: "Niños",
+    descripcion: "Zapatillas de junior, preescolar e infante",
+    categorias: [] as string[],
+    grupos: ["ZAPATILLAS"],
+    generos: ["JUNIOR", "PRESCO", "INFANTE"],
+  },
+] as const;
+
+const lista = (v: unknown): string[] =>
+  Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim().toUpperCase()) : [];
+const unico = (v: unknown): string[] => (typeof v === "string" && v.trim() ? [v.trim().toUpperCase()] : []);
+
+/** Lee los filtros guardados de un catálogo, incluidos los de antes (un solo grupo, marca y género). */
+export function normalizarFiltros(crudo: unknown): FiltrosCatalogo {
+  const o = (typeof crudo === "object" && crudo !== null ? crudo : {}) as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  return {
+    tipo: typeof o.tipo === "string" ? o.tipo : "",
+    almacenes: lista(o.almacenes),
+    grupos: o.grupos !== undefined ? lista(o.grupos) : unico(o.grupo),
+    marcas: o.marcas !== undefined ? lista(o.marcas) : unico(o.marca),
+    generos: o.generos !== undefined ? lista(o.generos) : unico(o.genero),
+    categorias: lista(o.categorias),
+    precio_min: num(o.precio_min),
+    precio_max: num(o.precio_max),
+  };
+}
+
+/** Fecha de la base («2026-09-19 22:35:10», UTC) a hora de Lima («2026-09-19 17:35»); Perú no tiene horario de verano. */
+export function fechaLima(utc: string): string {
+  const d = new Date(`${utc.replace(" ", "T").slice(0, 19)}Z`);
+  if (Number.isNaN(d.getTime())) return utc.slice(0, 16);
+  return new Date(d.getTime() - 5 * 3600_000).toISOString().slice(0, 16).replace("T", " ");
+}
+
+/** Los filtros en frases cortas para mostrarlos. */
+export function textoFiltros(f: FiltrosCatalogo): string[] {
+  const tipo = TIPOS_CATALOGO.find((t) => t.id === f.tipo);
+  const precio =
+    f.precio_min != null && f.precio_max != null
+      ? `Precio: S/ ${f.precio_min}–${f.precio_max}`
+      : f.precio_min != null
+        ? `Precio desde S/ ${f.precio_min}`
+        : f.precio_max != null
+          ? `Precio hasta S/ ${f.precio_max}`
+          : "";
+  return [
+    tipo && `Tipo: ${tipo.nombre}`,
+    f.categorias.length > 0 && `Categoría: ${f.categorias.join(", ")}`,
+    f.marcas.length > 0 && `Marca: ${f.marcas.join(", ")}`,
+    f.grupos.length > 0 && `Grupo: ${f.grupos.join(", ")}`,
+    f.generos.length > 0 && `Género: ${f.generos.join(", ")}`,
+    precio,
+    `Almacenes: ${f.almacenes.join(", ")}`,
+  ].filter((x): x is string => Boolean(x));
+}
 
 export type ResumenGeneracion = {
   /** Filas que devolvió el ERP. */
@@ -79,6 +175,8 @@ export type ResumenGeneracion = {
   sin_imagen: string[];
   /** Filas descartadas por no tener tallas con stock o precio. */
   sin_stock: number;
+  /** Filas fuera del rango de precio pedido (solo cuando se filtró por precio). */
+  fuera_de_precio?: number;
   paginas: number;
 };
 
@@ -136,11 +234,13 @@ function numero(v: number | string | null | undefined): number | null {
  *
  * @param versiones   cod_universal (MAYÚSCULAS) → versión de su imagen en R2
  * @param plantillaDe id de la plantilla que corresponde a una marca
+ * @param precio_rango los productos con precio lista fuera de este rango se descartan
  */
 export function construirBorrador(
   items: ItemErp[],
   versiones: Map<string, number>,
-  plantillaDe: (marca: string) => string
+  plantillaDe: (marca: string) => string,
+  precio_rango: { min: number | null; max: number | null } = { min: null, max: null }
 ): Borrador {
   const vistos = new Set<string>();
   const generosPorCodigo = new Map<string, Set<string>>();
@@ -148,6 +248,7 @@ export function construirBorrador(
   const productos: ProductoCat[] = [];
   let duplicados = 0;
   let sinStock = 0;
+  let fueraDePrecio = 0;
 
   for (const it of items) {
     const cod = it.cod_universal?.trim().toUpperCase();
@@ -165,6 +266,10 @@ export function construirBorrador(
     const precio = numero(it.precio_venta);
     if (tallas.length === 0 || precio == null || precio <= 0) {
       sinStock++;
+      continue;
+    }
+    if ((precio_rango.min != null && precio < precio_rango.min) || (precio_rango.max != null && precio > precio_rango.max)) {
+      fueraDePrecio++;
       continue;
     }
     const v = versiones.get(cod);
@@ -207,6 +312,7 @@ export function construirBorrador(
       multi_genero: [...generosPorCodigo.values()].filter((g) => g.size > 1).length,
       sin_imagen: [...sinImagen].sort(),
       sin_stock: sinStock,
+      ...(precio_rango.min != null || precio_rango.max != null ? { fuera_de_precio: fueraDePrecio } : {}),
       paginas: paginas.length,
     },
   };

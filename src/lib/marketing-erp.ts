@@ -18,9 +18,11 @@ export async function consultarCatalogoErp(f: FiltrosCatalogo): Promise<ItemErp[
 
   const filtros = {
     almacen: f.almacenes.join(","),
-    grupo: f.grupo,
-    marca: f.marca,
-    genero: f.genero,
+    // El ERP acepta varios valores separados por coma en cada filtro (comprobado con marca, grupo y género).
+    grupo: f.grupos.join(","),
+    marca: f.marcas.join(","),
+    genero: f.generos.join(","),
+    categoria: f.categorias.join(","),
   };
   const { stdout } = await promisify(execFile)(
     process.env.PYTHON_BIN ?? "python3",

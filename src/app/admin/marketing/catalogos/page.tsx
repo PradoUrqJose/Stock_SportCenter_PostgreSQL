@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireMarketing } from "@/lib/marketing";
+import { cerrarGeneracionesAbandonadas } from "@/lib/marketing-generacion";
+import { fechaLima, normalizarFiltros, textoFiltros } from "@/lib/marketing-catalogo";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -13,8 +15,27 @@ type Fila = {
   updated_at: string;
 };
 
+type Generacion = {
+  id: string;
+  titulo: string;
+  filtros: string;
+  estado: "en_curso" | "listo" | "error";
+  mensaje: string | null;
+  catalogo_id: string | null;
+  created_at: string;
+  segundos: number;
+  nombre: string | null;
+};
+
+const ESTADO_GENERACION = {
+  en_curso: { texto: "En curso", clase: "bg-blue-500/15 text-blue-700 dark:text-blue-400" },
+  listo: { texto: "Listo", clase: "bg-green-500/15 text-green-700 dark:text-green-400" },
+  error: { texto: "Error", clase: "bg-destructive/15 text-destructive" },
+} as const;
+
 export default async function CatalogosPage() {
   await requireMarketing();
+  await cerrarGeneracionesAbandonadas();
 
   const r = await db.execute(
     `SELECT c.id, c.titulo, c.version_publicada, c.updated_at,
@@ -24,6 +45,14 @@ export default async function CatalogosPage() {
      ORDER BY c.created_at DESC`
   );
   const catalogos = r.rows as unknown as Fila[];
+
+  const g = await db.execute(
+    `SELECT g.id, g.titulo, g.filtros, g.estado, g.mensaje, g.catalogo_id, g.created_at, u.nombre,
+            EXTRACT(EPOCH FROM (COALESCE(g.finished_at, now_text())::timestamp - g.created_at::timestamp))::int AS segundos
+     FROM mk_generaciones g LEFT JOIN users u ON u.id = g.created_by
+     ORDER BY g.created_at DESC LIMIT 15`
+  );
+  const generaciones = g.rows as unknown as Generacion[];
 
   return (
     <div className="p-4 md:p-8">
@@ -51,7 +80,7 @@ export default async function CatalogosPage() {
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-foreground">{c.titulo}</p>
                   <p className="text-xs text-muted-foreground">
-                    {c.paginas?.toLocaleString("en-US")} páginas · actualizado {c.updated_at.slice(0, 16).replace("T", " ")}
+                    {c.paginas?.toLocaleString("en-US")} páginas · actualizado {fechaLima(c.updated_at)}
                   </p>
                 </div>
                 <span
@@ -68,6 +97,50 @@ export default async function CatalogosPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {generaciones.length > 0 && (
+        <section className="mt-10">
+          <h2 className="text-sm font-semibold text-foreground">Historial de generaciones</h2>
+          <p className="mb-2 mt-0.5 text-xs text-muted-foreground">Cada vez que se pide un catálogo nuevo, con sus filtros y el resultado.</p>
+          <ul className="divide-y divide-border rounded-lg border border-border text-sm">
+            {generaciones.map((g) => {
+              const est = ESTADO_GENERACION[g.estado];
+              const destino =
+                g.estado === "listo" && g.catalogo_id
+                  ? `/admin/marketing/catalogos/${g.catalogo_id}`
+                  : g.estado === "en_curso"
+                    ? `/admin/marketing/catalogos/nuevo?generacion=${g.id}`
+                    : null;
+              const contenido = (
+                <>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-foreground">{g.titulo}</p>
+                    <p className="truncate text-xs text-muted-foreground">{textoFiltros(normalizarFiltros(JSON.parse(g.filtros))).join(" · ")}</p>
+                    {g.estado === "error" && g.mensaje && <p className="mt-0.5 text-xs text-destructive">{g.mensaje}</p>}
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
+                    <span className={cn("rounded-full px-2 py-0.5 font-medium", est.clase)}>{est.texto}</span>
+                    <span>
+                      {fechaLima(g.created_at)} · {g.segundos} s{g.nombre && ` · ${g.nombre}`}
+                    </span>
+                  </div>
+                </>
+              );
+              return (
+                <li key={g.id}>
+                  {destino ? (
+                    <Link href={destino} className="flex items-center justify-between gap-4 px-4 py-2.5 transition-colors hover:bg-muted/50">
+                      {contenido}
+                    </Link>
+                  ) : (
+                    <div className="flex items-center justify-between gap-4 px-4 py-2.5">{contenido}</div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       )}
     </div>
   );

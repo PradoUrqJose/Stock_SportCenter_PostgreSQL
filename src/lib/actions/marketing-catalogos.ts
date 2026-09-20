@@ -1,101 +1,150 @@
 "use server";
 
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { revalidatePath, updateTag } from "next/cache";
+import { after } from "next/server";
 import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
 import { IMAGENES_BASE, enlacesCatalogo, sesionMarketing } from "@/lib/marketing";
 import { borradorDeVersion, plantillasPorId, sincronizarVersiones } from "@/lib/marketing-catalogos-datos";
-import { consultarCatalogoErp } from "@/lib/marketing-erp";
+import { cerrarGeneracionesAbandonadas, ejecutarGeneracion } from "@/lib/marketing-generacion";
 import { etiquetaCatalogo } from "@/lib/marketing-publico";
 import {
   ALMACENES,
+  TIPOS_CATALOGO,
   armarSnapshot,
-  construirBorrador,
   validarPaginas,
   type Borrador,
   type FiltrosCatalogo,
 } from "@/lib/marketing-catalogo";
 import type { ActionResult } from "@/types";
 
-const TEXTO_FILTRO = /^[A-Z0-9ÁÉÍÓÚÑ&./ -]{0,40}$/;
+const TEXTO_FILTRO = /^[A-Z0-9ÁÉÍÓÚÑ&./ -]{1,40}$/;
 
-type PlantillaFila = { id: string; marca: string; ancho: number; alto: number; fondo_key: string; zonas: string };
-
-async function plantillasActivas(): Promise<PlantillaFila[]> {
-  const r = await db.execute("SELECT id, marca, ancho, alto, fondo_key, zonas FROM mk_plantillas WHERE activa = 1 ORDER BY created_at, id");
-  return r.rows as unknown as PlantillaFila[];
+/** Lista de valores de filtro validada (datos del navegador); null si algo no es válido. */
+function valoresFiltro(v: unknown): string[] | null {
+  if (!Array.isArray(v) || v.length > 60) return null;
+  const salida = new Set<string>();
+  for (const x of v) {
+    if (typeof x !== "string") return null;
+    const t = x.trim().toUpperCase();
+    if (!TEXTO_FILTRO.test(t)) return null;
+    salida.add(t);
+  }
+  return [...salida];
 }
 
-export async function generarCatalogo(input: {
+function precioFiltro(v: unknown): number | null | undefined {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 100_000) return undefined;
+  return v;
+}
+
+/**
+ * Pide generar un catálogo y responde al instante: el trabajo (consultar el
+ * ERP, armar las páginas) corre en segundo plano y la pantalla lo sigue con
+ * `estadoGeneracion`.
+ */
+export async function iniciarGeneracion(input: {
   titulo: string;
+  tipo: string;
   almacenes: string[];
-  grupo: string;
-  marca: string;
-  genero: string;
+  grupos: string[];
+  marcas: string[];
+  generos: string[];
+  categorias: string[];
+  precio_min: number | null;
+  precio_max: number | null;
 }): Promise<ActionResult<{ id: string }>> {
   const sesion = await sesionMarketing();
   if (!sesion) return { success: false, msg: "Sin permisos" };
 
-  const titulo = input.titulo.trim();
+  const titulo = String(input.titulo ?? "").trim();
   if (titulo.length < 3 || titulo.length > 100) return { success: false, msg: "El título debe tener entre 3 y 100 caracteres" };
 
-  const filtros: FiltrosCatalogo = {
-    almacenes: [...new Set(input.almacenes)].filter((a): a is (typeof ALMACENES)[number] => (ALMACENES as readonly string[]).includes(a)),
-    grupo: input.grupo.trim().toUpperCase(),
-    marca: input.marca.trim().toUpperCase(),
-    genero: input.genero.trim().toUpperCase(),
-  };
-  if (filtros.almacenes.length === 0) return { success: false, msg: "Elige al menos un almacén" };
-  if (![filtros.grupo, filtros.marca, filtros.genero].every((v) => TEXTO_FILTRO.test(v))) {
-    return { success: false, msg: "Filtro con caracteres no válidos" };
+  const almacenes = valoresFiltro(input.almacenes)?.filter((a): a is (typeof ALMACENES)[number] => (ALMACENES as readonly string[]).includes(a));
+  const grupos = valoresFiltro(input.grupos);
+  const marcas = valoresFiltro(input.marcas);
+  const generos = valoresFiltro(input.generos);
+  const categorias = valoresFiltro(input.categorias);
+  if (!almacenes || almacenes.length === 0) return { success: false, msg: "Elige al menos un almacén" };
+  if (!grupos || !marcas || !generos || !categorias) return { success: false, msg: "Filtro con caracteres no válidos" };
+
+  const precio_min = precioFiltro(input.precio_min);
+  const precio_max = precioFiltro(input.precio_max);
+  if (precio_min === undefined || precio_max === undefined) return { success: false, msg: "El precio debe ser un número válido" };
+  if (precio_min != null && precio_max != null && precio_min > precio_max) {
+    return { success: false, msg: "El precio mínimo no puede ser mayor que el máximo" };
   }
+  const tipo = TIPOS_CATALOGO.some((t) => t.id === input.tipo) ? input.tipo : "";
+
   // Sin ningún filtro se traería todo el ERP (miles de filas): se evita por error.
-  if (!filtros.grupo && !filtros.marca && !filtros.genero) {
-    return { success: false, msg: "Elige al menos una marca, un grupo o un género" };
+  if (grupos.length + marcas.length + generos.length + categorias.length === 0) {
+    return { success: false, msg: "Elige un tipo de catálogo o al menos una marca, un grupo, un género o una categoría" };
   }
   if (!(await rateLimit(`mk-generar:${sesion.id}`, 6, 60_000))) {
     return { success: false, msg: "Demasiadas generaciones seguidas; espera un minuto" };
   }
 
   try {
-    const plantillas = await plantillasActivas();
-    if (plantillas.length === 0) return { success: false, msg: "No hay ninguna plantilla activa" };
-
-    const items = await consultarCatalogoErp(filtros);
-
-    const codigos = [...new Set(items.map((i) => i.cod_universal?.trim().toUpperCase()).filter((c): c is string => Boolean(c)))];
-    const versiones = new Map<string, number>();
-    if (codigos.length > 0) {
-      const r = await db.execute({
-        sql: "SELECT cod_universal, version FROM mk_imagenes WHERE cod_universal = ANY(?)",
-        args: [codigos],
-      });
-      for (const f of r.rows) versiones.set(f.cod_universal as string, f.version as number);
+    // Una a la vez: cada una consulta el ERP y arma cientos de páginas.
+    await cerrarGeneracionesAbandonadas();
+    const activa = await db.execute("SELECT id, titulo FROM mk_generaciones WHERE estado = 'en_curso' LIMIT 1");
+    if (activa.rows.length > 0) {
+      return { success: false, msg: `Ya hay una generación en curso («${activa.rows[0].titulo}»); espera a que termine` };
     }
 
-    // Plantilla de la marca; si no hay, la primera activa.
-    const porMarca = new Map(plantillas.map((p) => [p.marca.toUpperCase(), p.id]));
-    const borrador = construirBorrador(items, versiones, (marca) => porMarca.get(marca) ?? plantillas[0].id);
-    if (borrador.paginas.length === 0) {
-      const r = borrador.resumen;
-      return {
-        success: false,
-        msg: `Ningún producto se puede mostrar: el ERP devolvió ${r.erp_items}, ${r.sin_imagen.length} sin imagen y ${r.sin_stock} sin stock o precio`,
-      };
-    }
-
+    const filtros: FiltrosCatalogo = { tipo, almacenes, grupos, marcas, generos, categorias, precio_min, precio_max };
     const id = randomUUID();
     await db.execute({
-      sql: `INSERT INTO mk_catalogos (id, slug, titulo, filtros, borrador, created_by)
-            VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [id, randomBytes(9).toString("base64url"), titulo, JSON.stringify(filtros), JSON.stringify(borrador), sesion.id],
+      sql: "INSERT INTO mk_generaciones (id, titulo, filtros, created_by) VALUES (?, ?, ?, ?)",
+      args: [id, titulo, JSON.stringify(filtros), sesion.id],
     });
+    after(() => ejecutarGeneracion(id));
     revalidatePath("/admin/marketing/catalogos");
-    return { success: true, msg: `${borrador.paginas.length} páginas generadas`, data: { id } };
+    return { success: true, msg: "Generación iniciada", data: { id } };
   } catch (e) {
-    console.error("[marketing] generarCatalogo falló:", e);
-    return { success: false, msg: e instanceof Error ? e.message : "No se pudo generar el catálogo" };
+    console.error("[marketing] iniciarGeneracion falló:", e);
+    return { success: false, msg: "No se pudo iniciar la generación" };
+  }
+}
+
+export type EstadoGeneracion = {
+  estado: "en_curso" | "listo" | "error";
+  etapa: "erp" | "armando" | "guardando";
+  mensaje: string | null;
+  catalogoId: string | null;
+  segundos: number;
+};
+
+/** Avance de una generación (la pantalla la consulta cada un par de segundos). */
+export async function estadoGeneracion(id: string): Promise<ActionResult<EstadoGeneracion>> {
+  const sesion = await sesionMarketing();
+  if (!sesion) return { success: false, msg: "Sin permisos" };
+  try {
+    await cerrarGeneracionesAbandonadas();
+    const r = await db.execute({
+      sql: `SELECT estado, etapa, mensaje, catalogo_id,
+                   EXTRACT(EPOCH FROM (COALESCE(finished_at, now_text())::timestamp - created_at::timestamp))::int AS segundos
+            FROM mk_generaciones WHERE id = ?`,
+      args: [id],
+    });
+    if (r.rows.length === 0) return { success: false, msg: "La generación no existe" };
+    const f = r.rows[0];
+    return {
+      success: true,
+      msg: "",
+      data: {
+        estado: f.estado as EstadoGeneracion["estado"],
+        etapa: f.etapa as EstadoGeneracion["etapa"],
+        mensaje: (f.mensaje as string | null) ?? null,
+        catalogoId: (f.catalogo_id as string | null) ?? null,
+        segundos: f.segundos as number,
+      },
+    };
+  } catch (e) {
+    console.error("[marketing] estadoGeneracion falló:", e);
+    return { success: false, msg: "No se pudo consultar el avance" };
   }
 }
 
