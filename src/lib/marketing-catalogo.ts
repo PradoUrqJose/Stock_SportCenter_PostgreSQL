@@ -31,6 +31,9 @@ export type PaginaProducto = {
   ajuste?: Ajuste;
 };
 
+/** Zona clicable de una página fija ya resuelta (va en el snapshot): rectángulo en fracciones 0–1 de la imagen. */
+export type ZonaClicable = { x: number; y: number; w: number; h: number; url: string; etiqueta: string };
+
 /** Página de imagen completa (portada, divisor, redes…) subida desde el editor. */
 export type PaginaFija = {
   id: string;
@@ -39,6 +42,8 @@ export type PaginaFija = {
   imagen: string;
   ancho: number;
   alto: number;
+  /** Enlaces sobre la imagen (WhatsApp, redes…); se agregan al publicar desde la biblioteca de páginas fijas. */
+  zonas?: ZonaClicable[];
 };
 
 export type PaginaCat = PaginaProducto | PaginaFija;
@@ -524,6 +529,91 @@ export function validarPaginas(
     } else {
       return "Tipo de página desconocido";
     }
+  }
+  return salida;
+}
+
+// ---------- zonas clicables de las páginas fijas ----------
+export const TIPOS_ENLACE = [
+  { id: "whatsapp", nombre: "WhatsApp" },
+  { id: "instagram", nombre: "Instagram" },
+  { id: "tiktok", nombre: "TikTok" },
+  { id: "facebook", nombre: "Facebook" },
+  { id: "web", nombre: "Otra página web" },
+] as const;
+export type TipoEnlace = (typeof TIPOS_ENLACE)[number]["id"];
+
+/** Rectángulo de la biblioteca (fracciones 0–1 de la imagen) con el tipo de enlace que abre. `url` solo en «web». */
+export type ZonaEnlace = { tipo: TipoEnlace; x: number; y: number; w: number; h: number; url?: string };
+
+/** Enlaces de contacto guardados una vez (mk_enlaces): número de WhatsApp, usuarios de las redes… */
+export type Enlaces = Partial<Record<Exclude<TipoEnlace, "web">, { valor: string; mensaje?: string | null }>>;
+
+/** ¿Es una dirección web https válida? (los enlaces de los clientes nunca usan http ni otros esquemas). */
+export function esUrlHttps(u: unknown): boolean {
+  if (typeof u !== "string" || u.length > 300) return false;
+  try {
+    return new URL(u).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/** Dirección final de un enlace de contacto; null si falta el dato o no es válido. */
+export function enlaceDeContacto(tipo: Exclude<TipoEnlace, "web">, e: { valor: string; mensaje?: string | null } | undefined): string | null {
+  const valor = (e?.valor ?? "").trim();
+  if (!valor) return null;
+  if (tipo === "whatsapp") {
+    const n = valor.replace(/\D/g, "");
+    // Un número peruano de 9 dígitos lleva el 51 delante.
+    const completo = n.length === 9 ? `51${n}` : n;
+    if (completo.length < 8 || completo.length > 15) return null;
+    const texto = (e?.mensaje ?? "").trim();
+    return `https://wa.me/${completo}${texto ? `?text=${encodeURIComponent(texto)}` : ""}`;
+  }
+  if (esUrlHttps(valor)) return valor;
+  if (tipo === "facebook") return /^[A-Za-z0-9.\-]{1,60}$/.test(valor) ? `https://www.facebook.com/${valor}` : null;
+  const usuario = valor.replace(/^@/, "");
+  if (!/^[A-Za-z0-9._]{1,40}$/.test(usuario)) return null;
+  return tipo === "instagram" ? `https://www.instagram.com/${usuario}/` : `https://www.tiktok.com/@${usuario}`;
+}
+
+/** Zona ya resuelta para el snapshot; null si su enlace no está configurado. */
+export function resolverZona(z: ZonaEnlace, enlaces: Enlaces): ZonaClicable | null {
+  const url = z.tipo === "web" ? (esUrlHttps(z.url) ? (z.url as string) : null) : enlaceDeContacto(z.tipo, enlaces[z.tipo]);
+  if (!url) return null;
+  const etiqueta = TIPOS_ENLACE.find((t) => t.id === z.tipo)?.nombre ?? "Enlace";
+  const r = (n: number) => Math.round(n * 10000) / 10000;
+  return { x: r(z.x), y: r(z.y), w: r(z.w), h: r(z.h), url, etiqueta };
+}
+
+/**
+ * Agrega a las páginas fijas del snapshot sus zonas clicables, según la biblioteca (por la ruta de la imagen).
+ * Las páginas subidas solo para un catálogo no están en la biblioteca y no llevan zonas.
+ */
+export function conZonasClicables(paginas: PaginaCat[], biblioteca: readonly { imagen: string; zonas: readonly ZonaEnlace[] }[], enlaces: Enlaces): PaginaCat[] {
+  const porImagen = new Map(biblioteca.map((f) => [f.imagen, f.zonas]));
+  return paginas.map((p) => {
+    if (p.tipo !== "fija") return p;
+    const zonas = (porImagen.get(p.imagen) ?? []).map((z) => resolverZona(z, enlaces)).filter((z): z is ZonaClicable => z !== null);
+    return zonas.length > 0 ? { ...p, zonas } : p;
+  });
+}
+
+/** Valida las zonas que llegan del navegador; devuelve las zonas limpias o un mensaje de error. */
+export function validarZonasEnlace(entrada: unknown): ZonaEnlace[] | string {
+  if (!Array.isArray(entrada)) return "Formato de zonas inválido";
+  if (entrada.length > 20) return "Demasiadas zonas (máximo 20)";
+  const salida: ZonaEnlace[] = [];
+  for (const z of entrada) {
+    const o = (typeof z === "object" && z !== null ? z : {}) as Record<string, unknown>;
+    const tipo = TIPOS_ENLACE.find((t) => t.id === o.tipo)?.id;
+    if (!tipo) return "Tipo de enlace no válido";
+    const [x, y, w, h] = [o.x, o.y, o.w, o.h].map(Number);
+    if (![x, y, w, h].every(Number.isFinite) || x < 0 || y < 0 || w < 0.01 || h < 0.01 || x + w > 1.0001 || y + h > 1.0001) return "Una zona queda fuera de la imagen";
+    if (tipo === "web" && !esUrlHttps(o.url)) return "La dirección web debe empezar con https://";
+    const r = (n: number) => Math.round(n * 10000) / 10000;
+    salida.push({ tipo, x: r(x), y: r(y), w: r(w), h: r(h), ...(tipo === "web" ? { url: o.url as string } : {}) });
   }
   return salida;
 }

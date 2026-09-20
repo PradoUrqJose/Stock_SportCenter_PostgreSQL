@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { db } from "@/lib/db";
 import { IMAGENES_BASE, ORIGEN_IMAGENES, requireMarketing } from "@/lib/marketing";
-import { fijasGestion, plantillasGestion } from "@/lib/marketing-catalogos-datos";
+import { enlacesDeContacto, fijasGestion, plantillasGestion } from "@/lib/marketing-catalogos-datos";
 import { BibliotecaDisenos } from "@/components/admin/marketing/biblioteca-disenos";
 import { preconnect } from "react-dom";
 
@@ -10,9 +10,10 @@ import { preconnect } from "react-dom";
 export default async function DisenosPage() {
   await requireMarketing();
   preconnect(ORIGEN_IMAGENES);
-  const [plantillas, fijas, marcas] = await Promise.all([
+  const [plantillas, fijas, enlaces, marcas] = await Promise.all([
     plantillasGestion(),
     fijasGestion(),
+    enlacesDeContacto(),
     db.execute("SELECT marca FROM productos WHERE marca IS NOT NULL GROUP BY 1 ORDER BY COUNT(*) DESC, 1"),
   ]);
 
@@ -22,7 +23,7 @@ export default async function DisenosPage() {
         <ChevronLeft className="h-3.5 w-3.5" /> Catálogos
       </Link>
       <h1 className="mb-4 text-xl font-semibold text-foreground">Diseños</h1>
-      <BibliotecaDisenos base={IMAGENES_BASE} plantillas={plantillas} fijas={fijas} marcas={marcas.rows.map((r) => r.marca as string)} />
+      <BibliotecaDisenos base={IMAGENES_BASE} plantillas={plantillas} fijas={fijas} marcas={marcas.rows.map((r) => r.marca as string)} enlaces={enlaces} />
     </div>
   );
 }

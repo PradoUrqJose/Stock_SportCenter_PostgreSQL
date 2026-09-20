@@ -6,7 +6,7 @@ import { after } from "next/server";
 import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
 import { IMAGENES_BASE, enlacesCatalogo, sesionMarketing } from "@/lib/marketing";
-import { borradorDeVersion, plantillasPorId, sincronizarVersiones } from "@/lib/marketing-catalogos-datos";
+import { borradorDeVersion, enlacesDeContacto, plantillasPorId, sincronizarVersiones, zonasDeBiblioteca } from "@/lib/marketing-catalogos-datos";
 import { cerrarGeneracionesAbandonadas, ejecutarGeneracion } from "@/lib/marketing-generacion";
 import { generarImagenCompartir } from "@/lib/marketing-og";
 import { etiquetaCatalogo } from "@/lib/marketing-publico";
@@ -14,6 +14,7 @@ import {
   ALMACENES,
   TIPOS_CATALOGO,
   armarSnapshot,
+  conZonasClicables,
   validarPaginas,
   type Borrador,
   type FiltrosCatalogo,
@@ -264,7 +265,10 @@ export async function publicarCatalogo(
     const faltan = ids.filter((i) => !plantillas[i]);
     if (faltan.length > 0) return { success: false, msg: `Falta la plantilla ${faltan.join(", ")}` };
 
-    const datosSnapshot = armarSnapshot(titulo, borrador, plantillas, IMAGENES_BASE);
+    const armado = armarSnapshot(titulo, borrador, plantillas, IMAGENES_BASE);
+    // Enlaces sobre las páginas fijas (portada, redes…): salen de la biblioteca y de los enlaces de contacto vigentes.
+    const [zonas, enlaces] = await Promise.all([zonasDeBiblioteca(), enlacesDeContacto()]);
+    const datosSnapshot = { ...armado, paginas: conZonasClicables(armado.paginas, zonas, enlaces) };
 
     const v = await db.execute({
       sql: "SELECT COALESCE(MAX(version), 0) + 1 AS siguiente FROM mk_catalogo_versiones WHERE catalogo_id = ?",

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { sesionMarketing } from "@/lib/marketing";
-import { TIPOS_IDS, type ZonasPlantilla } from "@/lib/marketing-catalogo";
+import { TIPOS_IDS, enlaceDeContacto, validarZonasEnlace, type ZonasPlantilla } from "@/lib/marketing-catalogo";
 import type { ActionResult } from "@/types";
 
 const ID = /^[a-z0-9-]{1,80}$/;
@@ -57,6 +57,63 @@ export async function activarDiseno(clase: "plantilla" | "fija", id: string, act
 }
 
 const TIPOS_CATALOGO = new Set([...TIPOS_IDS, "*"]);
+
+/**
+ * Guarda las zonas clicables de una página fija (rectángulos sobre la imagen, en fracciones de 0 a 1). Los catálogos
+ * las toman al publicarse: los ya publicados conservan los enlaces con los que salieron.
+ */
+export async function guardarZonasFija(id: string, zonas: unknown): Promise<ActionResult> {
+  if (!(await sesionMarketing())) return { success: false, msg: "Sin permisos" };
+  if (!ID.test(id)) return { success: false, msg: "Página no válida" };
+  const limpias = validarZonasEnlace(zonas);
+  if (typeof limpias === "string") return { success: false, msg: limpias };
+  try {
+    const r = await db.execute({
+      sql: "UPDATE mk_paginas_fijas SET zonas = ? WHERE id = ?",
+      args: [limpias.length > 0 ? JSON.stringify(limpias) : null, id],
+    });
+    if (r.rowsAffected === 0) return { success: false, msg: "La página no existe" };
+    revalidatePath("/admin/marketing/catalogos/disenos");
+    return { success: true, msg: limpias.length > 0 ? "Zonas guardadas" : "Zonas quitadas" };
+  } catch (e) {
+    console.error("[marketing] guardarZonasFija falló:", e);
+    return { success: false, msg: "No se pudieron guardar las zonas" };
+  }
+}
+
+type DatoEnlace = { valor: string; mensaje?: string };
+
+/**
+ * Guarda los enlaces de contacto (WhatsApp, Instagram, TikTok, Facebook). Un dato vacío se borra: las zonas de ese
+ * tipo dejan de llevar enlace en las próximas publicaciones.
+ */
+export async function guardarEnlaces(datos: Record<"whatsapp" | "instagram" | "tiktok" | "facebook", DatoEnlace>): Promise<ActionResult> {
+  if (!(await sesionMarketing())) return { success: false, msg: "Sin permisos" };
+  const nombres = { whatsapp: "WhatsApp", instagram: "Instagram", tiktok: "TikTok", facebook: "Facebook" } as const;
+  const sentencias: { sql: string; args: unknown[] }[] = [];
+  for (const clave of Object.keys(nombres) as (keyof typeof nombres)[]) {
+    const valor = String(datos?.[clave]?.valor ?? "").trim().slice(0, 200);
+    const mensaje = String(datos?.[clave]?.mensaje ?? "").trim().slice(0, 200);
+    if (!valor) {
+      sentencias.push({ sql: "DELETE FROM mk_enlaces WHERE clave = ?", args: [clave] });
+      continue;
+    }
+    if (enlaceDeContacto(clave, { valor, mensaje }) === null) return { success: false, msg: `El dato de ${nombres[clave]} no es válido` };
+    sentencias.push({
+      sql: `INSERT INTO mk_enlaces (clave, valor, mensaje, updated_at) VALUES (?, ?, ?, now_text())
+            ON CONFLICT (clave) DO UPDATE SET valor = excluded.valor, mensaje = excluded.mensaje, updated_at = now_text()`,
+      args: [clave, valor, clave === "whatsapp" && mensaje ? mensaje : null],
+    });
+  }
+  try {
+    await db.batch(sentencias as never);
+    revalidatePath("/admin/marketing/catalogos/disenos");
+    return { success: true, msg: "Enlaces guardados" };
+  } catch (e) {
+    console.error("[marketing] guardarEnlaces falló:", e);
+    return { success: false, msg: "No se pudieron guardar los enlaces" };
+  }
+}
 
 /**
  * Define en qué catálogos se usa una página fija y cómo: `aplica` vacío = a mano; con `posicion` inicio/final

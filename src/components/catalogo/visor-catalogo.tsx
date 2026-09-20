@@ -217,6 +217,18 @@ function ContenidoFija({ i, pag }: { i: number; pag: PaginaFija }) {
     <>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={`${c.base}/${pag.imagen}.webp`} alt="" decoding="async" draggable={false} className="absolute inset-0 h-full w-full select-none object-contain" />
+      {/* Zonas clicables (WhatsApp, redes…): invisibles; el área táctil se agranda unos píxeles para el dedo. */}
+      {pag.zonas?.map((z, k) => (
+        <a
+          key={k}
+          href={z.url}
+          target="_blank"
+          rel="noopener noreferrer nofollow"
+          aria-label={z.etiqueta}
+          className="absolute cursor-pointer rounded-md transition-colors before:absolute before:-inset-1.5 before:content-[''] hover:bg-white/10 active:bg-white/20"
+          style={{ left: `${z.x * 100}%`, top: `${z.y * 100}%`, width: `${z.w * 100}%`, height: `${z.h * 100}%` }}
+        />
+      ))}
       <div className="absolute bottom-1.5 right-2 rounded-full bg-black/40 px-1.5 text-[11px] text-white/60">
         {i + 1} / {c.total}
       </div>

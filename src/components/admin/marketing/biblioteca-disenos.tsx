@@ -6,9 +6,11 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { activarDiseno, guardarUsoFija, marcarPredeterminada } from "@/lib/actions/marketing-disenos";
-import { MARCA_GENERICA, TIPOS_CATALOGO, type FijaBiblioteca, type PlantillaLista } from "@/lib/marketing-catalogo";
+import { MARCA_GENERICA, TIPOS_CATALOGO, type Enlaces, type FijaBiblioteca, type PlantillaLista, type ZonaEnlace } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
 import { AccionMini, TarjetaDiseno } from "./tarjeta-diseno";
+import { EditorZonas } from "./editor-zonas";
+import { EnlacesContacto } from "./enlaces-contacto";
 import { SubirDisenosMasivo } from "./subir-disenos-masivo";
 
 const SELECT_MINI = "h-6 rounded border border-input bg-transparent px-1 text-[11px] outline-none focus-visible:border-ring";
@@ -32,16 +34,19 @@ export function BibliotecaDisenos({
   plantillas,
   fijas,
   marcas,
+  enlaces,
 }: {
   base: string;
   plantillas: PlantillaLista[];
-  fijas: (FijaBiblioteca & { activa: boolean })[];
+  fijas: (FijaBiblioteca & { activa: boolean; zonas: ZonaEnlace[] })[];
   marcas: string[];
+  enlaces: Enlaces;
 }) {
   const router = useRouter();
   const [, iniciar] = useTransition();
   const [grande, setGrande] = useState<{ src: string; titulo: string } | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [zonasDe, setZonasDe] = useState<string | null>(null);
 
   function accion(f: () => Promise<{ success: boolean; msg: string }>) {
     setAviso(null);
@@ -63,6 +68,8 @@ export function BibliotecaDisenos({
         </p>
         <SubirDisenosMasivo marcas={marcas} />
       </div>
+
+      <EnlacesContacto inicial={enlaces} />
 
       {aviso && <p className="mb-4 text-sm text-destructive">{aviso}</p>}
       {!hayGenerica && (
@@ -111,7 +118,7 @@ export function BibliotecaDisenos({
                     <TarjetaDiseno
                       src={`${base}/${f.imagen}-min.webp`}
                       nombre={f.nombre}
-                      insignias={[textoUso(f), !f.activa && "Inactiva"]}
+                      insignias={[textoUso(f), f.zonas.length > 0 && `${f.zonas.length} enlace${f.zonas.length === 1 ? "" : "s"}`, !f.activa && "Inactiva"]}
                       alAbrir={() => setGrande({ src: `${base}/${f.imagen}.webp`, titulo: f.nombre })}
                     >
                       <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -140,6 +147,7 @@ export function BibliotecaDisenos({
                           <option value="final">Al final</option>
                         </select>
                       )}
+                      <AccionMini onClick={() => setZonasDe(f.id)}>Zonas clicables</AccionMini>
                       <AccionMini onClick={() => accion(() => activarDiseno("fija", f.id, !f.activa))}>{f.activa ? "Desactivar" : "Activar"}</AccionMini>
                     </TarjetaDiseno>
                   </li>
@@ -149,6 +157,11 @@ export function BibliotecaDisenos({
           </div>
         );
       })}
+
+      {zonasDe && (() => {
+        const f = fijas.find((x) => x.id === zonasDe);
+        return f ? <EditorZonas key={f.id} base={base} pagina={f} enlaces={enlaces} alCerrar={() => setZonasDe(null)} /> : null;
+      })()}
 
       <Dialog open={grande !== null} onOpenChange={(o) => !o && setGrande(null)}>
         <DialogContent className="sm:max-w-5xl">

@@ -1,7 +1,7 @@
 // Lecturas de servidor compartidas por las acciones de catálogos y las páginas
 // del editor: plantillas y versiones de imagen al día.
 import { db } from "@/lib/db";
-import type { Borrador, FijaBiblioteca, PlantillaLista, PlantillaSnap, Snapshot } from "@/lib/marketing-catalogo";
+import type { Borrador, Enlaces, FijaBiblioteca, PlantillaLista, PlantillaSnap, Snapshot, ZonaEnlace } from "@/lib/marketing-catalogo";
 
 type PlantillaFila = { id: string; ancho: number; alto: number; fondo_key: string; zonas: string };
 
@@ -93,10 +93,31 @@ export async function plantillasGestion(): Promise<PlantillaLista[]> {
   }));
 }
 
-/** Todas las páginas fijas (activas o no), para la pantalla de plantillas. */
-export async function fijasGestion(): Promise<(FijaBiblioteca & { activa: boolean })[]> {
+/** Todas las páginas fijas (activas o no) con sus zonas clicables, para la pantalla de diseños y el asistente. */
+export async function fijasGestion(): Promise<(FijaBiblioteca & { activa: boolean; zonas: ZonaEnlace[] })[]> {
   const r = await db.execute(
-    "SELECT id, nombre, tipo, imagen, ancho, alto, auto_tipo, auto_posicion, activa FROM mk_paginas_fijas ORDER BY orden, id"
+    "SELECT id, nombre, tipo, imagen, ancho, alto, auto_tipo, auto_posicion, activa, zonas FROM mk_paginas_fijas ORDER BY orden, id"
   );
-  return r.rows.map((f) => ({ ...(f as unknown as FijaBiblioteca), activa: f.activa === 1 }));
+  return r.rows.map((f) => ({
+    ...(f as unknown as FijaBiblioteca),
+    activa: f.activa === 1,
+    zonas: f.zonas ? (JSON.parse(f.zonas as string) as ZonaEnlace[]) : [],
+  }));
+}
+
+/** Zonas clicables de la biblioteca por imagen (solo las páginas que tienen), para agregarlas al publicar. */
+export async function zonasDeBiblioteca(): Promise<{ imagen: string; zonas: ZonaEnlace[] }[]> {
+  const r = await db.execute("SELECT imagen, zonas FROM mk_paginas_fijas WHERE zonas IS NOT NULL");
+  return r.rows.map((f) => ({ imagen: f.imagen as string, zonas: JSON.parse(f.zonas as string) as ZonaEnlace[] }));
+}
+
+/** Enlaces de contacto (WhatsApp, Instagram, TikTok, Facebook). */
+export async function enlacesDeContacto(): Promise<Enlaces> {
+  const r = await db.execute("SELECT clave, valor, mensaje FROM mk_enlaces");
+  const salida: Enlaces = {};
+  for (const f of r.rows) {
+    const clave = f.clave as keyof Enlaces;
+    if (["whatsapp", "instagram", "tiktok", "facebook"].includes(clave)) salida[clave] = { valor: f.valor as string, mensaje: (f.mensaje as string | null) ?? null };
+  }
+  return salida;
 }

@@ -85,6 +85,16 @@ const FIJAS = [
   { id: "zapatillas-ropa-original", nombre: "Zapatillas y ropa original", tipo: "otra", archivo: "ZAPATILLAS Y ROPA ORIGINAL.jpg.jpeg" },
 ];
 
+// Bloque de contacto impreso abajo a la izquierda en las portadas (TikTok, WhatsApp, Facebook, Instagram), medido sobre el
+// diseño en fracciones de 0 a 1 de la imagen. Las portadas de Ropa Hombre y Ropa Mujer tienen otra composición: sin zonas.
+const ZONAS_CONTACTO = JSON.stringify([
+  { tipo: "tiktok", x: 0.027, y: 0.843, w: 0.222, h: 0.075 },
+  { tipo: "whatsapp", x: 0.027, y: 0.92, w: 0.165, h: 0.068 },
+  { tipo: "facebook", x: 0.254, y: 0.845, w: 0.183, h: 0.072 },
+  { tipo: "instagram", x: 0.254, y: 0.92, w: 0.22, h: 0.068 },
+]);
+const PORTADAS_CON_CONTACTO = ["portada-hombres", "portada-mujeres", "portada-ninos", "portada-accesorios", "portada-sandalias", "portada-ropa"];
+
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 await client.connect();
 try {
@@ -125,6 +135,8 @@ try {
     );
     console.log(`Neon ✔ mk_paginas_fijas.${f.id}`);
   }
+  // Zonas clicables de las portadas con bloque de contacto (los enlaces reales están en mk_enlaces; migración 014).
+  await client.query("UPDATE mk_paginas_fijas SET zonas = $1 WHERE id = ANY($2) AND zonas IS NULL", [ZONAS_CONTACTO, PORTADAS_CON_CONTACTO]);
 } finally {
   await client.end();
 }
