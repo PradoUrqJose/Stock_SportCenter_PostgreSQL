@@ -56,3 +56,25 @@ export async function enviarPaginaFija(imagen: Blob): Promise<ResultadoPaginaFij
     return { ok: false, error: "Sin conexión con el servidor" };
   }
 }
+
+export type ResultadoDiseno = { ok: true; id: string } | { ok: false; error: string };
+
+/** Sube un diseño (plantilla de una marca o página fija) ya reducido con `prepararPaginaFija`. */
+export async function enviarDiseno(
+  imagen: Blob,
+  datos: { clase: "plantilla"; marca: string; nombre: string } | { clase: "fija"; tipo: string; nombre: string }
+): Promise<ResultadoDiseno> {
+  try {
+    const params = new URLSearchParams(datos as Record<string, string>);
+    const res = await fetch(`/api/marketing/disenos?${params}`, {
+      method: "POST",
+      headers: { "Content-Type": imagen.type || "image/webp" },
+      body: imagen,
+    });
+    const json = (await res.json().catch(() => null)) as { error?: string; id?: string } | null;
+    if (!res.ok || !json?.id) return { ok: false, error: json?.error ?? `Error ${res.status}` };
+    return { ok: true, id: json.id };
+  } catch {
+    return { ok: false, error: "Sin conexión con el servidor" };
+  }
+}

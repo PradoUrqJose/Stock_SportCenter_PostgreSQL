@@ -73,6 +73,8 @@ export type FiltrosCatalogo = {
   /** Precio lista en soles; null = sin límite. */
   precio_min: number | null;
   precio_max: number | null;
+  /** Plantilla elegida por marca (marca → id); la clave «*» es la genérica. Sin elegir = la predeterminada. */
+  plantillas: Record<string, string>;
 };
 
 /**
@@ -132,7 +134,42 @@ export function normalizarFiltros(crudo: unknown): FiltrosCatalogo {
     categorias: lista(o.categorias),
     precio_min: num(o.precio_min),
     precio_max: num(o.precio_max),
+    plantillas:
+      typeof o.plantillas === "object" && o.plantillas !== null
+        ? Object.fromEntries(Object.entries(o.plantillas as Record<string, unknown>).filter(([, v]) => typeof v === "string") as [string, string][])
+        : {},
   };
+}
+
+/** Marca de la plantilla genérica (sin marca), que se usa con las marcas que no tienen la suya. */
+export const MARCA_GENERICA = "*";
+
+/** Plantilla tal como la usan la pantalla de plantillas y la generación. */
+export type PlantillaLista = {
+  id: string;
+  marca: string;
+  nombre: string;
+  activa: boolean;
+  predeterminada: boolean;
+  /** Ruta en el bucket sin extensión (`.webp` web, `.jpg` PDF). */
+  fondo: string;
+  ancho: number;
+  alto: number;
+  zonas: ZonasPlantilla;
+};
+
+/**
+ * Plantilla que corresponde a una marca: la elegida al crear el catálogo, si no
+ * la predeterminada de la marca y, si la marca no tiene ninguna, la genérica.
+ * null = ni la marca ni la genérica tienen plantilla (el producto no entra).
+ */
+export function plantillaDeMarca(marca: string, todas: readonly PlantillaLista[], elegidas: Record<string, string> = {}): string | null {
+  const activas = todas.filter((p) => p.activa);
+  const de = (m: string): PlantillaLista | null => {
+    const lista = activas.filter((p) => p.marca === m);
+    return lista.find((p) => p.id === elegidas[m]) ?? lista.find((p) => p.predeterminada) ?? lista[0] ?? null;
+  };
+  return (de(marca) ?? de(MARCA_GENERICA))?.id ?? null;
 }
 
 /** Página fija de la biblioteca (mk_paginas_fijas), tal como la usan el editor y la generación. */
@@ -207,6 +244,8 @@ export type ResumenGeneracion = {
   fuera_de_precio?: number;
   /** Productos que no entran porque su marca no tiene plantilla: marca → cantidad. */
   sin_plantilla?: Record<string, number>;
+  /** Productos que usaron la plantilla genérica por no tener la de su marca: marca → cantidad. */
+  con_generica?: Record<string, number>;
   /** Páginas fijas (portada, términos…) que la generación puso sola; están contadas en `paginas`. */
   fijas?: number;
   paginas: number;

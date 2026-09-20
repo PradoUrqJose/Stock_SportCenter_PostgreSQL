@@ -1,7 +1,7 @@
 // Lecturas de servidor compartidas por las acciones de catálogos y las páginas
 // del editor: plantillas y versiones de imagen al día.
 import { db } from "@/lib/db";
-import type { Borrador, FijaBiblioteca, PlantillaSnap, Snapshot } from "@/lib/marketing-catalogo";
+import type { Borrador, FijaBiblioteca, PlantillaLista, PlantillaSnap, Snapshot } from "@/lib/marketing-catalogo";
 
 type PlantillaFila = { id: string; ancho: number; alto: number; fondo_key: string; zonas: string };
 
@@ -72,4 +72,31 @@ export async function fijasDeBiblioteca(): Promise<FijaBiblioteca[]> {
     "SELECT id, nombre, tipo, imagen, ancho, alto, auto_tipo, auto_posicion FROM mk_paginas_fijas WHERE activa = 1 ORDER BY orden, id"
   );
   return r.rows as unknown as FijaBiblioteca[];
+}
+
+/** Todas las plantillas (activas o no) con su marca y si son la predeterminada, ordenadas por marca; la genérica al final. */
+export async function plantillasGestion(): Promise<PlantillaLista[]> {
+  const r = await db.execute(
+    `SELECT id, marca, nombre, activa, predeterminada, fondo_key, ancho, alto, zonas
+     FROM mk_plantillas ORDER BY (marca = '*'), marca, predeterminada DESC, created_at, id`
+  );
+  return r.rows.map((f) => ({
+    id: f.id as string,
+    marca: f.marca as string,
+    nombre: f.nombre as string,
+    activa: f.activa === 1,
+    predeterminada: f.predeterminada === 1,
+    fondo: f.fondo_key as string,
+    ancho: f.ancho as number,
+    alto: f.alto as number,
+    zonas: JSON.parse(f.zonas as string),
+  }));
+}
+
+/** Todas las páginas fijas (activas o no), para la pantalla de plantillas. */
+export async function fijasGestion(): Promise<(FijaBiblioteca & { activa: boolean })[]> {
+  const r = await db.execute(
+    "SELECT id, nombre, tipo, imagen, ancho, alto, auto_tipo, auto_posicion, activa FROM mk_paginas_fijas ORDER BY orden, id"
+  );
+  return r.rows.map((f) => ({ ...(f as unknown as FijaBiblioteca), activa: f.activa === 1 }));
 }

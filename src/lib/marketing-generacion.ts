@@ -6,13 +6,18 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { consultarCatalogoErp } from "@/lib/marketing-erp";
-import { conFijasAutomaticas, construirBorrador, normalizarFiltros, type FijaBiblioteca } from "@/lib/marketing-catalogo";
-import { fijasDeBiblioteca } from "@/lib/marketing-catalogos-datos";
+import {
+  MARCA_GENERICA,
+  conFijasAutomaticas,
+  construirBorrador,
+  normalizarFiltros,
+  plantillaDeMarca,
+  type FijaBiblioteca,
+} from "@/lib/marketing-catalogo";
+import { fijasDeBiblioteca, plantillasGestion } from "@/lib/marketing-catalogos-datos";
 
 /** El ERP tiene un tope de 4 min; pasado este tiempo una generación en curso se da por perdida. */
 export const MINUTOS_ABANDONO = 6;
-
-type PlantillaFila = { id: string; marca: string };
 
 async function etapa(id: string, nombre: "erp" | "armando" | "guardando"): Promise<void> {
   await db.execute({ sql: "UPDATE mk_generaciones SET etapa = ? WHERE id = ?", args: [nombre, id] });
@@ -33,9 +38,8 @@ export async function ejecutarGeneracion(id: string): Promise<void> {
     const { titulo, filtros: crudo, created_by } = g.rows[0] as { titulo: string; filtros: string; created_by: string | null };
     const filtros = normalizarFiltros(JSON.parse(crudo));
 
-    const pl = await db.execute("SELECT id, marca FROM mk_plantillas WHERE activa = 1 ORDER BY created_at, id");
-    const plantillas = pl.rows as unknown as PlantillaFila[];
-    if (plantillas.length === 0) return await terminar(id, "error", "No hay ninguna plantilla activa");
+    const plantillas = await plantillasGestion();
+    if (!plantillas.some((p) => p.activa)) return await terminar(id, "error", "No hay ninguna plantilla activa");
 
     await etapa(id, "erp");
     const items = await consultarCatalogoErp(filtros);
@@ -51,12 +55,20 @@ export async function ejecutarGeneracion(id: string): Promise<void> {
       for (const f of r.rows) versiones.set(f.cod_universal as string, f.version as number);
     }
 
-    // Cada marca usa su plantilla; las marcas sin plantilla no entran (se avisan en el resumen).
-    const porMarca = new Map(plantillas.map((p) => [p.marca.toUpperCase(), p.id]));
-    const sinFijas = construirBorrador(items, versiones, (marca) => porMarca.get(marca) ?? null, {
+    // Cada marca usa la plantilla elegida (o su predeterminada); sin la suya, la genérica; si tampoco
+    // hay genérica, el producto no entra y se avisa en el resumen.
+    const sinFijas = construirBorrador(items, versiones, (marca) => plantillaDeMarca(marca, plantillas, filtros.plantillas), {
       min: filtros.precio_min,
       max: filtros.precio_max,
     });
+    const conPropia = new Set(plantillas.filter((p) => p.activa && p.marca !== MARCA_GENERICA).map((p) => p.marca));
+    const genericas: Record<string, number> = {};
+    for (const pg of sinFijas.paginas) {
+      if (pg.tipo !== "producto") continue;
+      const marca = sinFijas.productos[pg.prod].marca;
+      if (!conPropia.has(marca)) genericas[marca || "(SIN MARCA)"] = (genericas[marca || "(SIN MARCA)"] ?? 0) + 1;
+    }
+    if (Object.keys(genericas).length > 0) sinFijas.resumen.con_generica = genericas;
     if (sinFijas.paginas.length === 0) {
       const r = sinFijas.resumen;
       const fuera = r.fuera_de_precio ? `, ${r.fuera_de_precio} fuera del rango de precio` : "";

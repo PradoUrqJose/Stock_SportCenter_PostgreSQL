@@ -55,6 +55,8 @@ export async function iniciarGeneracion(input: {
   categorias: string[];
   precio_min: number | null;
   precio_max: number | null;
+  /** Plantilla elegida por marca (marca → id); la clave «*» es la genérica. */
+  plantillas?: Record<string, string>;
 }): Promise<ActionResult<{ id: string }>> {
   const sesion = await sesionMarketing();
   if (!sesion) return { success: false, msg: "Sin permisos" };
@@ -78,6 +80,12 @@ export async function iniciarGeneracion(input: {
   }
   const tipo = TIPOS_CATALOGO.some((t) => t.id === input.tipo) ? input.tipo : "";
 
+  // Plantillas elegidas por marca: solo se aceptan pares con formato de marca e id (el resto lo valida la generación).
+  const plantillas: Record<string, string> = {};
+  for (const [marca, pid] of Object.entries(input.plantillas ?? {}).slice(0, 60)) {
+    if (/^[A-Z0-9 &.*-]{1,40}$/.test(marca) && /^[a-z0-9-]{1,80}$/.test(String(pid))) plantillas[marca] = String(pid);
+  }
+
   // Sin ningún filtro se traería todo el ERP (miles de filas): se evita por error.
   if (grupos.length + marcas.length + generos.length + categorias.length === 0) {
     return { success: false, msg: "Elige un tipo de catálogo o al menos una marca, un grupo, un género o una categoría" };
@@ -94,7 +102,7 @@ export async function iniciarGeneracion(input: {
       return { success: false, msg: `Ya hay una generación en curso («${activa.rows[0].titulo}»); espera a que termine` };
     }
 
-    const filtros: FiltrosCatalogo = { tipo, almacenes, grupos, marcas, generos, categorias, precio_min, precio_max };
+    const filtros: FiltrosCatalogo = { tipo, almacenes, grupos, marcas, generos, categorias, precio_min, precio_max, plantillas };
     const id = randomUUID();
     await db.execute({
       sql: "INSERT INTO mk_generaciones (id, titulo, filtros, created_by) VALUES (?, ?, ?, ?)",

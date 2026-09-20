@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
-import { requireMarketing } from "@/lib/marketing";
-import { FormNuevoCatalogo } from "@/components/admin/marketing/form-nuevo-catalogo";
+import { IMAGENES_BASE, ORIGEN_IMAGENES, requireMarketing } from "@/lib/marketing";
+import { fijasGestion, plantillasGestion } from "@/lib/marketing-catalogos-datos";
+import { AsistenteCatalogo } from "@/components/admin/marketing/asistente-catalogo";
+import { preconnect } from "react-dom";
 import { ProgresoGeneracion } from "@/components/admin/marketing/progreso-generacion";
 
 // Valores que existen hoy en los productos, los más frecuentes primero.
@@ -13,6 +15,7 @@ async function valores(columna: "marca" | "grupo" | "genero" | "categoria"): Pro
 
 export default async function NuevoCatalogoPage({ searchParams }: { searchParams: Promise<{ generacion?: string }> }) {
   await requireMarketing();
+  preconnect(ORIGEN_IMAGENES);
   const { generacion } = await searchParams;
 
   // Con ?generacion=<id> se muestra el avance de esa generación en lugar del formulario.
@@ -28,23 +31,32 @@ export default async function NuevoCatalogoPage({ searchParams }: { searchParams
     }
   }
 
-  const [marcas, grupos, generos, categorias] = await Promise.all([
+  const [marcas, grupos, generos, categorias, plantillas, fijas, ejemplo] = await Promise.all([
     valores("marca"),
     valores("grupo"),
     valores("genero"),
     valores("categoria"),
+    plantillasGestion(),
+    fijasGestion(),
+    // Zapatilla de ejemplo para acomodar su posición: una conocida si existe y, si no, la primera imagen.
+    db.execute("SELECT cod_universal, version FROM mk_imagenes ORDER BY (cod_universal = 'IG6410') DESC, cod_universal LIMIT 1"),
   ]);
+  const fila = ejemplo.rows[0];
 
   return (
     <div className="p-4 md:p-8">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-foreground">Nuevo catálogo</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Elige un tipo de catálogo (o los filtros a mano): se consulta el ERP y se arma una página por producto y género,
-          ordenado por marca. Los productos sin imagen o sin stock se omiten y se avisa.
-        </p>
       </div>
-      <FormNuevoCatalogo opciones={{ marcas, grupos, generos, categorias }} />
+      <AsistenteCatalogo
+        recursos={{
+          base: IMAGENES_BASE,
+          plantillas,
+          fijas,
+          ejemplo: fila ? { cod: fila.cod_universal as string, v: fila.version as number } : null,
+          opciones: { marcas, grupos, generos, categorias },
+        }}
+      />
     </div>
   );
 }

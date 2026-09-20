@@ -130,3 +130,22 @@
     @apply font-sans;
   }
 }
+/* Cambio de paso del asistente de catálogos (View Transitions): el paso sale y entra deslizando.
+   La dirección la pone el componente en <html data-dir="adelante|atras">. */
+::view-transition-old(paso),
+::view-transition-new(paso) {
+  animation-duration: 0.38s;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation-fill-mode: both;
+}
+html[data-dir="adelante"]::view-transition-old(paso) { animation-name: paso-sale-izquierda; }
+html[data-dir="adelante"]::view-transition-new(paso) { animation-name: paso-entra-derecha; }
+html[data-dir="atras"]::view-transition-old(paso) { animation-name: paso-sale-derecha; }
+html[data-dir="atras"]::view-transition-new(paso) { animation-name: paso-entra-izquierda; }
+@keyframes paso-sale-izquierda { to { opacity: 0; transform: translateX(-48px); } }
+@keyframes paso-entra-derecha { from { opacity: 0; transform: translateX(48px); } }
+@keyframes paso-sale-derecha { to { opacity: 0; transform: translateX(48px); } }
+@keyframes paso-entra-izquierda { from { opacity: 0; transform: translateX(-48px); } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
