@@ -13,6 +13,10 @@ async function valores(columna: "marca" | "grupo" | "genero" | "categoria"): Pro
   return r.rows.map((f) => f.v as string);
 }
 
+// La generación corre en segundo plano (`after`) dentro de esta misma función: necesita más que los 10 s por defecto
+// (consulta al ERP en paralelo, hasta ~35 s, más armar el catálogo). 60 s es el máximo del plan Hobby.
+export const maxDuration = 60;
+
 export default async function NuevoCatalogoPage({ searchParams }: { searchParams: Promise<{ generacion?: string }> }) {
   await requireMarketing();
   preconnect(ORIGEN_IMAGENES);

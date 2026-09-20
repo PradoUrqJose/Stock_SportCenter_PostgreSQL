@@ -617,3 +617,80 @@ export function validarZonasEnlace(entrada: unknown): ZonaEnlace[] | string {
   }
   return salida;
 }
+
+// ---------- consultas al ERP en trozos ----------
+/** Una consulta al ERP: marcas y géneros a pedir (grupo, categoría y almacenes van iguales en todas). */
+export type ConsultaErp = { marcas: string[]; generos: string[] };
+
+/** Filas que se piden al ERP por consulta: unas 800 tardan ~30 s (medido con Adidas: 827 filas en 33 s); más de ~2.000 superan el minuto. */
+export const FILAS_POR_CONSULTA = 800;
+
+/**
+ * Reparte lo que hay que pedir al ERP en consultas que se pueden hacer en paralelo, cada una de tamaño moderado
+ * (el ERP tarda en proporción a las filas y las funciones de Vercel duran como máximo 60 s). Las marcas chicas se
+ * juntan; una marca grande se parte por género. Las marcas nunca se repiten entre consultas, así que no hay filas dobles.
+ *
+ * Un catálogo chico (hasta `tope` filas) se pide en UNA consulta sin repartir: es completa por construcción. Solo se reparte
+ * lo grande, y ahí los conteos del sistema solo deciden CÓMO repartir, no QUÉ pedir: el sistema puede no conocer aún productos nuevos
+ * del ERP (aún sin sincronizar), así que todas las marcas conocidas se piden con TODOS los géneros del filtro, y las que
+ * el usuario eligió expresamente se piden aunque el sistema no tenga nada de ellas.
+ * @param conteos productos con stock por marca y género según el sistema (aproximado)
+ * @param o.generosFiltro géneros del filtro (vacío = todos)
+ * @param o.universoMarcas todas las marcas que conoce el sistema; o.universoGeneros todos los géneros que conoce
+ * @param o.marcasPedidas marcas elegidas expresamente por el usuario
+ */
+export function planificarConsultas(
+  conteos: readonly { marca: string; genero: string; n: number }[],
+  o: { tope?: number; generosFiltro?: readonly string[]; universoMarcas?: readonly string[]; universoGeneros?: readonly string[]; marcasPedidas?: readonly string[] } = {}
+): ConsultaErp[] {
+  const tope = o.tope ?? FILAS_POR_CONSULTA;
+  const generosFiltro = [...(o.generosFiltro ?? [])];
+  const pedidas = new Set(o.marcasPedidas ?? []);
+  // Chico: una sola consulta con los filtros tal cual (marca vacía = todas).
+  if (conteos.reduce((a, c) => a + c.n, 0) <= tope) return [{ marcas: [...pedidas], generos: generosFiltro }];
+
+  const porMarca = new Map<string, { genero: string; n: number }[]>();
+  const agregar = (m: string) => porMarca.get(m) ?? porMarca.set(m, []).get(m)!;
+  // Sin marca no se puede pedir al ERP por marca (vacío = todas): esas filas no entran. Con marcas elegidas, solo esas.
+  for (const c of conteos) if (c.marca.trim() !== "" && c.n > 0 && (pedidas.size === 0 || pedidas.has(c.marca))) agregar(c.marca).push({ genero: c.genero, n: c.n });
+  // Marcas elegidas expresamente: solo esas. Si no, todas las que conoce el sistema (también las sin filas locales para estos filtros).
+  for (const m of (o.marcasPedidas?.length ? o.marcasPedidas : (o.universoMarcas ?? []))) if (m.trim() !== "") agregar(m);
+  const total = (gs: { n: number }[]) => gs.reduce((a, g) => a + g.n, 0);
+  // Todos los géneros posibles: los del filtro o, sin filtro, los que conoce el sistema.
+  const generosPosibles = generosFiltro.length > 0 ? generosFiltro : [...(o.universoGeneros ?? [])];
+
+  const consultas: ConsultaErp[] = [];
+  let chicas = { marcas: [] as string[], n: 0 };
+  const cerrarChicas = () => {
+    if (chicas.marcas.length > 0) consultas.push({ marcas: chicas.marcas, generos: generosFiltro });
+    chicas = { marcas: [], n: 0 };
+  };
+
+  for (const [marca, gs] of [...porMarca].sort((a, b) => total(b[1]) - total(a[1]) || a[0].localeCompare(b[0]))) {
+    const n = total(gs);
+    if (n > tope && generosPosibles.length > 1) {
+      // Marca grande: se parte por género en trozos de hasta `tope` filas; los géneros sin conteo van con el trozo más chico.
+      const grupos: { generos: string[]; n: number }[] = [];
+      for (const g of [...gs].sort((a, b) => b.n - a.n)) {
+        const ultimo = grupos[grupos.length - 1];
+        if (ultimo && ultimo.n + g.n <= tope) {
+          ultimo.generos.push(g.genero);
+          ultimo.n += g.n;
+        } else grupos.push({ generos: [g.genero], n: g.n });
+      }
+      const conocidos = new Set(gs.map((g) => g.genero));
+      const sinConteo = generosPosibles.filter((g) => !conocidos.has(g));
+      if (sinConteo.length > 0) {
+        const menor = grupos.reduce((m, g) => (g.n < m.n ? g : m), grupos[0]);
+        menor.generos.push(...sinConteo);
+      }
+      for (const g of grupos) consultas.push({ marcas: [marca], generos: g.generos });
+    } else {
+      if (chicas.n + n > tope) cerrarChicas();
+      chicas.marcas.push(marca);
+      chicas.n += n;
+    }
+  }
+  cerrarChicas();
+  return consultas;
+}

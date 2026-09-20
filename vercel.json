@@ -1,7 +1,12 @@
 {
-  "regions": ["gru1"],
+  "regions": [
+    "gru1"
+  ],
   "functions": {
     "api/sincronizar.py": {
+      "maxDuration": 60
+    },
+    "api/catalogo.py": {
       "maxDuration": 60
     }
   }
