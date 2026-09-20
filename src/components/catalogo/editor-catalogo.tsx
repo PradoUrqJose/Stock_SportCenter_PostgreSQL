@@ -37,6 +37,7 @@ import { guardarEdicion, publicarCatalogo } from "@/lib/actions/marketing-catalo
 import { enviarPaginaFija, prepararPaginaFija } from "@/lib/subir-imagen-cliente";
 import type { Ajuste, FijaBiblioteca, PaginaCat, PaginaFija, PlantillaSnap, ProductoCat } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
+import { BotonPdf } from "./boton-pdf";
 import { ANCHO_MAX, PaginaShell, VisorCtx, useContextoVisor } from "./visor-catalogo";
 
 type Estado = { paginas: PaginaCat[]; quitadas: PaginaCat[] };
@@ -404,6 +405,7 @@ export function EditorCatalogo({
             <Button variant="outline" size="sm" disabled={quitadas.length === 0} onClick={() => setDialogo("quitadas")}>
               <Undo data-icon="inline-start" /> Quitadas ({quitadas.length})
             </Button>
+            <BotonPdf entrada={{ titulo, base, paginas, productos, plantillas }} className="h-7" />
             {enlaces && (
               <a href={enlaces.principal} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
                 <Eye data-icon="inline-start" /> Ver como cliente
