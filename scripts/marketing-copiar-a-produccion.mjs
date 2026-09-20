@@ -1,7 +1,9 @@
 // Copia a la base de PRODUCCIÓN los datos del módulo Marketing que ya se probaron en desarrollo:
-//   mk_imagenes (las 3.573 imágenes), mk_plantillas, mk_paginas_fijas (con sus zonas clicables) y mk_enlaces.
+//   mk_imagenes (el REGISTRO de las 3.573 imágenes: código, versión y dirección; NO los archivos), mk_plantillas,
+//   mk_paginas_fijas (con sus zonas clicables) y mk_enlaces.
 // NO copia catálogos, versiones ni historial (son pruebas) y NO toca ninguna tabla del sistema STOCK.
-// Los archivos de esas imágenes y diseños ya están en el bucket de R2 (es el mismo para desarrollo y producción).
+// Los ARCHIVOS de esas imágenes y diseños no se mueven: ya están en el bucket de R2 (el mismo para desarrollo y producción);
+// aquí solo se copian las filas que le dicen a la base de producción cuáles existen y en qué versión.
 //
 // Seguro por defecto: sin `--aplicar` solo muestra qué haría (vista previa). Con `--aplicar` inserta lo que falta
 // (ON CONFLICT DO NOTHING: no pisa nada que producción ya tenga) y avisa qué había de más allá en producción.
