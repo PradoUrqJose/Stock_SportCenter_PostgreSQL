@@ -54,6 +54,8 @@ export type PlantillaSnap = {
 /** JSON inmutable que lee el visor público. */
 export type Snapshot = {
   titulo: string;
+  /** Imagen JPEG de 1200×630 para la vista previa del enlace (ruta en el bucket); ausente en versiones antiguas. */
+  og?: string;
   generado: string;
   imagenes_base: string;
   plantillas: Record<string, PlantillaSnap>;

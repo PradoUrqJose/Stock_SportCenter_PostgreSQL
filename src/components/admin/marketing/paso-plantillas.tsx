@@ -97,11 +97,11 @@ export function PasoPlantillas({
               return (
                 <li key={m.marca} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 py-2 animate-in fade-in slide-in-from-left-2 fill-mode-both duration-500" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
                   <span className="w-32 shrink-0 text-sm font-medium text-foreground">{m.marca}</span>
-                  <span className="w-24 shrink-0 text-xs text-muted-foreground">{m.productos.toLocaleString("en-US")} productos</span>
+                  <span className="w-24 shrink-0 text-xs text-muted-foreground">{m.productos.toLocaleString("en-US")} {m.productos === 1 ? "producto" : "productos"}</span>
                   {lista.length > 0 ? (
                     <div className="flex min-w-0 flex-1 items-center gap-2">
                       <select
-                        className={cn(SELECT, "max-w-xs")}
+                        className={cn(SELECT, "min-w-0 max-w-xs flex-1")}
                         value={elegida(m.marca)}
                         onChange={(e) => cambiar({ plantillas: { ...datos.plantillas, [m.marca]: e.target.value } })}
                         aria-label={`Plantilla de ${m.marca}`}

@@ -58,14 +58,14 @@ export default async function CatalogosPage() {
 
   return (
     <div className="p-4 md:p-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <div>
           <h1 className="text-xl font-semibold text-foreground">Catálogos</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Un clic abre el catálogo con sus versiones, y desde ahí eliges cuál editar. Cada catálogo tiene un enlace fijo para los clientes: al publicar una versión nueva, el mismo enlace la muestra.
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link href="/admin/marketing/catalogos/disenos" className={cn(buttonVariants({ variant: "ghost" }))}>
             <Palette data-icon="inline-start" /> Diseños
           </Link>

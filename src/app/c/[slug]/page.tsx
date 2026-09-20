@@ -15,9 +15,25 @@ const montserrat = Montserrat({ subsets: ["latin"], weight: "900", display: "swa
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const snapshot = await obtenerSnapshotPublicado(slug);
+  if (!snapshot) return { title: "Catálogo", robots: { index: false, follow: false } };
+
+  // Vista previa del enlace (WhatsApp, Facebook, Telegram…): título, descripción e imagen de la portada.
+  const titulo = `${snapshot.titulo} · Sport Center`;
+  const descripcion = "Catálogo de Sport Center: modelos originales, tallas y precios sugeridos.";
+  const imagen = snapshot.og ? `${snapshot.imagenes_base}/${snapshot.og}` : undefined;
   return {
-    title: snapshot?.titulo ?? "Catálogo",
+    title: titulo,
+    description: descripcion,
     robots: { index: false, follow: false },
+    openGraph: {
+      type: "website",
+      title: titulo,
+      description: descripcion,
+      siteName: "Sport Center",
+      locale: "es_PE",
+      ...(imagen ? { images: [{ url: imagen, width: 1200, height: 630, alt: snapshot.titulo }] } : {}),
+    },
+    twitter: { card: imagen ? "summary_large_image" : "summary", title: titulo, description: descripcion, ...(imagen ? { images: [imagen] } : {}) },
   };
 }
 

@@ -8,6 +8,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { IMAGENES_BASE, enlacesCatalogo, sesionMarketing } from "@/lib/marketing";
 import { borradorDeVersion, plantillasPorId, sincronizarVersiones } from "@/lib/marketing-catalogos-datos";
 import { cerrarGeneracionesAbandonadas, ejecutarGeneracion } from "@/lib/marketing-generacion";
+import { generarImagenCompartir } from "@/lib/marketing-og";
 import { etiquetaCatalogo } from "@/lib/marketing-publico";
 import {
   ALMACENES,
@@ -263,13 +264,17 @@ export async function publicarCatalogo(
     const faltan = ids.filter((i) => !plantillas[i]);
     if (faltan.length > 0) return { success: false, msg: `Falta la plantilla ${faltan.join(", ")}` };
 
-    const snapshot = JSON.stringify(armarSnapshot(titulo, borrador, plantillas, IMAGENES_BASE));
+    const datosSnapshot = armarSnapshot(titulo, borrador, plantillas, IMAGENES_BASE);
 
     const v = await db.execute({
       sql: "SELECT COALESCE(MAX(version), 0) + 1 AS siguiente FROM mk_catalogo_versiones WHERE catalogo_id = ?",
       args: [id],
     });
     const version = v.rows[0].siguiente as number;
+
+    // Imagen de la vista previa del enlace (WhatsApp…); si falla, se publica igual sin ella.
+    const og = await generarImagenCompartir(datosSnapshot, slug, version);
+    const snapshot = JSON.stringify(og ? { ...datosSnapshot, og } : datosSnapshot);
 
     await db.batch([
       {
