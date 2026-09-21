@@ -56,6 +56,7 @@ export default async function CatalogosPage() {
     `SELECT g.id, g.titulo, g.filtros, g.estado, g.mensaje, g.catalogo_id, g.created_at, g.modo, g.base_version, u.nombre,
             EXTRACT(EPOCH FROM (COALESCE(g.finished_at, now_text())::timestamp - g.created_at::timestamp))::int AS segundos
      FROM mk_generaciones g LEFT JOIN users u ON u.id = g.created_by
+     WHERE g.modo <> 'precarga'
      ORDER BY g.created_at DESC LIMIT 15`
   );
   const generaciones = g.rows as unknown as Generacion[];

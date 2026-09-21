@@ -13,11 +13,16 @@ const EN_PARALELO = 3;
 /** Un poco menos que los 300 s de la función de Vercel, para responder con un error claro y no con un corte. */
 const ESPERA_HTTP_MS = 290_000;
 
-function urlCatalogoErp(): string | null {
+/**
+ * A dónde se llama a la función /api/catalogo (mismo proyecto). `origen` es el host desde el que el usuario usa el sistema
+ * (`Host` de su petición): siempre es un dominio del sistema y no el de los catálogos públicos (que por seguridad solo sirve
+ * /<enlace>). NO se usa VERCEL_PROJECT_PRODUCTION_URL: es el dominio personalizado más corto y hoy es el de los catálogos.
+ */
+function urlCatalogoErp(origen?: string): string | null {
   if (process.env.ERP_CATALOGO_URL) return process.env.ERP_CATALOGO_URL; // pruebas locales de la ruta HTTP
   if (!process.env.VERCEL) return null;
-  // VERCEL_URL es la URL de ESTE despliegue y Vercel la protege con su login; el dominio de producción no.
-  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
+  // VERCEL_URL es la URL de ESTE despliegue y Vercel la protege con su login; solo sirve si no hay otro origen.
+  const host = origen && origen !== process.env.CATALOGOS_HOST ? origen : (process.env.VERCEL_URL ?? origen);
   return `https://${host}/api/catalogo`;
 }
 
@@ -43,7 +48,7 @@ async function conocerLocal(f: FiltrosCatalogo) {
   };
 }
 
-async function pedirAlErp(f: FiltrosCatalogo, c: ConsultaErp): Promise<ItemErp[]> {
+async function pedirAlErp(f: FiltrosCatalogo, c: ConsultaErp, origen?: string): Promise<ItemErp[]> {
   // El ERP acepta varios valores separados por coma en cada filtro (comprobado con marca, grupo, género y categoría).
   const filtros = {
     almacen: f.almacenes.join(","),
@@ -54,7 +59,7 @@ async function pedirAlErp(f: FiltrosCatalogo, c: ConsultaErp): Promise<ItemErp[]
     categoria: f.categorias.join(","),
   };
 
-  const url = urlCatalogoErp();
+  const url = urlCatalogoErp(origen);
   if (url) {
     const secreto = process.env.SYNC_SECRET;
     if (!secreto) throw new Error("Falta SYNC_SECRET en las variables de entorno.");
@@ -83,7 +88,7 @@ async function pedirAlErp(f: FiltrosCatalogo, c: ConsultaErp): Promise<ItemErp[]
   return (JSON.parse(stdout) as { items?: ItemErp[] }).items ?? [];
 }
 
-export async function consultarCatalogoErp(f: FiltrosCatalogo): Promise<{ items: ItemErp[]; parcial: boolean }> {
+export async function consultarCatalogoErp(f: FiltrosCatalogo, origen?: string): Promise<{ items: ItemErp[]; parcial: boolean }> {
   // Los conteos del sistema solo sirven para estimar el tiempo y, si hace falta, repartir el trabajo.
   const local = await conocerLocal(f);
   const plan = planificarConsultas(local.conteos, { generosFiltro: f.generos, universoMarcas: local.universoMarcas, universoGeneros: local.universoGeneros, marcasPedidas: f.marcas });
@@ -94,7 +99,7 @@ export async function consultarCatalogoErp(f: FiltrosCatalogo): Promise<{ items:
   const trabajador = async () => {
     while (siguiente < trabajos.length) {
       const i = siguiente++;
-      resultados[i] = await pedirAlErp(f, trabajos[i]);
+      resultados[i] = await pedirAlErp(f, trabajos[i], origen);
     }
   };
   await Promise.all(Array.from({ length: Math.min(EN_PARALELO, trabajos.length) }, trabajador));

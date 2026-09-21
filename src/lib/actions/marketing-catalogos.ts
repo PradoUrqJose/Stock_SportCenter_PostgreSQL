@@ -2,12 +2,13 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath, updateTag } from "next/cache";
+import { headers } from "next/headers";
 import { after } from "next/server";
 import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
 import { IMAGENES_BASE, enlacesCatalogo, sesionMarketing } from "@/lib/marketing";
 import { borradorDeVersion, enlacesDeContacto, plantillasPorId, sincronizarVersiones, zonasDeBiblioteca } from "@/lib/marketing-catalogos-datos";
-import { borradorBase, cerrarGeneracionesAbandonadas, ejecutarGeneracion, ejecutarSincronizacion } from "@/lib/marketing-generacion";
+import { borradorBase, cerrarGeneracionesAbandonadas, ejecutarGeneracion, ejecutarPrecarga, ejecutarSincronizacion } from "@/lib/marketing-generacion";
 import { sincronizarBorrador, type InformeSincronizacion } from "@/lib/marketing-sincronizar";
 import { indiceDeTallas } from "@/lib/marketing-tallas-datos";
 import { convertirProductos } from "@/lib/marketing-tallas";
@@ -19,6 +20,7 @@ import {
   ALMACENES,
   armarSnapshot,
   CLAVE_PRODUCTOS,
+  claveConsultaErp,
   conZonasClicables,
   validarPaginas,
   escalaDe,
@@ -27,6 +29,15 @@ import {
   type FiltrosCatalogo,
 } from "@/lib/marketing-catalogo";
 import type { ActionResult } from "@/types";
+
+/**
+ * El host desde el que el usuario usa el sistema. Las consultas al ERP en segundo plano se llaman a la función /api/catalogo en
+ * ese mismo host (no en el dominio de los catálogos públicos, que solo sirve /<enlace>).
+ */
+async function origenDeLaPeticion(): Promise<string | undefined> {
+  const h = await headers();
+  return h.get("x-forwarded-host") ?? h.get("host") ?? undefined;
+}
 
 type EntradaFiltros = {
   tipo: string;
@@ -132,7 +143,7 @@ export async function iniciarGeneracion(input: {
   try {
     // Una a la vez: cada una consulta el ERP y arma cientos de páginas.
     await cerrarGeneracionesAbandonadas();
-    const activa = await db.execute("SELECT id, titulo FROM mk_generaciones WHERE estado = 'en_curso' LIMIT 1");
+    const activa = await db.execute("SELECT id, titulo FROM mk_generaciones WHERE estado = 'en_curso' AND modo <> 'precarga' LIMIT 1");
     if (activa.rows.length > 0) {
       return { success: false, msg: `Ya hay una generación en curso («${activa.rows[0].titulo}»); espera a que termine` };
     }
@@ -158,7 +169,8 @@ export async function iniciarGeneracion(input: {
       sql: "INSERT INTO mk_generaciones (id, titulo, filtros, created_by) VALUES (?, ?, ?, ?)",
       args: [id, titulo, JSON.stringify(filtros), sesion.id],
     });
-    after(() => ejecutarGeneracion(id));
+    const origen = await origenDeLaPeticion();
+    after(() => ejecutarGeneracion(id, origen));
     revalidatePath("/admin/marketing/catalogos");
     return { success: true, msg: "Generación iniciada", data: { id } };
   } catch (e) {
@@ -390,7 +402,7 @@ export async function iniciarSincronizacion(input: EntradaFiltros & { catalogoId
 
     // Una a la vez: cada una consulta el ERP.
     await cerrarGeneracionesAbandonadas();
-    const activa = await db.execute("SELECT id, titulo FROM mk_generaciones WHERE estado = 'en_curso' LIMIT 1");
+    const activa = await db.execute("SELECT id, titulo FROM mk_generaciones WHERE estado = 'en_curso' AND modo <> 'precarga' LIMIT 1");
     if (activa.rows.length > 0) {
       return { success: false, msg: `Ya hay una consulta al ERP en curso («${activa.rows[0].titulo}»); espera a que termine` };
     }
@@ -401,7 +413,8 @@ export async function iniciarSincronizacion(input: EntradaFiltros & { catalogoId
             VALUES (?, ?, ?, ?, 'sincronizar', ?, ?)`,
       args: [id, c.rows[0].titulo as string, JSON.stringify(base.filtros), sesion.id, input.catalogoId, version],
     });
-    after(() => ejecutarSincronizacion(id));
+    const origen = await origenDeLaPeticion();
+    after(() => ejecutarSincronizacion(id, origen));
     return { success: true, msg: "Consultando el ERP", data: { id } };
   } catch (e) {
     console.error("[marketing] iniciarSincronizacion falló:", e);
@@ -472,5 +485,36 @@ export async function cambiarEscalaTalla(id: string, escala: "peru" | "usa"): Pr
   } catch (e) {
     console.error("[marketing] cambiarEscalaTalla falló:", e);
     return { success: false, msg: "No se pudo cambiar la escala de tallas" };
+  }
+}
+
+/**
+ * Empieza a consultar el ERP con estos filtros SIN esperar: el asistente lo pide al pasar de los filtros a las plantillas, y cuando
+ * se termina de llenar «Generar» ya encuentra el resultado (vale unos minutos; el catálogo dirá la fecha en que se consultó). Si ya
+ * hay una consulta igual en curso o reciente no se repite. No cuenta como generación: no bloquea ni aparece en el historial.
+ */
+export async function precargarErp(input: { almacenes: string[]; grupos: string[]; marcas: string[]; generos: string[]; categorias: string[] }): Promise<ActionResult> {
+  if (!(await sesionMarketing())) return { success: false, msg: "Sin permisos" };
+  const base = await filtrosDeEntrada({ ...input, tipo: "", precio_min: null, precio_max: null });
+  if ("error" in base) return { success: false, msg: base.error };
+  try {
+    await cerrarGeneracionesAbandonadas();
+    // Las precargas viejas ya no sirven: fuera.
+    await db.execute("DELETE FROM mk_generaciones WHERE modo = 'precarga' AND created_at::timestamp < now_text()::timestamp - make_interval(mins => 60)");
+    const clave = claveConsultaErp(base.filtros);
+    const previa = await db.execute({
+      sql: `SELECT 1 FROM mk_generaciones WHERE modo = 'precarga' AND filtros = ? AND estado <> 'error'
+            AND created_at::timestamp > now_text()::timestamp - make_interval(mins => 10) LIMIT 1`,
+      args: [clave],
+    });
+    if (previa.rows.length > 0) return { success: true, msg: "Ya hay una consulta al ERP con estos filtros" };
+    const id = randomUUID();
+    await db.execute({ sql: "INSERT INTO mk_generaciones (id, titulo, filtros, modo) VALUES (?, 'Precarga del ERP', ?, 'precarga')", args: [id, clave] });
+    const origen = await origenDeLaPeticion();
+    after(() => ejecutarPrecarga(id, origen));
+    return { success: true, msg: "Consultando el ERP por adelantado" };
+  } catch (e) {
+    console.error("[marketing] precargarErp falló:", e);
+    return { success: false, msg: "No se pudo adelantar la consulta al ERP" };
   }
 }

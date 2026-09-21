@@ -6,7 +6,7 @@
 //   3. Final      — título, posición de la zapatilla en la plantilla y generar
 // El estado vive aquí; cada paso es una vista. El cambio de paso usa la API de View Transitions del
 // navegador (si no existe o el usuario pide menos movimiento, cambia sin animación).
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -24,7 +24,7 @@ import { PasoFinal } from "./paso-final";
 import { crearTipo } from "@/lib/actions/marketing-tipos";
 import { tallasSinEquivalencia } from "@/lib/actions/marketing-tallas";
 import type { AvisoTallas, EscalaTalla } from "@/lib/marketing-tallas";
-import { iniciarSincronizacion } from "@/lib/actions/marketing-catalogos";
+import { iniciarSincronizacion, precargarErp } from "@/lib/actions/marketing-catalogos";
 import { DialogoTipo, aEntradaTipo, tipoDesdeBorrador } from "./dialogo-tipo";
 import { GuardarComoTipo } from "./guardar-tipo";
 
@@ -149,6 +149,14 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
 
   const cambiar = useCallback((parte: Partial<DatosCatalogo>) => setDatos((d) => ({ ...d, ...parte })), []);
 
+  // Al abrir la sincronización de un catálogo, el ERP ya se consulta con sus filtros: si se dejan como están, «Consultar el ERP» no espera.
+  useEffect(() => {
+    if (!sincronizar) return;
+    void precargarErp({ categorias: datos.categorias, grupos: datos.grupos, generos: datos.generos, marcas: datos.marcas, almacenes: datos.almacenes });
+    // Solo al abrir: los filtros iniciales son los del catálogo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const sinFiltro = datos.grupos.length + datos.marcas.length + datos.generos.length + datos.categorias.length === 0;
   const puedeAvanzar = !sinFiltro && datos.almacenes.length > 0;
   // ¿Los filtros de ahora son exactamente los del tipo elegido? Si difieren en algo (por ejemplo, se agregó una marca o
@@ -193,6 +201,8 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
     setMarcasCatalogo(null);
     setSinEquivalencia(null);
     const filtros = { categorias: datos.categorias, grupos: datos.grupos, generos: datos.generos, marcas: datos.marcas };
+    // Mientras se eligen plantillas y se acomoda la zapatilla, el servidor ya consulta el ERP: «Generar» no tendrá que esperarlo.
+    void precargarErp({ ...filtros, almacenes: datos.almacenes });
     const [r, t] = await Promise.all([marcasAfectadas(filtros), tallasSinEquivalencia(filtros)]);
     setMarcasCatalogo(r.success && r.data ? r.data : []);
     setSinEquivalencia(t.success && t.data ? t.data : []);

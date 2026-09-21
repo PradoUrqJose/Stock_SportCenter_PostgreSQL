@@ -6,8 +6,10 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { consultarCatalogoErp } from "@/lib/marketing-erp";
+import type { ItemErp } from "@/lib/marketing-catalogo";
 import {
   MARCA_GENERICA,
+  claveConsultaErp,
   conFijasAutomaticas,
   construirBorrador,
   escalaDe,
@@ -38,16 +40,69 @@ async function terminar(id: string, estado: "listo" | "error", mensaje: string, 
   revalidatePath("/admin/marketing/catalogos");
 }
 
+/** Minutos que una consulta al ERP hecha por adelantado (mientras se llena el asistente) sigue valiendo. */
+const MINUTOS_PRECARGA = 10;
+
+type ConsultaEnMemoria = { items: ItemErp[]; parcial: boolean; al: string };
+
+/**
+ * La consulta al ERP con estos filtros que otra petición hizo por adelantado (ver `ejecutarPrecarga`): si ya terminó, se usa; si
+ * sigue en curso, se ESPERA a que termine (no se repite la consulta); si no hay ninguna vigente o falló, devuelve null.
+ */
+async function consultaPrecargada(filtros: FiltrosCatalogo): Promise<ConsultaEnMemoria | null> {
+  const clave = claveConsultaErp(filtros);
+  const limite = Date.now() + 200_000;
+  for (;;) {
+    const r = await db.execute({
+      sql: `SELECT estado, resultado FROM mk_generaciones
+            WHERE modo = 'precarga' AND filtros = ? AND created_at::timestamp > now_text()::timestamp - make_interval(mins => ?)
+            ORDER BY created_at DESC LIMIT 1`,
+      args: [clave, MINUTOS_PRECARGA],
+    });
+    if (r.rows.length === 0) return null;
+    const f = r.rows[0] as { estado: string; resultado: string | null };
+    if (f.estado === "listo" && f.resultado) return JSON.parse(f.resultado) as ConsultaEnMemoria;
+    if (f.estado === "error" || Date.now() > limite) return null;
+    await new Promise((res) => setTimeout(res, 1000));
+  }
+}
+
+/**
+ * Consulta el ERP por adelantado con estos filtros y deja el resultado en la fila `id` (modo «precarga»). El asistente la pide al
+ * pasar de los filtros a las plantillas: cuando se termina de llenar, «Generar» ya la tiene y no espera al ERP.
+ */
+export async function ejecutarPrecarga(id: string, origen?: string): Promise<void> {
+  try {
+    const g = await db.execute({ sql: "SELECT filtros FROM mk_generaciones WHERE id = ? AND modo = 'precarga'", args: [id] });
+    if (g.rows.length === 0) return;
+    const c = JSON.parse(g.rows[0].filtros as string) as { a: string[]; g: string[]; m: string[]; ge: string[]; c: string[] };
+    const filtros = normalizarFiltros({ almacenes: c.a, grupos: c.g, marcas: c.m, generos: c.ge, categorias: c.c });
+    const { items, parcial } = await consultarCatalogoErp(filtros, origen);
+    const resultado: ConsultaEnMemoria = { items, parcial, al: new Date().toISOString() };
+    await db.execute({ sql: "UPDATE mk_generaciones SET resultado = ?, estado = 'listo', finished_at = now_text() WHERE id = ?", args: [JSON.stringify(resultado), id] });
+  } catch (e) {
+    console.error("[marketing] precarga del ERP falló:", e);
+    try {
+      await db.execute({ sql: "UPDATE mk_generaciones SET estado = 'error', mensaje = ?, finished_at = now_text() WHERE id = ?", args: [e instanceof Error ? e.message : "No se pudo consultar el ERP", id] });
+    } catch {
+      // Sin poder registrar el error: la fila queda «en curso» y se cierra sola como abandonada.
+    }
+  }
+}
+
 /**
  * Consulta el ERP con estos filtros y arma las páginas de producto (sin portada ni páginas fijas): lo comparten la
- * generación de un catálogo nuevo y la sincronización de uno existente. Va dejando la etapa en la fila `id`.
+ * generación de un catálogo nuevo y la sincronización de uno existente. Va dejando la etapa en la fila `id`. Si el asistente
+ * ya consultó el ERP por adelantado con los mismos filtros hace poco, usa ese resultado (y la fecha en que se consultó).
  */
-async function borradorDeErp(id: string, filtros: FiltrosCatalogo): Promise<{ borrador: Borrador } | { error: string }> {
+async function borradorDeErp(id: string, filtros: FiltrosCatalogo, origen?: string): Promise<{ borrador: Borrador; consultadoAl: string } | { error: string }> {
   const plantillas = await plantillasGestion();
   if (!plantillas.some((p) => p.activa)) return { error: "No hay ninguna plantilla activa" };
 
   await etapa(id, "erp");
-  const { items, parcial } = await consultarCatalogoErp(filtros);
+  const previa = await consultaPrecargada(filtros);
+  const consulta = previa ?? { ...(await consultarCatalogoErp(filtros, origen)), al: new Date().toISOString() };
+  const { items, parcial } = consulta;
 
   await etapa(id, "armando");
   const codigos = [...new Set(items.map((i) => i.cod_universal?.trim().toUpperCase()).filter((c): c is string => Boolean(c)))];
@@ -84,17 +139,17 @@ async function borradorDeErp(id: string, filtros: FiltrosCatalogo): Promise<{ bo
     const sinPl = r.sin_plantilla ? `, ${Object.values(r.sin_plantilla).reduce((a, b) => a + b, 0)} de marcas sin plantilla (${Object.keys(r.sin_plantilla).join(", ")})` : "";
     return { error: `Ningún producto se puede mostrar: el ERP devolvió ${r.erp_items}, ${r.sin_stock} sin stock o precio${fuera}${sinPl}` };
   }
-  return { borrador: sinFijas };
+  return { borrador: sinFijas, consultadoAl: consulta.al };
 }
 
-export async function ejecutarGeneracion(id: string): Promise<void> {
+export async function ejecutarGeneracion(id: string, origen?: string): Promise<void> {
   try {
     const g = await db.execute({ sql: "SELECT titulo, filtros, created_by FROM mk_generaciones WHERE id = ?", args: [id] });
     if (g.rows.length === 0) return;
     const { titulo, filtros: crudo, created_by } = g.rows[0] as { titulo: string; filtros: string; created_by: string | null };
     const filtros = normalizarFiltros(JSON.parse(crudo));
 
-    const armado = await borradorDeErp(id, filtros);
+    const armado = await borradorDeErp(id, filtros, origen);
     if ("error" in armado) return await terminar(id, "error", armado.error);
     const sinFijas = armado.borrador;
     // Portada al inicio (la elegida o la del tipo), separadores elegidos y términos al final (se pueden quitar en el editor).
@@ -104,8 +159,8 @@ export async function ejecutarGeneracion(id: string): Promise<void> {
         separadores: filtros.separadores,
         orden: filtros.orden,
       }),
-      // Los datos de stock y precio son de este momento; el catálogo publicado lo dirá.
-      stock_al: new Date().toISOString(),
+      // Los datos de stock y precio son de cuando se consultó el ERP; el catálogo publicado lo dirá.
+      stock_al: armado.consultadoAl,
     };
 
     await etapa(id, "guardando");
@@ -142,7 +197,7 @@ export async function ejecutarGeneracion(id: string): Promise<void> {
  * editados) y deja en la fila el resultado y el informe de cambios contra el borrador que se está actualizando.
  * NO modifica el catálogo: eso lo hace `aplicarSincronizacion`, cuando Marketing revisa el informe.
  */
-export async function ejecutarSincronizacion(id: string): Promise<void> {
+export async function ejecutarSincronizacion(id: string, origen?: string): Promise<void> {
   let catalogoId: string | null = null;
   try {
     const g = await db.execute({ sql: "SELECT filtros, base_catalogo_id, base_version FROM mk_generaciones WHERE id = ? AND modo = 'sincronizar'", args: [id] });
@@ -152,7 +207,7 @@ export async function ejecutarSincronizacion(id: string): Promise<void> {
     catalogoId = base_catalogo_id;
     const filtros = normalizarFiltros(JSON.parse(crudo));
 
-    const armado = await borradorDeErp(id, filtros);
+    const armado = await borradorDeErp(id, filtros, origen);
     if ("error" in armado) {
       // Con el ERP vacío o sin respuesta NO se sincroniza: se quitaría todo el catálogo.
       return await terminar(id, "error", `${armado.error}. No se cambió nada del catálogo.`, base_catalogo_id);
@@ -162,7 +217,7 @@ export async function ejecutarSincronizacion(id: string): Promise<void> {
     await etapa(id, "guardando");
     const actual = await borradorBase(base_catalogo_id, base_version);
     if (!actual) return await terminar(id, "error", "La versión que se iba a sincronizar ya no existe", base_catalogo_id);
-    const al = new Date().toISOString();
+    const al = armado.consultadoAl;
     const { informe } = sincronizarBorrador(actual, fresco, al);
     await db.execute({ sql: "UPDATE mk_generaciones SET resultado = ? WHERE id = ?", args: [JSON.stringify({ al, fresco, informe }), id] });
     await terminar(

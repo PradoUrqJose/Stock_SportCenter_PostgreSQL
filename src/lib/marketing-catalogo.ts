@@ -854,6 +854,15 @@ export const PRESUPUESTO_CONSULTA_ERP_S = 150;
 /** Cuánto más puede traer el ERP que lo que cuenta el sistema (que puede no conocer aún productos nuevos). */
 const MARGEN_CONTEO = 1.3;
 
+/**
+ * Identifica una consulta al ERP: solo cuentan los filtros que le llegan (almacenes, grupos, marcas, géneros y categorías);
+ * la talla y el precio se aplican después, sobre lo que devuelve. Dos catálogos con la misma clave piden lo mismo al ERP.
+ */
+export function claveConsultaErp(f: { almacenes: readonly string[]; grupos: readonly string[]; marcas: readonly string[]; generos: readonly string[]; categorias: readonly string[] }): string {
+  const orden = (l: readonly string[]) => [...l].map((x) => x.trim().toUpperCase()).sort();
+  return JSON.stringify({ a: orden(f.almacenes), g: orden(f.grupos), m: orden(f.marcas), ge: orden(f.generos), c: orden(f.categorias) });
+}
+
 /** El valor que espera el filtro de marca del ERP: el nombre SIN espacios («NEW BALANCE» se pide como «NEWBALANCE»). */
 export const valorMarcaErp = (marca: string): string => marca.replace(/\s+/g, "");
 
