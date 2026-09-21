@@ -9,7 +9,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import Link from "next/link";
-import { Check, ChevronRight, Settings2, X } from "lucide-react";
+import { Check, ChevronRight, Plus, Settings2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,8 @@ import { cn } from "@/lib/utils";
 import { documentoDelCatalogo } from "./documento-catalogo";
 import { PasoPlantillas } from "./paso-plantillas";
 import { PasoFinal } from "./paso-final";
+import { crearTipo } from "@/lib/actions/marketing-tipos";
+import { DialogoTipo, aEntradaTipo, tipoDesdeBorrador } from "./dialogo-tipo";
 import { GuardarComoTipo } from "./guardar-tipo";
 
 export type Opciones = { marcas: string[]; grupos: string[]; generos: string[]; categorias: string[]; tallas: string[] };
@@ -112,6 +114,8 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
   const [marcasCatalogo, setMarcasCatalogo] = useState<MarcaAfectada[] | null>(null);
   // Tipos disponibles: los de la base de datos más los que se guarden desde este asistente.
   const [tipos, setTipos] = useState<TipoCatalogo[]>(recursos.tipos);
+  // «＋ Nuevo tipo»: formulario completo para crear un tipo sin salir del asistente.
+  const [creandoTipo, setCreandoTipo] = useState(false);
 
   const cambiar = useCallback((parte: Partial<DatosCatalogo>) => setDatos((d) => ({ ...d, ...parte })), []);
 
@@ -131,10 +135,14 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
     mismo(datos.tallas, tipoElegido.tallas) &&
     numDe(datos.precioMin) === tipoElegido.precio_min &&
     numDe(datos.precioMax) === tipoElegido.precio_max;
-  const nombreSugerido = [datos.marcas[0], datos.generos.length === 1 ? datos.generos[0] : "", datos.grupos.length === 1 ? datos.grupos[0] : ""]
+  // Nombre que se sugiere para un tipo nuevo: marca, género, grupo y talla de los filtros; nunca igual a uno que ya existe.
+  const partes = [datos.marcas[0], datos.generos.length === 1 ? datos.generos[0] : "", datos.grupos.length === 1 ? datos.grupos[0] : ""]
     .filter(Boolean)
     .map((x) => x.charAt(0) + x.slice(1).toLowerCase())
     .join(" ");
+  const conTalla = datos.tallas.length > 0 && datos.tallas.length <= 3 ? `${partes} talla ${datos.tallas.join("/")}`.trim() : partes;
+  const candidato = conTalla || (tipoElegido ? tipoElegido.nombre : "");
+  const nombreSugerido = candidato && tipos.some((t) => t.nombre.toLowerCase() === candidato.toLowerCase()) ? `${candidato} personalizado` : candidato;
 
   /** Cambia de paso con una transición de deslizamiento (si el navegador y el usuario lo permiten). */
   const ir = useCallback(
@@ -175,6 +183,17 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
       ...(t.precio_min != null ? { precioMin: String(t.precio_min) } : {}),
       ...(t.precio_max != null ? { precioMax: String(t.precio_max) } : {}),
       // El título se sugiere mientras no se haya escrito uno propio.
+      ...(datos.titulo.trim() === "" || datos.titulo === datos.tituloSugerido ? { titulo: sugerido, tituloSugerido: sugerido } : {}),
+    });
+  }
+  // Un tipo recién guardado se agrega a la lista y queda elegido con los mismos filtros. Desde el paso Plantillas
+  // (`conservar`) no se toca la portada ni los separadores que ya se hayan elegido.
+  function usarTipoGuardado(t: TipoCatalogo, conservar = false) {
+    setTipos((ts) => [...ts, t]);
+    const sugerido = `${t.nombre} — ${mesYAnio()}`;
+    cambiar({
+      tipo: t.id,
+      ...(conservar ? {} : { portada: undefined, separadores: [] }),
       ...(datos.titulo.trim() === "" || datos.titulo === datos.tituloSugerido ? { titulo: sugerido, tituloSugerido: sugerido } : {}),
     });
   }
@@ -255,6 +274,16 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
                       <span className="mt-0.5 block text-xs text-muted-foreground">{t.descripcion || "Tipo personalizado"}</span>
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => setCreandoTipo(true)}
+                    className="flex flex-col items-start justify-center rounded-xl border border-dashed border-foreground/40 px-4 py-3 text-left transition-all duration-300 hover:-translate-y-0.5 hover:bg-muted/50"
+                  >
+                    <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                      <Plus className="h-4 w-4" /> Nuevo tipo
+                    </span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">Crea uno con tus propios filtros y déjalo guardado</span>
+                  </button>
                 </div>
                 <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                   <span>{datos.tipo ? "Los filtros de abajo se llenaron solos y puedes ajustarlos." : "Sin tipo: elige los filtros a mano."}</span>
@@ -292,11 +321,7 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
                     <GuardarComoTipo
                       filtros={datos}
                       nombreSugerido={nombreSugerido}
-                      alGuardar={(t) => {
-                        setTipos((ts) => [...ts, t]);
-                        // El tipo nuevo queda elegido con los mismos filtros; la portada se decide en el paso siguiente.
-                        cambiar({ tipo: t.id, portada: undefined, separadores: [], ...(datos.titulo.trim() === "" || datos.titulo === datos.tituloSugerido ? { titulo: `${t.nombre} — ${mesYAnio()}`, tituloSugerido: `${t.nombre} — ${mesYAnio()}` } : {}) });
-                      }}
+                      alGuardar={(t) => usarTipoGuardado(t)}
                     />
                     <span className="text-xs text-muted-foreground">Guarda estos filtros para volver a usarlos con un clic.</span>
                   </div>
@@ -328,7 +353,37 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
         )}
 
         {paso === "plantillas" && (
-          <PasoPlantillas recursos={recursos} datos={datos} cambiar={cambiar} marcasCatalogo={marcasCatalogo} documento={documento} alVolver={() => ir("filtros")} alAvanzar={() => ir("final")} />
+          <PasoPlantillas
+            recursos={recursos}
+            datos={datos}
+            cambiar={cambiar}
+            marcasCatalogo={marcasCatalogo}
+            documento={documento}
+            nombreSugerido={nombreSugerido}
+            alGuardarTipo={(t) => usarTipoGuardado(t, true)}
+            alVolver={() => ir("filtros")}
+            alAvanzar={() => ir("final")}
+          />
+        )}
+
+        {creandoTipo && (
+          <DialogoTipo
+            titulo="Nuevo tipo de catálogo"
+            // Parte de los filtros que ya elegiste; se pueden cambiar en el formulario.
+            inicial={{ nombre: nombreSugerido, descripcion: "", categorias: datos.categorias, grupos: datos.grupos, generos: datos.generos, marcas: datos.marcas, tallas: datos.tallas, precioMin: datos.precioMin, precioMax: datos.precioMax }}
+            opciones={opciones}
+            alGuardar={async (b) => {
+              const r = await crearTipo(aEntradaTipo(b));
+              if (r.success && r.data) {
+                const t = tipoDesdeBorrador(r.data.id, b);
+                usarTipoGuardado(t);
+                // El tipo nuevo manda: los filtros del asistente quedan como él los definió.
+                cambiar({ categorias: t.categorias, grupos: t.grupos, generos: t.generos, marcas: t.marcas, tallas: t.tallas, precioMin: b.precioMin, precioMax: b.precioMax });
+              }
+              return r;
+            }}
+            alCerrar={() => setCreandoTipo(false)}
+          />
         )}
 
         {paso === "final" && <PasoFinal recursos={recursos} datos={datos} cambiar={cambiar} documento={documento} alVolver={() => ir("plantillas")} />}

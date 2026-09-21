@@ -2,18 +2,21 @@
 
 // Paso 2 del asistente: SOLO lo que corresponde a los filtros elegidos. Qué plantilla usa cada marca del
 // catálogo (la predeterminada o la que se elija), y qué portada, separadores y cierres lleva el documento.
-// Subir o administrar diseños se hace desde Catálogos → Subir diseños / Diseños.
+// Aquí mismo se puede subir una portada o la plantilla de una marca (queda elegida al terminar); para muchos archivos
+// a la vez, Catálogos → Subir diseños; para administrarlos, Diseños.
 import { useState } from "react";
-import { AlertTriangle, ChevronLeft, ChevronRight, ExternalLink, Eye } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, ExternalLink, Eye, Plus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { MarcaAfectada } from "@/lib/actions/marketing-disenos";
-import { MARCA_GENERICA, type FijaBiblioteca } from "@/lib/marketing-catalogo";
+import { MARCA_GENERICA, type FijaBiblioteca, type TipoCatalogo } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
 import type { DatosCatalogo, Recursos } from "./asistente-catalogo";
 import type { DocumentoCatalogo } from "./documento-catalogo";
+import { GuardarComoTipo } from "./guardar-tipo";
 import { PreviewPlantillas } from "./preview-plantillas";
+import { SubirDisenoAqui, type DestinoSubida } from "./subir-diseno-aqui";
 
 const SELECT =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
@@ -24,6 +27,8 @@ export function PasoPlantillas({
   cambiar,
   marcasCatalogo,
   documento,
+  nombreSugerido,
+  alGuardarTipo,
   alVolver,
   alAvanzar,
 }: {
@@ -32,12 +37,18 @@ export function PasoPlantillas({
   cambiar: (parte: Partial<DatosCatalogo>) => void;
   marcasCatalogo: MarcaAfectada[] | null;
   documento: DocumentoCatalogo;
+  /** Nombre que se sugiere al guardar los filtros como tipo. */
+  nombreSugerido: string;
+  /** Un tipo recién guardado desde aquí: el asistente lo agrega y lo deja elegido. */
+  alGuardarTipo: (tipo: TipoCatalogo) => void;
   alVolver: () => void;
   alAvanzar: () => void;
 }) {
   const { base, plantillas } = recursos;
   const [grande, setGrande] = useState<{ src: string; titulo: string } | null>(null);
   const [preview, setPreview] = useState(false);
+  // Diseño que se está subiendo desde aquí (portada o plantilla de una marca).
+  const [subir, setSubir] = useState<DestinoSubida | null>(null);
 
   const activas = plantillas.filter((p) => p.activa);
   const propias = (m: string) => activas.filter((p) => p.marca === m);
@@ -113,6 +124,9 @@ export function PasoPlantillas({
                           </option>
                         ))}
                       </select>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setSubir({ clase: "plantilla", marca: m.marca })} aria-label={`Subir otra plantilla de ${m.marca}`}>
+                        <Upload data-icon="inline-start" /> Subir otra
+                      </Button>
                       {(() => {
                         const p = lista.find((x) => x.id === elegida(m.marca));
                         return p ? (
@@ -124,11 +138,21 @@ export function PasoPlantillas({
                       })()}
                     </div>
                   ) : hayGenerica ? (
-                    <span className="text-xs text-muted-foreground">Usa la plantilla genérica</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Usa la plantilla genérica</span>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setSubir({ clase: "plantilla", marca: m.marca })}>
+                        <Upload data-icon="inline-start" /> Subir plantilla de {m.marca}
+                      </Button>
+                    </div>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
-                      <AlertTriangle className="h-3.5 w-3.5" /> Sin plantilla: estos productos no entrarán
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                        <AlertTriangle className="h-3.5 w-3.5" /> Sin plantilla: estos productos no entrarán
+                      </span>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setSubir({ clase: "plantilla", marca: m.marca })}>
+                        <Upload data-icon="inline-start" /> Subir plantilla de {m.marca}
+                      </Button>
+                    </div>
                   )}
                 </li>
               );
@@ -141,8 +165,11 @@ export function PasoPlantillas({
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span className="min-w-0 flex-1">
               {productosSin.toLocaleString("en-US")} productos de {documento.sinPlantilla.length} marca(s) no tienen plantilla ({documento.sinPlantilla.slice(0, 4).map((m) => m.marca).join(", ")}
-              {documento.sinPlantilla.length > 4 ? "…" : ""}). Falta la plantilla genérica: súbela en Catálogos → Subir diseños (archivo <code>PLANTILLA GENERICA</code>).
+              {documento.sinPlantilla.length > 4 ? "…" : ""}). Sube la plantilla de cada marca, o una genérica que se use con todas las que no tengan la suya.
             </span>
+            <Button type="button" variant="outline" size="sm" onClick={() => setSubir({ clase: "plantilla", marca: MARCA_GENERICA })}>
+              <Upload data-icon="inline-start" /> Subir genérica
+            </Button>
             <a href="/admin/marketing/catalogos/disenos" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium underline underline-offset-2">
               Ver diseños <ExternalLink className="h-3 w-3" />
             </a>
@@ -163,10 +190,23 @@ export function PasoPlantillas({
           </p>
           {documento.portada && documento.portada.zonas?.length === 0 && (
             <p className="mb-2 rounded-md bg-amber-100 px-2.5 py-1.5 text-xs text-amber-900 dark:bg-amber-500/15 dark:text-amber-300">
-              «{documento.portada.nombre}» no tiene enlaces clicables: en este catálogo los clientes no podrán tocar WhatsApp ni las redes de la portada. Se dibujan en Diseños → Zonas clicables.
+              «{documento.portada.nombre}» no tiene enlaces clicables: en este catálogo los clientes no podrán tocar WhatsApp ni las redes de la portada. Se dibujan en{" "}
+              <a href="/admin/marketing/catalogos/disenos" target="_blank" rel="noreferrer" className="font-medium underline underline-offset-2">
+                Diseños → Zonas clicables
+              </a>{" "}
+              (se abre en otra pestaña: aquí no pierdes nada).
             </p>
           )}
           <ul className="flex flex-wrap gap-3">
+            <li className="w-40">
+              <button
+                type="button"
+                onClick={() => setSubir({ clase: "portada" })}
+                className="flex aspect-video w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-foreground/40 text-xs font-medium text-foreground transition-all hover:-translate-y-0.5 hover:bg-muted/50"
+              >
+                <Plus className="h-4 w-4" /> Subir portada
+              </button>
+            </li>
             <li className="w-40">
               <button
                 type="button"
@@ -247,6 +287,21 @@ export function PasoPlantillas({
           {grande && <img src={grande.src} alt={grande.titulo} className="w-full rounded-md border border-border" />}
         </DialogContent>
       </Dialog>
+
+      {subir && (
+        <SubirDisenoAqui
+          key={subir.clase === "plantilla" ? `p-${subir.marca}` : "portada"}
+          destino={subir}
+          existentes={subir.clase === "portada" ? recursos.fijas.filter((f) => f.tipo === "portada").map((f) => f.nombre) : plantillas.filter((p) => p.marca === subir.marca).map((p) => p.nombre)}
+          tipo={(() => {
+            const t = recursos.tipos.find((x) => x.id === datos.tipo);
+            return t ? { id: t.id, nombre: t.nombre } : null;
+          })()}
+          slotTipo={<GuardarComoTipo filtros={datos} nombreSugerido={nombreSugerido} alGuardar={alGuardarTipo} />}
+          alSubir={({ id }) => cambiar(subir.clase === "portada" ? { portada: id } : { plantillas: { ...datos.plantillas, [subir.marca]: id } })}
+          alCerrar={() => setSubir(null)}
+        />
+      )}
 
       {preview && (
         <PreviewPlantillas
