@@ -102,6 +102,7 @@ export function PasoFinal({
         marcas: datos.marcas,
         generos: datos.generos,
         categorias: datos.categorias,
+        tallas: datos.tallas,
         precio_min: min !== null && Number.isNaN(min) ? null : min,
         precio_max: max !== null && Number.isNaN(max) ? null : max,
         plantillas: datos.plantillas,

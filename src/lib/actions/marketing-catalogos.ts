@@ -10,9 +10,10 @@ import { borradorDeVersion, enlacesDeContacto, plantillasPorId, sincronizarVersi
 import { cerrarGeneracionesAbandonadas, ejecutarGeneracion } from "@/lib/marketing-generacion";
 import { generarImagenCompartir } from "@/lib/marketing-og";
 import { etiquetaCatalogo } from "@/lib/marketing-publico";
+import { idsDeTipos } from "@/lib/marketing-tipos";
+import { precioFiltro, valoresFiltro, valoresTalla } from "@/lib/marketing-validar";
 import {
   ALMACENES,
-  TIPOS_CATALOGO,
   armarSnapshot,
   conZonasClicables,
   validarPaginas,
@@ -20,27 +21,6 @@ import {
   type FiltrosCatalogo,
 } from "@/lib/marketing-catalogo";
 import type { ActionResult } from "@/types";
-
-const TEXTO_FILTRO = /^[A-Z0-9ÁÉÍÓÚÑ&./ -]{1,40}$/;
-
-/** Lista de valores de filtro validada (datos del navegador); null si algo no es válido. */
-function valoresFiltro(v: unknown): string[] | null {
-  if (!Array.isArray(v) || v.length > 60) return null;
-  const salida = new Set<string>();
-  for (const x of v) {
-    if (typeof x !== "string") return null;
-    const t = x.trim().toUpperCase();
-    if (!TEXTO_FILTRO.test(t)) return null;
-    salida.add(t);
-  }
-  return [...salida];
-}
-
-function precioFiltro(v: unknown): number | null | undefined {
-  if (v === null || v === undefined || v === "") return null;
-  if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 100_000) return undefined;
-  return v;
-}
 
 /**
  * Pide generar un catálogo y responde al instante: el trabajo (consultar el
@@ -55,6 +35,8 @@ export async function iniciarGeneracion(input: {
   marcas: string[];
   generos: string[];
   categorias: string[];
+  /** Tallas (escala USA del ERP); vacío = sin filtro. Entra el producto con stock en alguna. */
+  tallas?: string[];
   precio_min: number | null;
   precio_max: number | null;
   /** Plantilla elegida por marca (marca → id); la clave «*» es la genérica. */
@@ -78,13 +60,16 @@ export async function iniciarGeneracion(input: {
   if (!almacenes || almacenes.length === 0) return { success: false, msg: "Elige al menos un almacén" };
   if (!grupos || !marcas || !generos || !categorias) return { success: false, msg: "Filtro con caracteres no válidos" };
 
+  const tallas = valoresTalla(input.tallas ?? []);
+  if (!tallas) return { success: false, msg: "Talla con caracteres no válidos" };
+
   const precio_min = precioFiltro(input.precio_min);
   const precio_max = precioFiltro(input.precio_max);
   if (precio_min === undefined || precio_max === undefined) return { success: false, msg: "El precio debe ser un número válido" };
   if (precio_min != null && precio_max != null && precio_min > precio_max) {
     return { success: false, msg: "El precio mínimo no puede ser mayor que el máximo" };
   }
-  const tipo = TIPOS_CATALOGO.some((t) => t.id === input.tipo) ? input.tipo : "";
+  const tipo = (await idsDeTipos()).has(input.tipo) ? input.tipo : "";
 
   // Plantillas elegidas por marca: solo se aceptan pares con formato de marca e id (el resto lo valida la generación).
   const plantillas: Record<string, string> = {};
@@ -120,6 +105,7 @@ export async function iniciarGeneracion(input: {
       marcas,
       generos,
       categorias,
+      tallas,
       precio_min,
       precio_max,
       plantillas,

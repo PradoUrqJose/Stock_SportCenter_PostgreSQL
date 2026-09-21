@@ -4,6 +4,7 @@ import { ChevronRight, ChevronLeft } from "lucide-react";
 import { db } from "@/lib/db";
 import { enlacesCatalogo, requireMarketing } from "@/lib/marketing";
 import { fechaLima, normalizarFiltros, textoFiltros, type Borrador } from "@/lib/marketing-catalogo";
+import { tiposCatalogo } from "@/lib/marketing-tipos";
 import { EnlaceCatalogo, PublicarCatalogo } from "@/components/admin/marketing/acciones-catalogo";
 
 type Catalogo = {
@@ -51,7 +52,7 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
   const paginasVigentes = versiones.find((x) => x.version === cat.version_publicada)?.paginas ?? r.paginas;
   const enlaces = cat.version_publicada ? await enlacesCatalogo(cat.slug) : null;
 
-  const filtrosTexto = textoFiltros(filtros);
+  const filtrosTexto = textoFiltros(filtros, await tiposCatalogo());
 
   return (
     <div className="p-4 md:p-8">
@@ -93,6 +94,12 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
       {r.fuera_de_precio !== undefined && (
         <p className="mb-6 text-xs text-muted-foreground">
           {r.fuera_de_precio.toLocaleString("en-US")} fila(s) del ERP quedaron fuera del rango de precio pedido.
+        </p>
+      )}
+
+      {r.fuera_de_talla !== undefined && (
+        <p className="mb-6 text-xs text-muted-foreground">
+          {r.fuera_de_talla.toLocaleString("en-US")} fila(s) del ERP quedaron fuera por no tener stock en las tallas pedidas.
         </p>
       )}
 

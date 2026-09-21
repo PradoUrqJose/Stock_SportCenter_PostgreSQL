@@ -5,7 +5,8 @@ import { db } from "@/lib/db";
 import { sesionMarketing } from "@/lib/marketing";
 import { r2Configurado, r2Subir } from "@/lib/r2";
 import { MAX_BYTES_IMAGEN } from "@/lib/marketing-codigos";
-import { MARCA_GENERICA, TIPOS_IDS } from "@/lib/marketing-catalogo";
+import { MARCA_GENERICA } from "@/lib/marketing-catalogo";
+import { idsDeTipos } from "@/lib/marketing-tipos";
 import { plantillasGestion } from "@/lib/marketing-catalogos-datos";
 import { claveNombre } from "@/lib/marketing-disenos-nombres";
 
@@ -14,7 +15,6 @@ export const maxDuration = 30;
 const error = (mensaje: string, status: number) => NextResponse.json({ error: mensaje }, { status });
 const TIPOS_IMAGEN = new Set(["image/webp", "image/png", "image/jpeg"]);
 const TIPOS_FIJA = new Set(["portada", "separador", "cierre", "otra"]);
-const TIPOS_CATALOGO = new Set([...TIPOS_IDS, "*"]);
 const ANCHO = 2000;
 const CACHE = "public, max-age=31536000, immutable";
 
@@ -103,7 +103,8 @@ export async function POST(req: NextRequest) {
       const tipoFija = q.get("tipo") ?? "";
       if (!TIPOS_FIJA.has(tipoFija)) return error("Tipo de página no válido", 400);
       const aplica = (q.get("aplica") ?? "").split(",").map((t) => t.trim()).filter(Boolean);
-      if (!aplica.every((t) => TIPOS_CATALOGO.has(t))) return error("Tipo de catálogo no válido", 400);
+      const tiposValidos = new Set([...(await idsDeTipos()), "*"]);
+      if (!aplica.every((t) => tiposValidos.has(t))) return error("Tipo de catálogo no válido", 400);
       const posicion = q.get("posicion") ?? "";
       if (!["", "inicio", "final"].includes(posicion)) return error("Posición no válida", 400);
       if (posicion !== "" && aplica.length === 0) return error("Elige en qué catálogos se usa antes de fijar su posición", 400);

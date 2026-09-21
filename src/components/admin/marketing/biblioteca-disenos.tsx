@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { activarDiseno, guardarUsoFija, marcarPredeterminada } from "@/lib/actions/marketing-disenos";
-import { MARCA_GENERICA, TIPOS_CATALOGO, type Enlaces, type FijaBiblioteca, type PlantillaLista, type ZonaEnlace } from "@/lib/marketing-catalogo";
+import { MARCA_GENERICA, type Enlaces, type FijaBiblioteca, type PlantillaLista, type ZonaEnlace } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
 import { AccionMini, TarjetaDiseno } from "./tarjeta-diseno";
 import { EditorZonas } from "./editor-zonas";
@@ -20,10 +20,11 @@ const TIPOS_FIJA: { tipo: FijaBiblioteca["tipo"]; plural: string }[] = [
   { tipo: "cierre", plural: "Cierres (términos, redes)" },
   { tipo: "otra", plural: "Otras" },
 ];
-const USOS = [{ valor: "", texto: "A mano" }, ...TIPOS_CATALOGO.map((t) => ({ valor: t.id as string, texto: t.nombre as string })), { valor: "*", texto: "Todos" }];
+/** Opciones de «dónde se usa» una página fija: a mano, cada tipo de catálogo (de fábrica y personalizados) o todos. */
+const usosDe = (tipos: readonly { id: string; nombre: string }[]) => [{ valor: "", texto: "A mano" }, ...tipos.map((t) => ({ valor: t.id, texto: t.nombre })), { valor: "*", texto: "Todos" }];
 const etiquetaMarca = (m: string) => (m === MARCA_GENERICA ? "Genérica (sin marca)" : m);
 
-function textoUso(f: FijaBiblioteca): string | false {
+function textoUso(f: FijaBiblioteca, USOS: { valor: string; texto: string }[]): string | false {
   if (!f.auto_tipo) return false;
   const tipos = f.auto_tipo.split(",").map((t) => USOS.find((u) => u.valor === t)?.texto ?? t).join(", ");
   return f.auto_posicion ? `${tipos} · ${f.auto_posicion === "inicio" ? "al inicio" : "al final"}` : `${tipos} · sugerida`;
@@ -35,13 +36,17 @@ export function BibliotecaDisenos({
   fijas,
   marcas,
   enlaces,
+  tipos,
 }: {
   base: string;
   plantillas: PlantillaLista[];
   fijas: (FijaBiblioteca & { activa: boolean; zonas: ZonaEnlace[] })[];
   marcas: string[];
   enlaces: Enlaces;
+  /** Tipos de catálogo (de fábrica y personalizados) a los que se puede asociar una página. */
+  tipos: { id: string; nombre: string }[];
 }) {
+  const USOS = usosDe(tipos);
   const router = useRouter();
   const [, iniciar] = useTransition();
   const [grande, setGrande] = useState<{ src: string; titulo: string } | null>(null);
@@ -66,7 +71,7 @@ export function BibliotecaDisenos({
         <p className="max-w-2xl text-sm text-muted-foreground">
           Todos los diseños de Marketing. Al crear un catálogo, el asistente usa solo los que corresponden a sus filtros. Toca un diseño para verlo en grande.
         </p>
-        <SubirDisenosMasivo marcas={marcas} />
+        <SubirDisenosMasivo marcas={marcas} tipos={tipos} />
       </div>
 
       <EnlacesContacto inicial={enlaces} />
@@ -118,7 +123,7 @@ export function BibliotecaDisenos({
                     <TarjetaDiseno
                       src={`${base}/${f.imagen}-min.webp`}
                       nombre={f.nombre}
-                      insignias={[textoUso(f), f.zonas.length > 0 && `${f.zonas.length} enlace${f.zonas.length === 1 ? "" : "s"}`, !f.activa && "Inactiva"]}
+                      insignias={[textoUso(f, USOS), f.zonas.length > 0 && `${f.zonas.length} enlace${f.zonas.length === 1 ? "" : "s"}`, !f.activa && "Inactiva"]}
                       alAbrir={() => setGrande({ src: `${base}/${f.imagen}.webp`, titulo: f.nombre })}
                     >
                       <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
