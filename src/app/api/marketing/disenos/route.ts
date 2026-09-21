@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
 
       // Mismo diseño = mismo nombre sin contar tildes, mayúsculas ni símbolos.
       // El separador de marca es único por marca (con cualquier nombre).
-      const delTipo = await db.execute({ sql: "SELECT id, nombre, to_jsonb(mk_paginas_fijas) ->> 'marca' AS marca FROM mk_paginas_fijas WHERE tipo = ?", args: [tipoFija] });
+      const delTipo = await db.execute({ sql: "SELECT id, nombre, marca FROM mk_paginas_fijas WHERE tipo = ?", args: [tipoFija] });
       const previa = delTipo.rows.find((r) => (deMarca ? (r.marca as string | null) === marcaFija : claveNombre(r.nombre as string) === claveNombre(nombre)));
       const existente = { rows: previa ? [previa] : [] };
       const id = (previa?.id as string | undefined) ?? (deMarca ? `separador-${slug(marcaFija)}-${hash}` : `${slug(nombre)}-${hash}`).slice(0, 60);
@@ -133,11 +133,10 @@ export async function POST(req: NextRequest) {
         await db.execute({ sql: "UPDATE mk_paginas_fijas SET imagen = ?, ancho = ?, alto = ?, activa = 1 WHERE id = ?", args: [clave, info.width, info.height, id] });
         return NextResponse.json({ id, reemplazo: true });
       }
-      // La columna `marca` (migración 016) solo se toca en los separadores de marca.
       await db.execute({
-        sql: `INSERT INTO mk_paginas_fijas (id, nombre, tipo, imagen, ancho, alto, auto_tipo, auto_posicion, ${deMarca ? "marca, " : ""}orden)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${deMarca ? "?, " : ""}(SELECT COALESCE(MAX(orden), 0) + 1 FROM mk_paginas_fijas))`,
-        args: [id, nombre, tipoFija, clave, info.width, info.height, aplica.length > 0 ? aplica.join(",") : null, posicion || null, ...(deMarca ? [marcaFija] : [])],
+        sql: `INSERT INTO mk_paginas_fijas (id, nombre, tipo, imagen, ancho, alto, auto_tipo, auto_posicion, marca, orden)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(orden), 0) + 1 FROM mk_paginas_fijas))`,
+        args: [id, nombre, tipoFija, clave, info.width, info.height, aplica.length > 0 ? aplica.join(",") : null, posicion || null, deMarca ? marcaFija : null],
       });
       return NextResponse.json({ id, reemplazo: false });
     }
