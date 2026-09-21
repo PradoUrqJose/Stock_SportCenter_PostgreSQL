@@ -18,7 +18,7 @@ type Catalogo = {
   version_publicada: number | null;
   created_at: string;
 };
-type Version = { version: number; paginas: number; publicado_at: string; nombre: string | null; con_cambios: boolean };
+type Version = { version: number; paginas: number; publicado_at: string; nombre: string | null; con_cambios: boolean; sin_imagen: number };
 
 function Dato({ etiqueta, valor, nota }: { etiqueta: string; valor: string; nota?: string }) {
   return (
@@ -45,13 +45,18 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
   const r = borrador.resumen;
 
   const v = await db.execute({
-    sql: `SELECT v.version, v.paginas, v.publicado_at, u.nombre, (v.borrador IS NOT NULL) AS con_cambios
+    // `sin_imagen`: productos de esa versión publicada cuya imagen faltaba (versión de imagen 0): su zapatilla sale vacía.
+    sql: `SELECT v.version, v.paginas, v.publicado_at, u.nombre, (v.borrador IS NOT NULL) AS con_cambios,
+                 (SELECT COUNT(DISTINCT e->>'cod')::int FROM jsonb_array_elements(v.snapshot::jsonb->'productos') e WHERE (e->>'v')::int = 0) AS sin_imagen
           FROM mk_catalogo_versiones v LEFT JOIN users u ON u.id = v.publicado_por
           WHERE v.catalogo_id = ? ORDER BY v.version DESC`,
     args: [id],
   });
   const versiones = v.rows as unknown as Version[];
-  const paginasVigentes = versiones.find((x) => x.version === cat.version_publicada)?.paginas ?? r.paginas;
+  const vigente = versiones.find((x) => x.version === cat.version_publicada);
+  const paginasVigentes = vigente?.paginas ?? r.paginas;
+  // Por agregar imagen: lo que tiene la versión vigente hoy (no lo que había al generar: desde entonces se pudieron subir).
+  const porAgregarImagen = vigente ? vigente.sin_imagen : r.sin_imagen.length;
   const enlaces = cat.version_publicada ? await enlacesCatalogo(cat.slug) : null;
 
   const filtrosTexto = textoFiltros(filtros, await tiposCatalogo());
@@ -77,7 +82,11 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Dato etiqueta="Páginas" valor={paginasVigentes.toLocaleString("en-US")} nota={`Una por producto y género, ordenadas por marca${r.fijas ? ` · incluye ${r.fijas} fija(s)` : ""}`} />
-        <Dato etiqueta="Sin imagen" valor={r.sin_imagen.length.toLocaleString("en-US")} nota="No entran al catálogo" />
+        <Dato
+          etiqueta="Por agregar imagen"
+          valor={porAgregarImagen.toLocaleString("en-US")}
+          nota={porAgregarImagen > 0 ? "Entran como páginas vacías: súbeles la imagen en el editor" : "Todos los productos tienen imagen"}
+        />
         <Dato etiqueta="Sin stock o precio" valor={r.sin_stock.toLocaleString("en-US")} nota="No entran al catálogo" />
         {r.multi_genero === undefined ? (
           // Catálogos generados antes de «una página por género»: se conservó una sola fila por código.
@@ -91,6 +100,17 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
         )}
       </div>
 
+      {r.consulta_parcial && (
+        <p className="mb-6 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+          Este catálogo es tan grande que el ERP se consultó por marca. Si el ERP tiene una marca que STOCK todavía no conoce, sus productos pudieron quedar fuera: actualiza
+          STOCK y vuelve a sincronizar.
+        </p>
+      )}
+      {(r.sin_explicar ?? 0) !== 0 && (
+        <p className="mb-6 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {Math.abs(r.sin_explicar ?? 0).toLocaleString("en-US")} fila(s) del ERP no cuadran con lo contado (ni entraron ni tienen motivo de descarte). Avísale a quien mantiene el sistema.
+        </p>
+      )}
       {r.sin_plantilla && (
         <p className="mb-6 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
           Quedaron fuera por no tener plantilla de su marca:{" "}
@@ -114,7 +134,7 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
 
       {r.sin_imagen.length > 0 && (
         <details className="mb-6 rounded-lg border border-border px-4 py-3 text-sm">
-          <summary className="cursor-pointer font-medium text-foreground">Ver códigos sin imagen ({r.sin_imagen.length})</summary>
+          <summary className="cursor-pointer font-medium text-foreground">Ver códigos que entraron sin imagen al generar ({r.sin_imagen.length})</summary>
           <p className="mt-2 break-words font-mono text-xs text-muted-foreground">
             {r.sin_imagen.slice(0, 200).join(", ")}
             {r.sin_imagen.length > 200 && ` … y ${r.sin_imagen.length - 200} más`}
@@ -170,6 +190,11 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
                   v{x.version}
                   {x.version === cat.version_publicada && (
                     <span className="rounded-full bg-green-500/15 px-2 py-0.5 text-xs text-green-700 dark:text-green-400">vigente</span>
+                  )}
+                  {x.sin_imagen > 0 && (
+                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400">
+                      {x.sin_imagen.toLocaleString("en-US")} por agregar imagen
+                    </span>
                   )}
                   {x.con_cambios && (
                     <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400">cambios sin publicar</span>

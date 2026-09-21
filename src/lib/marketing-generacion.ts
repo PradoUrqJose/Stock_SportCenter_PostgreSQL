@@ -44,7 +44,7 @@ async function borradorDeErp(id: string, filtros: FiltrosCatalogo): Promise<{ bo
   if (!plantillas.some((p) => p.activa)) return { error: "No hay ninguna plantilla activa" };
 
   await etapa(id, "erp");
-  const items = await consultarCatalogoErp(filtros);
+  const { items, parcial } = await consultarCatalogoErp(filtros);
 
   await etapa(id, "armando");
   const codigos = [...new Set(items.map((i) => i.cod_universal?.trim().toUpperCase()).filter((c): c is string => Boolean(c)))];
@@ -72,13 +72,14 @@ async function borradorDeErp(id: string, filtros: FiltrosCatalogo): Promise<{ bo
     if (!conPropia.has(marca)) genericas[marca || "(SIN MARCA)"] = (genericas[marca || "(SIN MARCA)"] ?? 0) + 1;
   }
   if (Object.keys(genericas).length > 0) sinFijas.resumen.con_generica = genericas;
+  if (parcial) sinFijas.resumen.consulta_parcial = true;
   if (sinFijas.paginas.length === 0) {
     const r = sinFijas.resumen;
     const fuera =
       (r.fuera_de_precio ? `, ${r.fuera_de_precio} fuera del rango de precio` : "") +
       (r.fuera_de_talla ? `, ${r.fuera_de_talla} sin stock en las tallas elegidas (${filtros.tallas.join(", ")})` : "");
     const sinPl = r.sin_plantilla ? `, ${Object.values(r.sin_plantilla).reduce((a, b) => a + b, 0)} de marcas sin plantilla (${Object.keys(r.sin_plantilla).join(", ")})` : "";
-    return { error: `Ningún producto se puede mostrar: el ERP devolvió ${r.erp_items}, ${r.sin_imagen.length} sin imagen, ${r.sin_stock} sin stock o precio${fuera}${sinPl}` };
+    return { error: `Ningún producto se puede mostrar: el ERP devolvió ${r.erp_items}, ${r.sin_stock} sin stock o precio${fuera}${sinPl}` };
   }
   return { borrador: sinFijas };
 }
@@ -112,12 +113,13 @@ export async function ejecutarGeneracion(id: string): Promise<void> {
       args: [catalogoId, randomBytes(9).toString("base64url"), titulo, JSON.stringify(filtros), JSON.stringify(borrador), created_by],
     });
     const nSinPlantilla = Object.values(borrador.resumen.sin_plantilla ?? {}).reduce((a, b) => a + b, 0);
-    await terminar(
-      id,
-      "listo",
-      `${borrador.paginas.length} páginas generadas${nSinPlantilla > 0 ? ` (${nSinPlantilla} productos sin plantilla de su marca quedaron fuera)` : ""}`,
-      catalogoId
-    );
+    const avisos = [
+      nSinPlantilla > 0 ? `${nSinPlantilla} productos sin plantilla de su marca quedaron fuera` : "",
+      borrador.resumen.sin_imagen.length > 0 ? `${borrador.resumen.sin_imagen.length} con la imagen por agregar` : "",
+      borrador.resumen.consulta_parcial ? "consulta repartida por marca: pudieron faltar marcas que STOCK no conoce" : "",
+      (borrador.resumen.sin_explicar ?? 0) !== 0 ? `${borrador.resumen.sin_explicar} filas del ERP sin explicación` : "",
+    ].filter(Boolean);
+    await terminar(id, "listo", `${borrador.paginas.length} páginas generadas${avisos.length > 0 ? ` (${avisos.join("; ")})` : ""}`, catalogoId);
   } catch (e) {
     console.error("[marketing] generación falló:", e);
     try {

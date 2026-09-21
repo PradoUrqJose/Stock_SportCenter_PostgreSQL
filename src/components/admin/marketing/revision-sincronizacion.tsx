@@ -142,7 +142,7 @@ export function RevisionSincronizacion({
               .
             </p>
           )}
-          {informe.sinImagen.length > 0 && <p>Con stock pero sin imagen (no entran): {informe.sinImagen.slice(0, 40).join(", ")}{informe.sinImagen.length > 40 ? ` … y ${informe.sinImagen.length - 40} más` : ""}.</p>}
+          {informe.sinImagen.length > 0 && <p>Con la imagen por agregar (sus páginas salen vacías hasta que la subas en el editor): {informe.sinImagen.slice(0, 40).join(", ")}{informe.sinImagen.length > 40 ? ` … y ${informe.sinImagen.length - 40} más` : ""}.</p>}
         </div>
       )}
 

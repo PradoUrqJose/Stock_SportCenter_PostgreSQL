@@ -430,8 +430,20 @@ export type ResumenGeneracion = {
   duplicados: number;
   /** Códigos que aparecen en más de un género: cada género tiene su propia página. */
   multi_genero?: number;
-  /** Códigos del ERP sin imagen en R2: no entran al catálogo. */
+  /**
+   * Códigos que entraron al catálogo SIN imagen en R2: sus páginas salen vacías (versión de imagen 0) hasta que se les suba una
+   * desde el editor.
+   */
   sin_imagen: string[];
+  /** Filas del ERP sin código: no se pueden mostrar. */
+  sin_codigo?: number;
+  /**
+   * Filas del ERP que no están en el catálogo y NO tienen motivo (debe ser 0: cada fila entra o se descarta con un motivo
+   * contado arriba). Si no es 0, algo se perdió sin explicación y se avisa.
+   */
+  sin_explicar?: number;
+  /** true = la consulta al ERP se repartió por marca sin ver todas las de ERP (catálogo enorme): una marca desconocida podría faltar. */
+  consulta_parcial?: boolean;
   /** Filas descartadas por no tener tallas con stock o precio. */
   sin_stock: number;
   /** Filas fuera del rango de precio pedido (solo cuando se filtró por precio). */
@@ -553,11 +565,15 @@ export function construirBorrador(
   let sinStock = 0;
   let fueraDePrecio = 0;
   let fueraDeTalla = 0;
+  let sinCodigo = 0;
   const sinPlantilla: Record<string, number> = {};
 
   for (const it of items) {
     const cod = it.cod_universal?.trim().toUpperCase();
-    if (!cod) continue;
+    if (!cod) {
+      sinCodigo++;
+      continue;
+    }
     const genero = (it.genero ?? "").trim().toUpperCase();
     const clave = `${cod}|${genero}`;
     if (vistos.has(clave)) {
@@ -587,11 +603,9 @@ export function construirBorrador(
       sinPlantilla[marca || "(SIN MARCA)"] = (sinPlantilla[marca || "(SIN MARCA)"] ?? 0) + 1;
       continue;
     }
-    const v = versiones.get(cod);
-    if (v == null) {
-      sinImagen.add(cod);
-      continue;
-    }
+    // Sin imagen en R2 el producto entra igual, con la zapatilla vacía (versión 0): en el editor se ve dónde falta y se sube.
+    const v = versiones.get(cod) ?? 0;
+    if (v === 0) sinImagen.add(cod);
     productos.push({
       cod,
       v,
@@ -618,11 +632,15 @@ export function construirBorrador(
     prod: i,
   }));
 
+  const totalSinPlantilla = Object.values(sinPlantilla).reduce((a, b) => a + b, 0);
   return {
     productos,
     paginas,
     resumen: {
       erp_items: items.length,
+      ...(sinCodigo > 0 ? { sin_codigo: sinCodigo } : {}),
+      // Cada fila del ERP o entra (una página) o se descarta con un motivo contado; lo que sobre es una pérdida sin explicar.
+      sin_explicar: items.length - productos.length - duplicados - sinCodigo - sinStock - fueraDePrecio - fueraDeTalla - totalSinPlantilla,
       duplicados,
       multi_genero: [...generosPorCodigo.values()].filter((g) => g.size > 1).length,
       sin_imagen: [...sinImagen].sort(),
@@ -807,39 +825,78 @@ export function validarZonasEnlace(entrada: unknown): ZonaEnlace[] | string {
 /** Una consulta al ERP: marcas y géneros a pedir (grupo, categoría y almacenes van iguales en todas). */
 export type ConsultaErp = { marcas: string[]; generos: string[] };
 
-/** Filas que se piden al ERP por consulta: unas 800 tardan ~30 s (medido con Adidas: 827 filas en 33 s); más de ~2.000 superan el minuto. */
-export const FILAS_POR_CONSULTA = 800;
+/**
+ * Lo que tarda el ERP en responder UNA consulta de `n` filas, en segundos. Medido: 68 filas → 1 s, 253 → 4 s, 344 → 5 s,
+ * 938 → 27 s: crece más que proporcional (~n^1.6), por eso varias consultas chicas en paralelo son más rápidas que una grande.
+ */
+export const segundosConsultaErp = (n: number): number => 27 * (Math.max(n, 0) / 938) ** 1.6 + 1;
 
 /**
- * Reparte lo que hay que pedir al ERP en consultas que se pueden hacer en paralelo, cada una de tamaño moderado
- * (el ERP tarda en proporción a las filas y las funciones de Vercel duran como máximo 60 s). Las marcas chicas se
- * juntan; una marca grande se parte por género. Las marcas nunca se repiten entre consultas, así que no hay filas dobles.
- *
- * Un catálogo chico (hasta `tope` filas) se pide en UNA consulta sin repartir: es completa por construcción. Solo se reparte
- * lo grande, y ahí los conteos del sistema solo deciden CÓMO repartir, no QUÉ pedir: el sistema puede no conocer aún productos nuevos
- * del ERP (aún sin sincronizar), así que todas las marcas conocidas se piden con TODOS los géneros del filtro, y las que
- * el usuario eligió expresamente se piden aunque el sistema no tenga nada de ellas.
- * @param conteos productos con stock por marca y género según el sistema (aproximado)
- * @param o.generosFiltro géneros del filtro (vacío = todos)
- * @param o.universoMarcas todas las marcas que conoce el sistema; o.universoGeneros todos los géneros que conoce
- * @param o.marcasPedidas marcas elegidas expresamente por el usuario
+ * Segundos que se aceptan para una consulta única sin filtro de marca. Las funciones de Vercel duran hasta 300 s
+ * (Hobby con Fluid Compute); se usa la mitad para tener margen con un ERP más lento de lo medido y para el resto del trabajo.
+ */
+export const PRESUPUESTO_CONSULTA_ERP_S = 150;
+
+/** Cuánto más puede traer el ERP que lo que cuenta el sistema (que puede no conocer aún productos nuevos). */
+const MARGEN_CONTEO = 1.3;
+
+/** El valor que espera el filtro de marca del ERP: el nombre SIN espacios («NEW BALANCE» se pide como «NEWBALANCE»). */
+export const valorMarcaErp = (marca: string): string => marca.replace(/\s+/g, "");
+
+export type PlanErp = {
+  consultas: ConsultaErp[];
+  /**
+   * true = la consulta se repartió por marca sin tener a la vista todas las marcas del ERP (el catálogo es tan grande que una
+   * sola consulta no cabe en el tiempo): una marca que el sistema no conoce podría faltar, y así se avisa en el catálogo.
+   */
+  parcial: boolean;
+};
+
+/**
+ * Qué pedir al ERP. Lo único que garantiza no perder nada es que el ERP entregue TODO lo que cumple los filtros, así que:
+ *  · marcas elegidas expresamente → esas marcas, una consulta por marca, en paralelo (completo para esas marcas);
+ *  · sin marca elegida → UNA consulta sin filtro de marca (completa por construcción) mientras su tiempo estimado quepa
+ *    en `PRESUPUESTO_CONSULTA_ERP_S`;
+ *  · si no cabe → se reparte por marca (`particionarPorMarca`) y el plan queda `parcial`.
+ * No hay un tope de filas: lo que decide es el tiempo.
+ * @param conteos productos con stock por marca y género según el sistema (aproximado; solo sirve para estimar y repartir)
  */
 export function planificarConsultas(
   conteos: readonly { marca: string; genero: string; n: number }[],
-  o: { tope?: number; generosFiltro?: readonly string[]; universoMarcas?: readonly string[]; universoGeneros?: readonly string[]; marcasPedidas?: readonly string[] } = {}
-): ConsultaErp[] {
-  const tope = o.tope ?? FILAS_POR_CONSULTA;
-  const generosFiltro = [...(o.generosFiltro ?? [])];
-  const pedidas = new Set(o.marcasPedidas ?? []);
-  // Chico: una sola consulta con los filtros tal cual (marca vacía = todas).
-  if (conteos.reduce((a, c) => a + c.n, 0) <= tope) return [{ marcas: [...pedidas], generos: generosFiltro }];
+  o: { generosFiltro?: readonly string[]; universoMarcas?: readonly string[]; universoGeneros?: readonly string[]; marcasPedidas?: readonly string[]; presupuestoS?: number } = {}
+): PlanErp {
+  const generos = [...(o.generosFiltro ?? [])];
+  const pedidas = [...new Set(o.marcasPedidas ?? [])];
+  if (pedidas.length > 0) return { consultas: pedidas.map((m) => ({ marcas: [m], generos })), parcial: false };
 
+  const estimadas = conteos.reduce((a, c) => a + c.n, 0) * MARGEN_CONTEO;
+  if (segundosConsultaErp(estimadas) <= (o.presupuestoS ?? PRESUPUESTO_CONSULTA_ERP_S)) return { consultas: [{ marcas: [], generos }], parcial: false };
+
+  // Demasiado grande para una consulta: bloques de ~500 filas (≈ 10 s cada uno), en paralelo.
+  const consultas = particionarPorMarca(conteos, { tope: 500, generosFiltro: generos, universoMarcas: o.universoMarcas, universoGeneros: o.universoGeneros });
+  return { consultas: consultas.length > 0 ? consultas : [{ marcas: [], generos }], parcial: true };
+}
+
+/**
+ * Reparte lo que hay que pedir al ERP en consultas de tamaño moderado que se pueden hacer en paralelo. Las marcas chicas se
+ * juntan; una marca grande se parte por género. Las marcas nunca se repiten entre consultas, así que no hay filas dobles.
+ * Los conteos del sistema solo deciden CÓMO repartir: todas las marcas conocidas se piden con TODOS los géneros del filtro.
+ * OJO: el ERP no entrega lo que no se le pide por nombre, así que una marca desconocida para el sistema no entra aquí.
+ * @param conteos productos con stock por marca y género según el sistema (aproximado)
+ * @param o.generosFiltro géneros del filtro (vacío = todos)
+ * @param o.universoMarcas todas las marcas que conoce el sistema; o.universoGeneros todos los géneros que conoce
+ */
+export function particionarPorMarca(
+  conteos: readonly { marca: string; genero: string; n: number }[],
+  o: { tope: number; generosFiltro?: readonly string[]; universoMarcas?: readonly string[]; universoGeneros?: readonly string[] }
+): ConsultaErp[] {
+  const tope = o.tope;
+  const generosFiltro = [...(o.generosFiltro ?? [])];
   const porMarca = new Map<string, { genero: string; n: number }[]>();
   const agregar = (m: string) => porMarca.get(m) ?? porMarca.set(m, []).get(m)!;
-  // Sin marca no se puede pedir al ERP por marca (vacío = todas): esas filas no entran. Con marcas elegidas, solo esas.
-  for (const c of conteos) if (c.marca.trim() !== "" && c.n > 0 && (pedidas.size === 0 || pedidas.has(c.marca))) agregar(c.marca).push({ genero: c.genero, n: c.n });
-  // Marcas elegidas expresamente: solo esas. Si no, todas las que conoce el sistema (también las sin filas locales para estos filtros).
-  for (const m of (o.marcasPedidas?.length ? o.marcasPedidas : (o.universoMarcas ?? []))) if (m.trim() !== "") agregar(m);
+  for (const c of conteos) if (c.marca.trim() !== "" && c.n > 0) agregar(c.marca).push({ genero: c.genero, n: c.n });
+  // Todas las marcas que conoce el sistema (también las sin filas locales para estos filtros).
+  for (const m of o.universoMarcas ?? []) if (m.trim() !== "") agregar(m);
   const total = (gs: { n: number }[]) => gs.reduce((a, g) => a + g.n, 0);
   // Todos los géneros posibles: los del filtro o, sin filtro, los que conoce el sistema.
   const generosPosibles = generosFiltro.length > 0 ? generosFiltro : [...(o.universoGeneros ?? [])];

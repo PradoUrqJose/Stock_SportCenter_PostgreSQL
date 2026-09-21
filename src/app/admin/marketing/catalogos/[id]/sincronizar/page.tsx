@@ -11,8 +11,8 @@ import { AsistenteCatalogo } from "@/components/admin/marketing/asistente-catalo
 import { ProgresoGeneracion } from "@/components/admin/marketing/progreso-generacion";
 import { RevisionSincronizacion } from "@/components/admin/marketing/revision-sincronizacion";
 
-// La consulta al ERP corre en segundo plano dentro de esta misma función (`after`): 60 s es el máximo del plan Hobby.
-export const maxDuration = 60;
+// La consulta al ERP corre en segundo plano dentro de esta misma función (`after`): 300 s es el máximo del plan Hobby con Fluid Compute.
+export const maxDuration = 300;
 
 /**
  * Sincronizar un catálogo con el ERP: (1) los filtros del catálogo, editables como en el asistente; (2) el avance de la

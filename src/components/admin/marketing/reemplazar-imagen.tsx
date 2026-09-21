@@ -19,9 +19,11 @@ type Props = {
   onHecho: (version: number) => void;
   /** Vuelve a leer la página del servidor tras reemplazar (por defecto sí). */
   refrescar?: boolean;
+  /** «nueva» = el producto aún no tiene imagen (no hay «Actual» que mostrar); por defecto se reemplaza la vigente. */
+  modo?: "reemplazo" | "nueva";
 };
 
-export function ReemplazarImagen({ codigo, urlActual, onHecho, refrescar = true }: Props) {
+export function ReemplazarImagen({ codigo, urlActual, onHecho, refrescar = true, modo = "reemplazo" }: Props) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [fase, setFase] = useState<"reposo" | "procesando" | "vista" | "subiendo">("reposo");
@@ -47,7 +49,7 @@ export function ReemplazarImagen({ codigo, urlActual, onHecho, refrescar = true 
     if (!nueva) return;
     setError(null);
     setFase("subiendo");
-    const r = await enviarImagen(codigo, nueva.blob, "reemplazo");
+    const r = await enviarImagen(codigo, nueva.blob, modo);
     if (!r.ok) {
       setError(r.error);
       setFase("vista");
@@ -67,7 +69,8 @@ export function ReemplazarImagen({ codigo, urlActual, onHecho, refrescar = true 
 
   return (
     <div className="space-y-3">
-      <div className={cn("grid gap-3", enVista ? "grid-cols-2" : "grid-cols-1")}>
+      <div className={cn("grid gap-3", enVista && modo === "reemplazo" ? "grid-cols-2" : "grid-cols-1")}>
+        {modo === "reemplazo" && (
         <figure className="space-y-1">
           <div className={cn("mx-auto aspect-square w-full rounded-lg", AJEDREZ, !enVista && "max-w-[70vh]")}>
             {/* Original completo: aquí se revisa la calidad del recorte. */}
@@ -76,6 +79,7 @@ export function ReemplazarImagen({ codigo, urlActual, onHecho, refrescar = true 
           </div>
           {enVista && <figcaption className="text-center text-xs text-muted-foreground">Actual</figcaption>}
         </figure>
+        )}
         {enVista && nueva && (
           <figure className="space-y-1">
             <div className={cn("mx-auto aspect-square w-full rounded-lg", AJEDREZ)}>
@@ -99,13 +103,13 @@ export function ReemplazarImagen({ codigo, urlActual, onHecho, refrescar = true 
           <>
             <Button variant="outline" onClick={descartar} disabled={fase === "subiendo"}>Cancelar</Button>
             <Button onClick={confirmar} disabled={fase === "subiendo"}>
-              {fase === "subiendo" ? "Subiendo…" : "Confirmar reemplazo"}
+              {fase === "subiendo" ? "Subiendo…" : modo === "nueva" ? "Confirmar imagen" : "Confirmar reemplazo"}
             </Button>
           </>
         ) : (
           <>
             <Button variant="outline" onClick={() => inputRef.current?.click()} disabled={fase === "procesando"}>
-              {fase === "procesando" ? "Procesando…" : "Reemplazar imagen"}
+              {fase === "procesando" ? "Procesando…" : modo === "nueva" ? "Elegir la imagen" : "Reemplazar imagen"}
             </Button>
             <input
               ref={inputRef}

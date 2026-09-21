@@ -20,6 +20,7 @@ import {
   ImagePlus,
   Minus,
   Plus,
+  ImageOff,
   Redo2,
   RefreshCw,
   Replace,
@@ -173,7 +174,7 @@ export function EditorCatalogo({
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(
     mensajeInicial ? { ok: true, texto: mensajeInicial } : null
   );
-  const [dialogo, setDialogo] = useState<"quitadas" | "agregar" | "reemplazar" | null>(null);
+  const [dialogo, setDialogo] = useState<"quitadas" | "agregar" | "reemplazar" | "sinimagen" | null>(null);
   const [irA, setIrA] = useState("");
 
   const { listaRef, valor } = useContextoVisor(base, fuente, paginas.length);
@@ -336,7 +337,7 @@ export function EditorCatalogo({
     const r = await publicarCatalogo(id, versionBase);
     if (r.success && r.data) {
       // La versión nueva pasa a ser la que se edita; la de partida vuelve a verse como se publicó.
-      router.replace(`/admin/marketing/catalogos/${id}/editar?version=${r.data.version}&publicado=${r.data.version}`);
+      router.replace(`/admin/marketing/catalogos/${id}/editar?version=${r.data.version}&publicado=${r.data.version}${r.data.sinImagen > 0 ? `&sinimagen=${r.data.sinImagen}` : ""}`);
     } else {
       setPublicando(false);
       setMensaje({ ok: false, texto: r.msg });
@@ -356,6 +357,12 @@ export function EditorCatalogo({
     }
     router.push(`/admin/marketing/catalogos/${id}/sincronizar${versionBase === null ? "" : `?version=${versionBase}`}`);
   }
+  // Páginas cuyo producto aún no tiene imagen en R2 (versión 0): salen con la zapatilla vacía hasta que se les sube una.
+  const sinImagen = useMemo(
+    () => paginas.flatMap((p, i) => (p.tipo === "producto" && productos[p.prod]?.v === 0 ? [{ id: p.id, numero: i + 1, prod: productos[p.prod] }] : [])),
+    [paginas, productos]
+  );
+  const codigosSinImagen = useMemo(() => new Set(sinImagen.map((x) => x.prod.cod)).size, [sinImagen]);
   // Productos que la sincronización quitó por falta de stock y siguen sin restaurarse.
   const quitadosPorStock = useMemo(() => quitadas.filter((q) => q.tipo === "producto" && q.motivo === "sync").length, [quitadas]);
 
@@ -429,6 +436,11 @@ export function EditorCatalogo({
             <Button variant="outline" size="sm" disabled={quitadas.length === 0} onClick={() => setDialogo("quitadas")}>
               <Undo data-icon="inline-start" /> Quitadas ({quitadas.length})
             </Button>
+            {sinImagen.length > 0 && (
+              <Button variant="outline" size="sm" className="border-amber-500/60 text-amber-300" onClick={() => setDialogo("sinimagen")} title="Productos cuya imagen aún no está en R2">
+                <ImageOff data-icon="inline-start" /> Sin imagen ({codigosSinImagen})
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => void sincronizar()} disabled={yendoASincronizar || publicando} title="Actualiza las tallas y los precios con el ERP, agrega productos nuevos y quita los que ya no tienen stock">
               <RefreshCw data-icon="inline-start" className={yendoASincronizar ? "animate-spin" : undefined} /> {yendoASincronizar ? "Guardando…" : "Sincronizar con el ERP"}
             </Button>
@@ -443,6 +455,17 @@ export function EditorCatalogo({
             </Button>
           </div>
         </div>
+
+        {sinImagen.length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[#2a2d35] bg-amber-500/10 px-4 py-2 text-xs text-amber-300">
+            <span>
+              <strong>{codigosSinImagen.toLocaleString("en-US")} producto{codigosSinImagen === 1 ? "" : "s"} por agregar imagen</strong> ({sinImagen.length.toLocaleString("en-US")} página{sinImagen.length === 1 ? "" : "s"}): su zapatilla sale vacía hasta que la subas.
+            </span>
+            <button type="button" className="font-medium underline underline-offset-2" onClick={() => setDialogo("sinimagen")}>
+              Ver la lista
+            </button>
+          </div>
+        )}
 
         {(stockAl || sincronizacion) && (
           <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[#2a2d35] px-4 py-2 text-xs", quitadosPorStock > 0 ? "bg-amber-500/10 text-amber-300" : "text-[#9aa0ab]")}>
@@ -525,8 +548,8 @@ export function EditorCatalogo({
                 <Button variant="outline" size="sm" disabled={esNeutro(ajusteSel)} onClick={restablecer} title="Volver a la posición del diseño (0)">
                   <RotateCcw data-icon="inline-start" /> Restablecer
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setDialogo("reemplazar")}>
-                  <Replace data-icon="inline-start" /> Reemplazar imagen
+                <Button variant={productoSel?.v === 0 ? "default" : "outline"} size="sm" onClick={() => setDialogo("reemplazar")}>
+                  <Replace data-icon="inline-start" /> {productoSel?.v === 0 ? "Subir imagen" : "Reemplazar imagen"}
                 </Button>
               </>
             )}
@@ -566,13 +589,16 @@ export function EditorCatalogo({
           <DialogHeader>
             <DialogTitle className="font-mono">{productoSel?.cod}</DialogTitle>
             <DialogDescription>
-              La imagen nueva se guarda en R2 y en la base de datos, y la usarán todas las páginas y catálogos con este código al publicar.
+              {productoSel?.v === 0
+                ? "Este producto aún no tiene imagen. La que subas se guarda en R2 y en la base de datos, y la usarán todas las páginas y catálogos con este código."
+                : "La imagen nueva se guarda en R2 y en la base de datos, y la usarán todas las páginas y catálogos con este código al publicar."}
             </DialogDescription>
           </DialogHeader>
           {productoSel && dialogo === "reemplazar" && (
             <ReemplazarImagen
               codigo={productoSel.cod}
               urlActual={`${base}/${encodeURIComponent(productoSel.cod)}.png?v=${productoSel.v}`}
+              modo={productoSel.v === 0 ? "nueva" : "reemplazo"}
               refrescar={false}
               onHecho={(v) => {
                 setProductos((ps) => ps.map((p) => (p.cod === productoSel.cod ? { ...p, v } : p)));
@@ -581,6 +607,53 @@ export function EditorCatalogo({
               }}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Productos sin imagen: para ir a cada página y subir su imagen */}
+      <Dialog open={dialogo === "sinimagen"} onOpenChange={(o) => !o && setDialogo(null)}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Productos por agregar imagen</DialogTitle>
+            <DialogDescription>Su zapatilla sale vacía. Ve a la página o sube la imagen directamente: queda en R2 y la usan todas las páginas con ese código.</DialogDescription>
+          </DialogHeader>
+          <ul className="max-h-96 divide-y divide-border overflow-y-auto rounded-lg border border-border text-sm">
+            {sinImagen.map((x) => (
+              <li key={x.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                <span className="min-w-0 truncate">
+                  <span className="mr-2 text-xs text-muted-foreground">Pág. {x.numero.toLocaleString("en-US")}</span>
+                  <span className="font-mono">{x.prod.cod}</span>{" "}
+                  <span className="text-muted-foreground">
+                    {x.prod.marca} · {x.prod.modelo}
+                    {x.prod.genero ? ` · ${x.prod.genero}` : ""}
+                  </span>
+                </span>
+                <span className="flex shrink-0 gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSel(x.id);
+                      irAPagina(x.id);
+                      setDialogo(null);
+                    }}
+                  >
+                    Ir a la página
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setSel(x.id);
+                      irAPagina(x.id);
+                      setDialogo("reemplazar");
+                    }}
+                  >
+                    Subir imagen
+                  </Button>
+                </span>
+              </li>
+            ))}
+          </ul>
         </DialogContent>
       </Dialog>
 

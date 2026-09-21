@@ -129,7 +129,20 @@ function ContenidoProducto({
     <div className="absolute left-0 top-0 origin-top-left" style={{ width: pl.ancho, height: pl.alto, transform: `scale(${k})` }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={`${c.base}/${pl.fondo}.webp`} alt="" decoding="async" className="absolute inset-0 select-none" style={{ width: pl.ancho, height: pl.alto }} draggable={false} />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {prod.v === 0 ? (
+        // Producto sin imagen en R2: en el editor se marca dónde falta (y se sube desde ahí); a los clientes les llega la zona vacía.
+        editable && (
+          <div
+            className="absolute flex cursor-pointer flex-col items-center justify-center gap-2 rounded-3xl border-4 border-dashed border-amber-400 bg-amber-400/15 text-center text-amber-300"
+            style={{ left: z.zapatilla.x, top: z.zapatilla.y, width: z.zapatilla.w, height: z.zapatilla.h, fontFamily: c.fuente }}
+            onClick={() => edicion!.alSeleccionar(pag.id)}
+          >
+            <span className="text-[56px] font-black leading-none">FALTA LA IMAGEN</span>
+            <span className="text-[34px] font-bold leading-none opacity-80">{prod.cod}</span>
+          </div>
+        )
+      ) : (
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={urlZapatilla(c.base, prod, necesario)}
         alt={prod.modelo}
@@ -182,6 +195,7 @@ function ContenidoProducto({
         }
         onPointerCancel={editable ? () => (arrastre.current = null) : undefined}
       />
+      )}
       {txt(z.codigo, t.codigo)}
       {txt(z.tallas, t.tallas, true)}
       {txt(z.precio, t.precio, true)}

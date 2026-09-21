@@ -290,9 +290,10 @@ export async function generarPdf(
     if (!prod) return;
     const clave = claveZapatilla(prod);
     if (enCurso.has(clave)) return;
-    const promesa = bytesDe(
-      `${e.base}/derivados/w1200/${encodeURIComponent(prod.cod)}.v${prod.v}.webp`,
-      senal,
+    // Versión 0 = el producto aún no tiene imagen: la página sale sin zapatilla (no hay nada que pedir).
+    const promesa = (prod.v === 0
+      ? Promise.resolve(null)
+      : bytesDe(`${e.base}/derivados/w1200/${encodeURIComponent(prod.cod)}.v${prod.v}.webp`, senal)
     ).catch((err) => {
       // Si la imagen de un producto no existe (404) no se cae todo el PDF: la página sale sin zapatilla y se avisa al final.
       if (err instanceof ErrorLectura && err.estado === 404) return null;

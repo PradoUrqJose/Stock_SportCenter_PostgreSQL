@@ -145,13 +145,17 @@ def cargar_excel(s: requests.Session, **filtros) -> str:
         "Referer": f"{BASE}/Default.aspx",
         "Accept": "*/*",
     }
-    r = s.post(CARGADOR_URL, data=params, headers=headers, timeout=30)
+    r = s.post(CARGADOR_URL, data=params, headers=headers, timeout=60)
     r.raise_for_status()
     data = r.json()
+    # Filtros sin ninguna fila (p. ej. una marca sin stock en esos almacenes): es un resultado vacío, no un error.
+    if data.get("message") == "No se encontraron resultados":
+        return ""
     if data.get("message") != "OK":
         raise RuntimeError(f"El ERP no devolvió OK al preparar el catálogo: {data}")
 
-    r = s.get(EXCEL_URL, headers={"Referer": f"{BASE}/Default.aspx"}, timeout=60)
+    # El ERP tarda en proporción (más que lineal) a las filas: ~27 s para 900 filas; las funciones de Vercel duran hasta 300 s.
+    r = s.get(EXCEL_URL, headers={"Referer": f"{BASE}/Default.aspx"}, timeout=280)
     r.raise_for_status()
     return r.text
 
@@ -257,7 +261,7 @@ def scrapear_catalogo(
         p_porcentaje_1_4_caja="",
         p_fecha_minima_ingreso="",
     )
-    return parse_tabla_catalogo(html)
+    return parse_tabla_catalogo(html) if html else []
 
 
 # --------------------------------------------------------------------------- #

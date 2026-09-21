@@ -12,8 +12,8 @@ import { ProgresoGeneracion } from "@/components/admin/marketing/progreso-genera
 const montserrat = Montserrat({ subsets: ["latin"], weight: "900", display: "swap" });
 
 // La generación corre en segundo plano (`after`) dentro de esta misma función: necesita más que los 10 s por defecto
-// (consulta al ERP en paralelo, hasta ~35 s, más armar el catálogo). 60 s es el máximo del plan Hobby.
-export const maxDuration = 60;
+// (la consulta al ERP tarda ~30 s con ~1.000 productos y crece más que proporcional). 300 s es el máximo del plan Hobby con Fluid Compute.
+export const maxDuration = 300;
 
 export default async function NuevoCatalogoPage({ searchParams }: { searchParams: Promise<{ generacion?: string }> }) {
   await requireMarketing();

@@ -27,7 +27,7 @@ export type InformeSincronizacion = {
   reactivados: ProductoResumen[];
   /** Del ERP: productos que no entran por no tener plantilla de su marca (marca → cantidad). */
   sinPlantilla: Record<string, number>;
-  /** Del ERP: códigos con stock que no tienen imagen. */
+  /** Códigos del catálogo, ya sincronizado, cuya imagen falta en R2: sus páginas salen vacías hasta que se les suba una. */
   sinImagen: string[];
 };
 
@@ -90,7 +90,8 @@ export function sincronizarBorrador(actual: Borrador, fresco: Borrador, al: stri
     if (tallas || precio) actualizados++;
     else if (activosProd.has(i)) sinCambios++;
     // Si el catálogo es de antes de los géneros, el producto lo toma del ERP (no cuenta como cambio).
-    productos[i] = { ...p, tallas: f.tallas, precio: f.precio, marca: f.marca, modelo: f.modelo, genero: f.genero };
+    // También la imagen vigente: un producto que no tenía imagen puede haberla recibido desde entonces.
+    productos[i] = { ...p, tallas: f.tallas, precio: f.precio, marca: f.marca, modelo: f.modelo, genero: f.genero, v: f.v };
   }
 
   // 2. Los que ya no están en el ERP salen de las páginas (quedan en «Quitadas» con su motivo).
@@ -199,7 +200,7 @@ export function sincronizarBorrador(actual: Borrador, fresco: Borrador, al: stri
     quitados,
     reactivados,
     sinPlantilla: fresco.resumen.sin_plantilla ?? {},
-    sinImagen: fresco.resumen.sin_imagen ?? [],
+    sinImagen: [...new Set(paginasProducto(paginas).map((pg) => productos[pg.prod]).filter((p) => p.v === 0).map((p) => p.cod))],
   };
   return { borrador, informe };
 }

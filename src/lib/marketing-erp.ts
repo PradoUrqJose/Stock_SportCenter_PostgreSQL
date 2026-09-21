@@ -1,16 +1,17 @@
 // Consulta del catálogo al ERP (SOLO servidor). El trabajo real lo hace api/catalogo.py:
 //  - en Vercel se llama por HTTP a /api/catalogo (mismo proyecto), con el secreto compartido, igual que la sincronización;
 //  - en tu Mac se ejecuta el mismo archivo como script y se lee su JSON (`next dev` no conoce api/*.py).
-// La consulta se reparte por marca (y género en las marcas grandes) y se hace en paralelo: el ERP tarda en proporción
-// a las filas, una consulta de más de ~2.000 filas pasa del minuto y las funciones de Vercel duran como máximo 60 s.
+// Sin filtro de marca se pide TODO en una sola consulta (completa por construcción); solo si no cabe en el tiempo se reparte
+// por marca y en paralelo, y entonces el catálogo lo avisa (ver `planificarConsultas`). El ERP tarda más que proporcional a
+// las filas y las funciones de Vercel duran hasta 300 s (Hobby con Fluid Compute).
 // Las credenciales ERP_USUARIO / ERP_CLAVE las toma del entorno o del .env.local.
 import { db } from "@/lib/db";
-import { planificarConsultas, type ConsultaErp, type FiltrosCatalogo, type ItemErp } from "./marketing-catalogo";
+import { planificarConsultas, valorMarcaErp, type ConsultaErp, type FiltrosCatalogo, type ItemErp } from "./marketing-catalogo";
 
 /** Consultas simultáneas al ERP: probado con tres a la vez con el mismo usuario, sin cortar sesiones. */
 const EN_PARALELO = 3;
-/** Un poco menos que los 60 s de la función de Vercel, para responder con un error claro y no con un corte. */
-const ESPERA_HTTP_MS = 58_000;
+/** Un poco menos que los 300 s de la función de Vercel, para responder con un error claro y no con un corte. */
+const ESPERA_HTTP_MS = 290_000;
 
 function urlCatalogoErp(): string | null {
   if (process.env.ERP_CATALOGO_URL) return process.env.ERP_CATALOGO_URL; // pruebas locales de la ruta HTTP
@@ -47,7 +48,8 @@ async function pedirAlErp(f: FiltrosCatalogo, c: ConsultaErp): Promise<ItemErp[]
   const filtros = {
     almacen: f.almacenes.join(","),
     grupo: f.grupos.join(","),
-    marca: c.marcas.join(","),
+    // El filtro de marca del ERP pide el nombre sin espacios («NEW BALANCE» → «NEWBALANCE»); con espacio no devuelve nada.
+    marca: c.marcas.map(valorMarcaErp).join(","),
     genero: c.generos.join(","),
     categoria: f.categorias.join(","),
   };
@@ -76,16 +78,16 @@ async function pedirAlErp(f: FiltrosCatalogo, c: ConsultaErp): Promise<ItemErp[]
   const { stdout } = await promisify(execFile)(
     process.env.PYTHON_BIN ?? "python3",
     [join(process.cwd(), "api", "catalogo.py"), JSON.stringify(filtros)],
-    { maxBuffer: 128 * 1024 * 1024, timeout: 240_000 }
+    { maxBuffer: 128 * 1024 * 1024, timeout: 290_000 }
   );
   return (JSON.parse(stdout) as { items?: ItemErp[] }).items ?? [];
 }
 
-export async function consultarCatalogoErp(f: FiltrosCatalogo): Promise<ItemErp[]> {
-  // Los conteos del sistema solo reparten el trabajo; todas las marcas conocidas se piden completas (ver planificarConsultas).
+export async function consultarCatalogoErp(f: FiltrosCatalogo): Promise<{ items: ItemErp[]; parcial: boolean }> {
+  // Los conteos del sistema solo sirven para estimar el tiempo y, si hace falta, repartir el trabajo.
   const local = await conocerLocal(f);
-  const consultas = planificarConsultas(local.conteos, { generosFiltro: f.generos, universoMarcas: local.universoMarcas, universoGeneros: local.universoGeneros, marcasPedidas: f.marcas });
-  const trabajos: ConsultaErp[] = consultas.length > 0 ? consultas : [{ marcas: f.marcas, generos: f.generos }];
+  const plan = planificarConsultas(local.conteos, { generosFiltro: f.generos, universoMarcas: local.universoMarcas, universoGeneros: local.universoGeneros, marcasPedidas: f.marcas });
+  const trabajos: ConsultaErp[] = plan.consultas;
 
   const resultados: ItemErp[][] = new Array(trabajos.length);
   let siguiente = 0;
@@ -96,5 +98,5 @@ export async function consultarCatalogoErp(f: FiltrosCatalogo): Promise<ItemErp[
     }
   };
   await Promise.all(Array.from({ length: Math.min(EN_PARALELO, trabajos.length) }, trabajador));
-  return resultados.flat();
+  return { items: resultados.flat(), parcial: plan.parcial };
 }

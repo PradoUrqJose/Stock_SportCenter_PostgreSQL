@@ -27,6 +27,8 @@ type Generacion = {
   created_at: string;
   segundos: number;
   nombre: string | null;
+  modo: "nuevo" | "sincronizar";
+  base_version: number | null;
 };
 
 const ESTADO_GENERACION = {
@@ -51,7 +53,7 @@ export default async function CatalogosPage() {
   const catalogos = r.rows as unknown as Fila[];
 
   const g = await db.execute(
-    `SELECT g.id, g.titulo, g.filtros, g.estado, g.mensaje, g.catalogo_id, g.created_at, u.nombre,
+    `SELECT g.id, g.titulo, g.filtros, g.estado, g.mensaje, g.catalogo_id, g.created_at, g.modo, g.base_version, u.nombre,
             EXTRACT(EPOCH FROM (COALESCE(g.finished_at, now_text())::timestamp - g.created_at::timestamp))::int AS segundos
      FROM mk_generaciones g LEFT JOIN users u ON u.id = g.created_by
      ORDER BY g.created_at DESC LIMIT 15`
@@ -114,21 +116,27 @@ export default async function CatalogosPage() {
 
       {generaciones.length > 0 && (
         <section className="mt-10">
-          <h2 className="text-sm font-semibold text-foreground">Historial de generaciones</h2>
-          <p className="mb-2 mt-0.5 text-xs text-muted-foreground">Cada vez que se pide un catálogo nuevo, con sus filtros y el resultado.</p>
+          <h2 className="text-sm font-semibold text-foreground">Historial de generaciones y sincronizaciones</h2>
+          <p className="mb-2 mt-0.5 text-xs text-muted-foreground">Cada vez que se pide un catálogo nuevo o se sincroniza uno con el ERP, con sus filtros y el resultado.</p>
           <ul className="divide-y divide-border rounded-lg border border-border text-sm">
             {generaciones.map((g) => {
               const est = ESTADO_GENERACION[g.estado];
+              const sincroniza = g.modo === "sincronizar";
               const destino =
                 g.estado === "listo" && g.catalogo_id
                   ? `/admin/marketing/catalogos/${g.catalogo_id}`
                   : g.estado === "en_curso"
-                    ? `/admin/marketing/catalogos/nuevo?generacion=${g.id}`
+                    ? sincroniza && g.catalogo_id
+                      ? `/admin/marketing/catalogos/${g.catalogo_id}/sincronizar?generacion=${g.id}${g.base_version === null ? "" : `&version=${g.base_version}`}`
+                      : `/admin/marketing/catalogos/nuevo?generacion=${g.id}`
                     : null;
               const contenido = (
                 <>
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-foreground">{g.titulo}</p>
+                    <p className="truncate font-medium text-foreground">
+                      {sincroniza && <span className="mr-1.5 rounded-full bg-muted px-1.5 py-0.5 align-middle text-[10px] font-normal text-muted-foreground">Sincronización{g.base_version !== null ? ` · v${g.base_version}` : ""}</span>}
+                      {g.titulo}
+                    </p>
                     <p className="truncate text-xs text-muted-foreground">{textoFiltros(normalizarFiltros(JSON.parse(g.filtros)), tipos).join(" · ")}</p>
                     {g.estado === "error" && g.mensaje && <p className="mt-0.5 text-xs text-destructive">{g.mensaje}</p>}
                   </div>

@@ -33,12 +33,12 @@ export default async function EditarCatalogoPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ version?: string; publicado?: string }>;
+  searchParams: Promise<{ version?: string; publicado?: string; sinimagen?: string }>;
 }) {
   await requireMarketing();
   preconnect(ORIGEN_IMAGENES);
   const { id } = await params;
-  const { version, publicado } = await searchParams;
+  const { version, publicado, sinimagen } = await searchParams;
 
   const c = await db.execute({
     sql: "SELECT slug, titulo, borrador, version_publicada, created_at FROM mk_catalogos WHERE id = ?",
@@ -93,7 +93,7 @@ export default async function EditarCatalogoPage({
         enlacesIniciales={cat.version_publicada ? await enlacesCatalogo(cat.slug) : null}
         mensajeInicial={
           publicado && publicado === String(versionBase)
-            ? `Versión ${publicado} publicada: los clientes ya la ven en el mismo enlace.`
+            ? `Versión ${publicado} publicada: los clientes ya la ven en el mismo enlace.${Number(sinimagen) > 0 ? ` Ojo: ${Number(sinimagen)} producto(s) salen sin imagen (su zapatilla está vacía); súbeles la imagen y publica otra versión.` : ""}`
             : undefined
         }
       />

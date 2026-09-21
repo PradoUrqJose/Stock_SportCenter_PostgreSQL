@@ -266,7 +266,7 @@ export async function guardarEdicion(
 export async function publicarCatalogo(
   id: string,
   base: number | null = null
-): Promise<ActionResult<{ version: number; enlaces: { principal: string; alterno: string } }>> {
+): Promise<ActionResult<{ version: number; sinImagen: number; enlaces: { principal: string; alterno: string } }>> {
   const sesion = await sesionMarketing();
   if (!sesion) return { success: false, msg: "Sin permisos" };
 
@@ -332,7 +332,13 @@ export async function publicarCatalogo(
     updateTag(etiquetaCatalogo(slug));
     revalidatePath(`/admin/marketing/catalogos/${id}`);
     revalidatePath("/admin/marketing/catalogos");
-    return { success: true, msg: `Versión ${version} publicada`, data: { version, enlaces: await enlacesCatalogo(slug) } };
+    // Productos que salen sin imagen (su zapatilla queda vacía para los clientes): se avisa al publicar.
+    const sinImagen = new Set(borrador.paginas.flatMap((p) => (p.tipo === "producto" && borrador.productos[p.prod]?.v === 0 ? [borrador.productos[p.prod].cod] : []))).size;
+    return {
+      success: true,
+      msg: `Versión ${version} publicada${sinImagen > 0 ? `; ${sinImagen} producto${sinImagen === 1 ? "" : "s"} sin imagen` : ""}`,
+      data: { version, sinImagen, enlaces: await enlacesCatalogo(slug) },
+    };
   } catch (e) {
     console.error("[marketing] publicarCatalogo falló:", e);
     return { success: false, msg: e instanceof Error ? e.message : "No se pudo publicar" };
