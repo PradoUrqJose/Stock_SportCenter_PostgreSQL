@@ -40,9 +40,9 @@ export function TarjetaDiseno({
 }
 
 /** Acción de una tarjeta: un botón de verdad (con borde), para que se note que se puede pulsar. */
-export function AccionMini({ onClick, icono, children }: { onClick: () => void; icono?: React.ReactNode; children: React.ReactNode }) {
+export function AccionMini({ onClick, icono, destacada, children }: { onClick: () => void; icono?: React.ReactNode; /** Acción recomendada ahora (por ejemplo, dibujar los enlaces que faltan). */ destacada?: boolean; children: React.ReactNode }) {
   return (
-    <Button type="button" variant="outline" size="sm" onClick={onClick}>
+    <Button type="button" variant={destacada ? "default" : "outline"} size="sm" onClick={onClick}>
       {icono && <span data-icon="inline-start">{icono}</span>}
       {children}
     </Button>

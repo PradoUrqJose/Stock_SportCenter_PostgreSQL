@@ -4,7 +4,7 @@
 import { MARCA_GENERICA, fijasAplicables, plantillaDeMarca, portadaDelTipo, type FijaBiblioteca, type PlantillaLista } from "@/lib/marketing-catalogo";
 import type { MarcaAfectada } from "@/lib/actions/marketing-disenos";
 
-export type FijaGestion = FijaBiblioteca & { activa: boolean };
+export type FijaGestion = FijaBiblioteca & { activa: boolean; /** Zonas clicables (solo su cantidad importa aquí). */ zonas?: readonly unknown[] };
 
 export type Hoja = {
   id: string;

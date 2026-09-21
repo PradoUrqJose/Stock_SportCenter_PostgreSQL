@@ -29,11 +29,14 @@ export function EditorZonas({
   base,
   pagina,
   enlaces,
+  otras = [],
   alCerrar,
 }: {
   base: string;
   pagina: { id: string; nombre: string; imagen: string; ancho: number; alto: number; zonas: ZonaEnlace[] };
   enlaces: Enlaces;
+  /** Otras páginas con zonas, para copiarlas como punto de partida. */
+  otras?: { id: string; nombre: string; zonas: ZonaEnlace[] }[];
   alCerrar: () => void;
 }) {
   const router = useRouter();
@@ -49,6 +52,15 @@ export function EditorZonas({
     const r = lienzo.current!.getBoundingClientRect();
     return { x: limitar((e.clientX - r.left) / r.width, 0, 1), y: limitar((e.clientY - r.top) / r.height, 0, 1) };
   };
+  // Copia las zonas de otra página (fracciones de 0 a 1, valen igual si el bloque de redes está en un lugar parecido).
+  // Reemplaza las de ahora, pero nada se guarda hasta pulsar «Guardar zonas»: cerrar sin guardar lo deja como estaba.
+  function copiarDe(id: string) {
+    const origen = otras.find((o) => o.id === id);
+    if (!origen) return;
+    setZonas(origen.zonas.map((z) => ({ ...z, id: ++contador.current })));
+    setSel(null);
+    setMensaje({ ok: true, texto: `Se copiaron ${origen.zonas.length} zona(s) de «${origen.nombre}». Ajústalas sobre esta imagen y pulsa «Guardar zonas».` });
+  }
   const cambiar = (id: number, parte: Partial<ZonaEnlace>) => setZonas((zs) => zs.map((z) => (z.id === id ? { ...z, ...parte } : z)));
 
   function alPresionar(e: React.PointerEvent) {
@@ -171,6 +183,19 @@ export function EditorZonas({
             <p className="text-xs text-muted-foreground">
               {zonas.filter((z) => z.id !== -1).length} zona(s). En amarillo, las que aún no tienen el dato de contacto configurado: no llevarán enlace.
             </p>
+            {otras.length > 0 && (
+              <label className="block space-y-1 text-xs font-medium text-foreground">
+                Copiar zonas de otra página
+                <select className={SELECT} value="" onChange={(e) => copiarDe(e.target.value)}>
+                  <option value="">Elegir una página…</option>
+                  {otras.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.nombre} ({o.zonas.length})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {seleccionada ? (
               <div className="space-y-2.5 rounded-lg border border-border p-3">
                 <label className="block space-y-1 text-xs font-medium text-foreground">
@@ -199,7 +224,7 @@ export function EditorZonas({
             ) : (
               <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">Toca una zona para elegir a dónde lleva, o dibuja una nueva.</p>
             )}
-            {mensaje && !mensaje.ok && <p className="text-sm text-destructive">{mensaje.texto}</p>}
+            {mensaje && <p className={mensaje.ok ? "text-xs text-muted-foreground" : "text-sm text-destructive"}>{mensaje.texto}</p>}
             <Button className="w-full" onClick={() => void guardar()} disabled={guardando}>
               {guardando ? "Guardando…" : "Guardar zonas"}
             </Button>

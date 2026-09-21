@@ -4,6 +4,7 @@
 // clasifica por su NOMBRE (PLANTILLA NIKE, PORTADA HOMBRES, TERMINOS Y CONDICIONES…) y antes de subir se
 // puede corregir todo en una tabla. Si ya existe un diseño con el mismo nombre, se reemplaza su imagen.
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Check, ImagePlus, Loader2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -125,6 +126,9 @@ export function SubirDisenosMasivo({ marcas, tipos, className }: { marcas: strin
   const repetida = (f: Fila) => filas.filter((x) => identidad(x) === identidad(f)).length > 1;
   const invalida = (f: Fila) => f.nombre.trim().length < 2 || (f.clase === "plantilla" && !f.marca.trim()) || repetida(f);
   const hechas = filas.filter((f) => f.estado === "ok" || f.estado === "reemplazo").length;
+  // Una portada nueva no trae enlaces clicables (hay que dibujarlos); al reemplazar una, se conservan los anteriores.
+  const portadasNuevas = filas.filter((f) => f.clase === "portada" && f.estado === "ok");
+  const portadasReemplazadas = filas.filter((f) => f.clase === "portada" && f.estado === "reemplazo");
   const hayGenerica = filas.some((f) => f.clase === "plantilla" && f.marca === MARCA_GENERICA);
 
   return (
@@ -263,6 +267,19 @@ export function SubirDisenosMasivo({ marcas, tipos, className }: { marcas: strin
                 {subiendo ? "Subiendo…" : `Subir ${porSubir.length} diseño${porSubir.length === 1 ? "" : "s"}`}
               </Button>
               {hechas > 0 && !subiendo && <p className="text-sm text-muted-foreground">{hechas} listo{hechas === 1 ? "" : "s"}.</p>}
+              {!subiendo && portadasNuevas.length > 0 && (
+                <p className="basis-full rounded-md bg-amber-100 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/15 dark:text-amber-300">
+                  {portadasNuevas.length === 1 ? "La portada nueva" : `${portadasNuevas.length} portadas nuevas`} ({portadasNuevas.map((f) => f.nombre).join(", ")}) todavía no tiene
+                  {portadasNuevas.length === 1 ? "" : "n"} enlaces clicables. En{" "}
+                  <Link href="/admin/marketing/catalogos/disenos" className="font-medium underline underline-offset-2">Diseños → Zonas clicables</Link> puedes dibujarlos o copiarlos de otra portada.
+                </p>
+              )}
+              {!subiendo && portadasReemplazadas.length > 0 && (
+                <p className="basis-full rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  Al reemplazar {portadasReemplazadas.map((f) => f.nombre).join(", ")} se conservaron sus enlaces anteriores. Si las redes cambiaron de lugar en la imagen nueva, ajústalos en{" "}
+                  <Link href="/admin/marketing/catalogos/disenos" className="font-medium underline underline-offset-2">Diseños → Zonas clicables</Link>.
+                </p>
+              )}
               {porSubir.some(invalida) && <p className="text-xs text-destructive">Revisa los nombres (sin repetir) y la marca de cada plantilla.</p>}
               {hayGenerica && <p className="text-xs text-muted-foreground">La genérica se usará con las marcas que no tengan plantilla propia.</p>}
               {hechas > 0 && porSubir.length === 0 && (

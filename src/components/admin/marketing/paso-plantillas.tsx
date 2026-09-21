@@ -161,6 +161,11 @@ export function PasoPlantillas({
                 ? `La portada asociada a ${nombreTipo} ya está elegida; puedes cambiarla.`
                 : "Este tipo no tiene una portada asociada: elige una o déjalo sin portada."}
           </p>
+          {documento.portada && documento.portada.zonas?.length === 0 && (
+            <p className="mb-2 rounded-md bg-amber-100 px-2.5 py-1.5 text-xs text-amber-900 dark:bg-amber-500/15 dark:text-amber-300">
+              «{documento.portada.nombre}» no tiene enlaces clicables: en este catálogo los clientes no podrán tocar WhatsApp ni las redes de la portada. Se dibujan en Diseños → Zonas clicables.
+            </p>
+          )}
           <ul className="flex flex-wrap gap-3">
             <li className="w-40">
               <button

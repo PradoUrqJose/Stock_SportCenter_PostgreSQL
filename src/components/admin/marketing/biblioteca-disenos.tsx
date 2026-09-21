@@ -161,9 +161,14 @@ export function BibliotecaDisenos({
                           <option value="final">Al final</option>
                         </select>
                       )}
+                      {f.tipo === "portada" && f.zonas.length === 0 && (
+                        <p className="rounded-md bg-amber-100 px-2 py-1.5 text-[11px] leading-snug text-amber-900 dark:bg-amber-500/15 dark:text-amber-300">
+                          Sin enlaces clicables: los clientes no podrán tocar WhatsApp ni las redes de esta portada.
+                        </p>
+                      )}
                       <div className="flex flex-wrap gap-1.5">
-                        <AccionMini icono={<MousePointerClick />} onClick={() => setZonasDe(f.id)}>
-                          Zonas clicables
+                        <AccionMini icono={<MousePointerClick />} destacada={f.tipo === "portada" && f.zonas.length === 0} onClick={() => setZonasDe(f.id)}>
+                          {f.zonas.length === 0 ? "Dibujar enlaces" : "Zonas clicables"}
                         </AccionMini>
                         <AccionMini icono={f.activa ? <EyeOff /> : <Eye />} onClick={() => accion(() => activarDiseno("fija", f.id, !f.activa))}>
                           {f.activa ? "Desactivar" : "Activar"}
@@ -180,7 +185,17 @@ export function BibliotecaDisenos({
 
       {zonasDe && (() => {
         const f = fijas.find((x) => x.id === zonasDe);
-        return f ? <EditorZonas key={f.id} base={base} pagina={f} enlaces={enlaces} alCerrar={() => setZonasDe(null)} /> : null;
+        return f ? (
+          <EditorZonas
+            key={f.id}
+            base={base}
+            pagina={f}
+            enlaces={enlaces}
+            // Páginas que ya tienen zonas: se pueden copiar como punto de partida.
+            otras={fijas.filter((x) => x.id !== f.id && x.zonas.length > 0).map((x) => ({ id: x.id, nombre: x.nombre, zonas: x.zonas }))}
+            alCerrar={() => setZonasDe(null)}
+          />
+        ) : null;
       })()}
 
       <Dialog open={grande !== null} onOpenChange={(o) => !o && setGrande(null)}>
