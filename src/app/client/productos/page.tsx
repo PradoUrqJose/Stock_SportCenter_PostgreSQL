@@ -23,7 +23,7 @@ export default async function ClientProductosPage() {
   const result = await db.execute(
     `SELECT p.cod_universal, p.genero, p.marca, p.modelo, p.categoria, p.grupo, p.color,
             p.precio_lista, p.descuento, p.stock_total, pi.imagen_url,
-            GROUP_CONCAT(DISTINCT t.nombre) AS tiendas
+            STRING_AGG(DISTINCT t.nombre, ',') AS tiendas
      FROM productos p
      LEFT JOIN producto_imagenes pi ON pi.cod_universal = p.cod_universal
      LEFT JOIN (
@@ -32,7 +32,7 @@ export default async function ClientProductosPage() {
        SELECT cod_universal, genero, alm_der AS alm FROM variantes WHERE alm_der IS NOT NULL
      ) v ON v.cod_universal = p.cod_universal AND v.genero = p.genero
      LEFT JOIN tiendas t ON t.nombre = v.alm
-     GROUP BY p.cod_universal, p.genero
+     GROUP BY p.cod_universal, p.genero, pi.imagen_url
      ORDER BY p.marca, p.modelo`
   );
 
