@@ -171,6 +171,49 @@ export async function guardarPosicionZapatilla(
   }
 }
 
+/** Una caja de texto de la plantilla, en px de diseño (el ancho de la plantilla), tal como llega del navegador. */
+export type CajaTexto = { x: number; y: number; w: number; h: number; color: string; max: number };
+
+const COLOR_HEX = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * Guarda dónde van el código, las tallas y el precio en UNA plantilla (y con qué color y tamaño máximo de letra).
+ * Vale para los catálogos que se generen desde ahora con esa plantilla; los ya generados y publicados conservan
+ * las posiciones con las que salieron. La zona de la zapatilla no se toca (tiene su propio ajuste).
+ */
+export async function guardarZonasTexto(
+  id: string,
+  cajas: { codigo: CajaTexto; tallas: CajaTexto; precio: CajaTexto }
+): Promise<ActionResult> {
+  if (!(await sesionMarketing())) return { success: false, msg: "Sin permisos" };
+  if (!ID.test(id)) return { success: false, msg: "Plantilla no válida" };
+  try {
+    const r = await db.execute({ sql: "SELECT ancho, alto, zonas FROM mk_plantillas WHERE id = ?", args: [id] });
+    if (r.rows.length === 0) return { success: false, msg: "La plantilla no existe" };
+    const ancho = r.rows[0].ancho as number;
+    const alto = r.rows[0].alto as number;
+    const zonas = JSON.parse(r.rows[0].zonas as string) as ZonasPlantilla;
+
+    const nombres = { codigo: "el código", tallas: "las tallas", precio: "el precio" } as const;
+    for (const clave of ["codigo", "tallas", "precio"] as const) {
+      const c = cajas?.[clave];
+      if (!c || ![c.x, c.y, c.w, c.h, c.max].every(Number.isFinite)) return { success: false, msg: `La caja de ${nombres[clave]} no es válida` };
+      if (c.w < 30 || c.h < 16) return { success: false, msg: `La caja de ${nombres[clave]} es demasiado pequeña` };
+      if (c.x < 0 || c.y < 0 || c.x + c.w > ancho + 1 || c.y + c.h > alto + 1) return { success: false, msg: `La caja de ${nombres[clave]} se sale de la plantilla` };
+      if (!COLOR_HEX.test(c.color)) return { success: false, msg: `El color de ${nombres[clave]} debe ser como #0143bb` };
+      if (c.max < 14 || c.max > 240) return { success: false, msg: `El tamaño de letra de ${nombres[clave]} debe estar entre 14 y 240` };
+      zonas[clave] = { x: Math.round(c.x), y: Math.round(c.y), w: Math.round(c.w), h: Math.round(c.h), color: c.color.toLowerCase(), max: Math.round(c.max) };
+    }
+    await db.execute({ sql: "UPDATE mk_plantillas SET zonas = ? WHERE id = ?", args: [JSON.stringify(zonas), id] });
+    revalidatePath("/admin/marketing/catalogos/nuevo");
+    revalidatePath("/admin/marketing/catalogos/disenos");
+    return { success: true, msg: "Posiciones guardadas" };
+  } catch (e) {
+    console.error("[marketing] guardarZonasTexto falló:", e);
+    return { success: false, msg: "No se pudieron guardar las posiciones" };
+  }
+}
+
 export type MarcaAfectada = { marca: string; productos: number };
 
 /**

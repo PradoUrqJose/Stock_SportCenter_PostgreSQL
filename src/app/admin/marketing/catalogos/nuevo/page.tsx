@@ -1,3 +1,4 @@
+import { Montserrat } from "next/font/google";
 import { db } from "@/lib/db";
 import { IMAGENES_BASE, ORIGEN_IMAGENES, requireMarketing } from "@/lib/marketing";
 import { fijasGestion, plantillasGestion } from "@/lib/marketing-catalogos-datos";
@@ -6,6 +7,9 @@ import { tiposCatalogo } from "@/lib/marketing-tipos";
 import { AsistenteCatalogo } from "@/components/admin/marketing/asistente-catalogo";
 import { preconnect } from "react-dom";
 import { ProgresoGeneracion } from "@/components/admin/marketing/progreso-generacion";
+
+// Tipografía del diseño (la misma del catálogo): el editor de posiciones del texto la usa para mostrar el ejemplo real.
+const montserrat = Montserrat({ subsets: ["latin"], weight: "900", display: "swap" });
 
 // Valores que existen hoy en los productos, los más frecuentes primero.
 async function valores(columna: "marca" | "grupo" | "genero" | "categoria"): Promise<string[]> {
@@ -69,6 +73,7 @@ export default async function NuevoCatalogoPage({ searchParams }: { searchParams
           fijas,
           ejemplo: fila ? { cod: fila.cod_universal as string, v: fila.version as number } : null,
           tipos,
+          fuente: montserrat.style.fontFamily,
           opciones: { marcas, grupos, generos, categorias, tallas },
         }}
       />

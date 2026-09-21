@@ -33,6 +33,8 @@ export type Recursos = {
   ejemplo: { cod: string; v: number } | null;
   /** Tipos de catálogo activos (de fábrica y personalizados). */
   tipos: TipoCatalogo[];
+  /** Familia de la tipografía del diseño (Montserrat Black), para el editor de posiciones del texto. */
+  fuente: string;
   opciones: Opciones;
 };
 

@@ -4,12 +4,13 @@
 // plantilla predeterminada de cada marca y dónde se usa cada página fija. La subida masiva está aquí y en Catálogos.
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, MousePointerClick, Star } from "lucide-react";
+import { Eye, EyeOff, MousePointerClick, Star, Type } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { activarDiseno, guardarUsoFija, marcarPredeterminada } from "@/lib/actions/marketing-disenos";
 import { MARCA_GENERICA, type Enlaces, type FijaBiblioteca, type PlantillaLista, type ZonaEnlace } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
 import { AccionMini, TarjetaDiseno } from "./tarjeta-diseno";
+import { EditorTextoPlantilla } from "./editor-texto-plantilla";
 import { EditorZonas } from "./editor-zonas";
 import { EnlacesContacto } from "./enlaces-contacto";
 import { SubirDisenosMasivo } from "./subir-disenos-masivo";
@@ -38,6 +39,7 @@ export function BibliotecaDisenos({
   marcas,
   enlaces,
   tipos,
+  fuente,
 }: {
   base: string;
   plantillas: PlantillaLista[];
@@ -46,6 +48,8 @@ export function BibliotecaDisenos({
   enlaces: Enlaces;
   /** Tipos de catálogo (de fábrica y personalizados) a los que se puede asociar una página. */
   tipos: { id: string; nombre: string }[];
+  /** Familia de la tipografía del diseño, para mostrar el texto de ejemplo en el editor de posiciones. */
+  fuente: string;
 }) {
   const USOS = usosDe(tipos);
   const router = useRouter();
@@ -53,6 +57,7 @@ export function BibliotecaDisenos({
   const [grande, setGrande] = useState<{ src: string; titulo: string } | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [zonasDe, setZonasDe] = useState<string | null>(null);
+  const [textosDe, setTextosDe] = useState<string | null>(null);
 
   function accion(f: () => Promise<{ success: boolean; msg: string }>) {
     setAviso(null);
@@ -106,6 +111,9 @@ export function BibliotecaDisenos({
                             Hacer predeterminada
                           </AccionMini>
                         )}
+                        <AccionMini icono={<Type />} onClick={() => setTextosDe(p.id)}>
+                          Ajustar textos
+                        </AccionMini>
                         <AccionMini icono={p.activa ? <EyeOff /> : <Eye />} onClick={() => accion(() => activarDiseno("plantilla", p.id, !p.activa))}>
                           {p.activa ? "Desactivar" : "Activar"}
                         </AccionMini>
@@ -182,6 +190,11 @@ export function BibliotecaDisenos({
           </div>
         );
       })}
+
+      {textosDe && (() => {
+        const p = plantillas.find((x) => x.id === textosDe);
+        return p ? <EditorTextoPlantilla key={p.id} base={base} plantilla={p} fuente={fuente} alCerrar={() => setTextosDe(null)} /> : null;
+      })()}
 
       {zonasDe && (() => {
         const f = fijas.find((x) => x.id === zonasDe);

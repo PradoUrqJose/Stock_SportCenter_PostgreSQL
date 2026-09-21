@@ -14,6 +14,7 @@ import { MARCA_GENERICA, type FijaBiblioteca, type TipoCatalogo } from "@/lib/ma
 import { cn } from "@/lib/utils";
 import type { DatosCatalogo, Recursos } from "./asistente-catalogo";
 import type { DocumentoCatalogo } from "./documento-catalogo";
+import { EditorTextoPlantilla } from "./editor-texto-plantilla";
 import { GuardarComoTipo } from "./guardar-tipo";
 import { PreviewPlantillas } from "./preview-plantillas";
 import { SubirDisenoAqui, type DestinoSubida } from "./subir-diseno-aqui";
@@ -49,6 +50,8 @@ export function PasoPlantillas({
   const [preview, setPreview] = useState(false);
   // Diseño que se está subiendo desde aquí (portada o plantilla de una marca).
   const [subir, setSubir] = useState<DestinoSubida | null>(null);
+  // Plantilla recién subida: se abre el editor de dónde van el código, las tallas y el precio.
+  const [textosDe, setTextosDe] = useState<string | null>(null);
 
   const activas = plantillas.filter((p) => p.activa);
   const propias = (m: string) => activas.filter((p) => p.marca === m);
@@ -298,10 +301,28 @@ export function PasoPlantillas({
             return t ? { id: t.id, nombre: t.nombre } : null;
           })()}
           slotTipo={<GuardarComoTipo filtros={datos} nombreSugerido={nombreSugerido} alGuardar={alGuardarTipo} />}
-          alSubir={({ id }) => cambiar(subir.clase === "portada" ? { portada: id } : { plantillas: { ...datos.plantillas, [subir.marca]: id } })}
+          alSubir={({ id, reemplazo }) => {
+            cambiar(subir.clase === "portada" ? { portada: id } : { plantillas: { ...datos.plantillas, [subir.marca]: id } });
+            if (subir.clase === "plantilla" && !reemplazo) setTextosDe(id);
+          }}
           alCerrar={() => setSubir(null)}
         />
       )}
+
+      {textosDe && (() => {
+        // La plantilla llega con el refresco de los datos: hasta entonces no hay nada que mostrar.
+        const p = plantillas.find((x) => x.id === textosDe);
+        return p ? (
+          <EditorTextoPlantilla
+            key={p.id}
+            base={base}
+            plantilla={p}
+            fuente={recursos.fuente}
+            nota="Plantilla nueva: copiamos de otra plantilla dónde van el código, las tallas y el precio. Si en este diseño van en otro lugar, acomódalos aquí."
+            alCerrar={() => setTextosDe(null)}
+          />
+        ) : null;
+      })()}
 
       {preview && (
         <PreviewPlantillas

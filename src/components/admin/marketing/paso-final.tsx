@@ -2,10 +2,11 @@
 
 // Paso 3 del asistente: título del catálogo y posición de la zapatilla sobre cada plantilla (con una
 // zapatilla de ejemplo). La posición se guarda en la plantilla y vale para los catálogos que se
-// generen desde ahora; los ya generados conservan la suya.
+// generen desde ahora; los ya generados conservan la suya. También abre el editor de dónde van el código, las
+// tallas y el precio de cada plantilla (por si un diseño los trae en otro lugar).
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Minus, Plus, RotateCcw, Sparkles } from "lucide-react";
+import { ChevronLeft, Minus, Plus, RotateCcw, Sparkles, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import { MARCA_GENERICA } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
 import type { DatosCatalogo, Recursos } from "./asistente-catalogo";
 import type { DocumentoCatalogo } from "./documento-catalogo";
+import { EditorTextoPlantilla } from "./editor-texto-plantilla";
 
 type Pos = { x: number; y: number; w: number };
 const iguales = (a: Pos, b: Pos) => a.x === b.x && a.y === b.y && a.w === b.w;
@@ -49,6 +51,7 @@ export function PasoFinal({
   // Posiciones retocadas y aún sin guardar (por plantilla).
   const [cambios, setCambios] = useState<Record<string, Pos>>({});
   const [aTodas, setATodas] = useState(true);
+  const [editandoTexto, setEditandoTexto] = useState(false);
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null);
   const [ancho, setAncho] = useState(0);
   const lienzo = useRef<HTMLDivElement>(null);
@@ -214,6 +217,14 @@ export function PasoFinal({
               <p className="mt-2 text-xs text-muted-foreground">Arrastra la zapatilla sobre la plantilla para ubicarla.</p>
             </div>
 
+            <div className="border-t border-border pt-4">
+              <p className="text-sm font-medium text-foreground">Código, tallas y precio</p>
+              <p className="mt-1 text-xs text-muted-foreground">Si este diseño los trae en otro lugar que las demás plantillas, acomódalos.</p>
+              <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => setEditandoTexto(true)} disabled={!plantilla || pendiente}>
+                <Type data-icon="inline-start" /> Ajustar posiciones del texto
+              </Button>
+            </div>
+
             <label className="flex items-start gap-2 text-sm">
               <Checkbox checked={aTodas} onCheckedChange={(v) => setATodas(v === true)} className="mt-0.5" />
               <span>
@@ -234,6 +245,11 @@ export function PasoFinal({
           </aside>
         </div>
       )}
+
+      {editandoTexto && (() => {
+        const p = recursos.plantillas.find((x) => x.id === sel);
+        return p ? <EditorTextoPlantilla key={p.id} base={base} plantilla={p} fuente={recursos.fuente} alCerrar={() => setEditandoTexto(false)} /> : null;
+      })()}
 
       {mensaje && <p className={cn("mb-4 text-sm", mensaje.ok ? "text-green-600 dark:text-green-400" : "text-destructive")}>{mensaje.texto}</p>}
 
