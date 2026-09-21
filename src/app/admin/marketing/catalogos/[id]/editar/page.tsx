@@ -4,7 +4,9 @@ import { preconnect } from "react-dom";
 import { db } from "@/lib/db";
 import { IMAGENES_BASE, ORIGEN_IMAGENES, enlacesCatalogo, requireMarketing } from "@/lib/marketing";
 import { borradorDeVersion, fijasDeBiblioteca, plantillasPorId, sincronizarVersiones } from "@/lib/marketing-catalogos-datos";
-import type { Borrador } from "@/lib/marketing-catalogo";
+import { escalaDe, normalizarFiltros, type Borrador } from "@/lib/marketing-catalogo";
+import { indiceDeTallas } from "@/lib/marketing-tallas-datos";
+import { convertirProductos, textoAviso } from "@/lib/marketing-tallas";
 import { EditorCatalogo } from "@/components/catalogo/editor-catalogo";
 
 // Misma tipografía provisional que el visor público (hasta tener la definitiva).
@@ -16,6 +18,7 @@ type Fila = {
   borrador: string;
   version_publicada: number | null;
   created_at: string;
+  filtros: string;
 };
 
 /** Un catálogo generado antes de registrar la fecha del stock: los datos son de cuando se generó. */
@@ -33,15 +36,15 @@ export default async function EditarCatalogoPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ version?: string; publicado?: string; sinimagen?: string }>;
+  searchParams: Promise<{ version?: string; publicado?: string; sinimagen?: string; tallasusa?: string }>;
 }) {
   await requireMarketing();
   preconnect(ORIGEN_IMAGENES);
   const { id } = await params;
-  const { version, publicado, sinimagen } = await searchParams;
+  const { version, publicado, sinimagen, tallasusa } = await searchParams;
 
   const c = await db.execute({
-    sql: "SELECT slug, titulo, borrador, version_publicada, created_at FROM mk_catalogos WHERE id = ?",
+    sql: "SELECT slug, titulo, borrador, version_publicada, created_at, filtros FROM mk_catalogos WHERE id = ?",
     args: [id],
   });
   if (c.rows.length === 0) notFound();
@@ -72,16 +75,26 @@ export default async function EditarCatalogoPage({
   const usadas = [...borrador.paginas, ...quitadas].flatMap((p) => (p.tipo === "producto" ? [p.plantilla] : []));
   const [plantillas, biblioteca] = await Promise.all([plantillasPorId([...new Set(usadas)]), fijasDeBiblioteca()]);
 
+  // Tallas: el borrador guarda la talla USA del ERP; aquí se muestran en la escala del catálogo (peruana según la equivalencia
+  // de cada marca y género). Lo que no tenga equivalencia queda en USA y se avisa.
+  const escalaTalla = escalaDe(normalizarFiltros(JSON.parse(cat.filtros)));
+  const idxTallas = await indiceDeTallas();
+  const productosVistos = convertirProductos(borrador.productos, idxTallas, escalaTalla).productos;
+  const usados = [...new Set(borrador.paginas.flatMap((p) => (p.tipo === "producto" ? [p.prod] : [])))].map((i) => borrador.productos[i]);
+  const avisosTallas = escalaTalla === "peru" ? convertirProductos(usados, idxTallas, "peru").avisos.map(textoAviso) : [];
+
   return (
     <div className={montserrat.className}>
       <EditorCatalogo
-        key={versionBase ?? "borrador"}
+        key={`${versionBase ?? "borrador"}-${escalaTalla}`}
+        escalaTalla={escalaTalla}
+        avisosTallas={avisosTallas}
         id={id}
         titulo={cat.titulo}
         base={IMAGENES_BASE}
         fuente={montserrat.style.fontFamily}
         plantillas={plantillas}
-        productosIniciales={borrador.productos}
+        productosIniciales={productosVistos}
         paginasIniciales={borrador.paginas}
         quitadasIniciales={quitadas}
         biblioteca={biblioteca}
@@ -93,7 +106,7 @@ export default async function EditarCatalogoPage({
         enlacesIniciales={cat.version_publicada ? await enlacesCatalogo(cat.slug) : null}
         mensajeInicial={
           publicado && publicado === String(versionBase)
-            ? `Versión ${publicado} publicada: los clientes ya la ven en el mismo enlace.${Number(sinimagen) > 0 ? ` Ojo: ${Number(sinimagen)} producto(s) salen sin imagen (su zapatilla está vacía); súbeles la imagen y publica otra versión.` : ""}`
+            ? `Versión ${publicado} publicada: los clientes ya la ven en el mismo enlace.${Number(sinimagen) > 0 ? ` Ojo: ${Number(sinimagen)} producto(s) salen sin imagen (su zapatilla está vacía); súbeles la imagen y publica otra versión.` : ""}${Number(tallasusa) > 0 ? ` Ojo: ${Number(tallasusa)} producto(s) salen con talla USA por falta de equivalencia (Marketing → Tallas).` : ""}`
             : undefined
         }
       />

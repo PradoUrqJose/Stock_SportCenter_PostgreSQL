@@ -22,6 +22,8 @@ import { documentoDelCatalogo, ordenConPortada, ordenConSeparador, ordenConSepar
 import { PasoPlantillas } from "./paso-plantillas";
 import { PasoFinal } from "./paso-final";
 import { crearTipo } from "@/lib/actions/marketing-tipos";
+import { tallasSinEquivalencia } from "@/lib/actions/marketing-tallas";
+import type { AvisoTallas, EscalaTalla } from "@/lib/marketing-tallas";
 import { iniciarSincronizacion } from "@/lib/actions/marketing-catalogos";
 import { DialogoTipo, aEntradaTipo, tipoDesdeBorrador } from "./dialogo-tipo";
 import { GuardarComoTipo } from "./guardar-tipo";
@@ -61,6 +63,8 @@ export type DatosCatalogo = {
   separadores: string[];
   /** Orden del documento fijado en el Preview (ids de fijas y «productos»); undefined = automático. */
   orden: string[] | undefined;
+  /** Escala de las tallas que se muestran: la peruana (por defecto) o la USA del ERP. */
+  escalaTalla: EscalaTalla;
 };
 
 type Paso = "filtros" | "plantillas" | "final";
@@ -132,9 +136,12 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
     portada: undefined,
     separadores: [],
     orden: undefined,
+    escalaTalla: "peru",
     ...(sincronizar?.inicial ?? {}),
   });
   const [marcasCatalogo, setMarcasCatalogo] = useState<MarcaAfectada[] | null>(null);
+  // Marcas y géneros de este catálogo sin equivalencia de tallas (saldrán con talla USA); null = aún no se sabe.
+  const [sinEquivalencia, setSinEquivalencia] = useState<AvisoTallas[] | null>(null);
   // Tipos disponibles: los de la base de datos más los que se guarden desde este asistente.
   const [tipos, setTipos] = useState<TipoCatalogo[]>(recursos.tipos);
   // «＋ Nuevo tipo»: formulario completo para crear un tipo sin salir del asistente.
@@ -184,8 +191,11 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
   async function irAPlantillas() {
     ir("plantillas");
     setMarcasCatalogo(null);
-    const r = await marcasAfectadas({ categorias: datos.categorias, grupos: datos.grupos, generos: datos.generos, marcas: datos.marcas });
+    setSinEquivalencia(null);
+    const filtros = { categorias: datos.categorias, grupos: datos.grupos, generos: datos.generos, marcas: datos.marcas };
+    const [r, t] = await Promise.all([marcasAfectadas(filtros), tallasSinEquivalencia(filtros)]);
     setMarcasCatalogo(r.success && r.data ? r.data : []);
+    setSinEquivalencia(t.success && t.data ? t.data : []);
   }
 
   // Sincronizar: consulta el ERP con los filtros de ahora y sigue a la pantalla del avance y la revisión.
@@ -208,6 +218,7 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
       precio_min: min !== null && Number.isNaN(min) ? null : min,
       precio_max: max !== null && Number.isNaN(max) ? null : max,
       plantillas: datos.plantillas,
+      escala_talla: datos.escalaTalla,
     });
     if (r.success && r.data) {
       router.push(`/admin/marketing/catalogos/${sincronizar.catalogoId}/sincronizar?generacion=${r.data.id}${sincronizar.version === null ? "" : `&version=${sincronizar.version}`}`);
@@ -447,6 +458,40 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
                   ))}
                 </div>
               </fieldset>
+
+              <fieldset className={cn("space-y-2", ENTRA)} style={entrada(4)}>
+                <legend className="mb-1 text-sm font-medium">Tallas a mostrar</legend>
+                <div className="flex flex-wrap gap-2.5">
+                  {([
+                    ["peru", "Peruana", "Cada talla USA del ERP se muestra con su equivalente peruano, según la marca y el género."],
+                    ["usa", "USA", "Las tallas tal como las entrega el ERP."],
+                  ] as const).map(([valor, nombre, nota]) => (
+                    <button
+                      key={valor}
+                      type="button"
+                      aria-pressed={datos.escalaTalla === valor}
+                      onClick={() => cambiar({ escalaTalla: valor })}
+                      className={cn(
+                        "max-w-xs rounded-xl border px-4 py-2.5 text-left transition-all duration-300 hover:-translate-y-0.5",
+                        datos.escalaTalla === valor ? "border-foreground bg-muted shadow-sm" : "border-border hover:bg-muted/50"
+                      )}
+                    >
+                      <span className="block text-sm font-medium text-foreground">
+                        {nombre}
+                        {valor === "peru" && <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 align-middle text-[10px] font-normal text-muted-foreground">Recomendada</span>}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">{nota}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Las equivalencias se administran en{" "}
+                  <Link href="/admin/marketing/tallas" target="_blank" className="underline underline-offset-2 hover:text-foreground">
+                    Marketing → Tallas
+                  </Link>
+                  . Donde falte una, la talla sale en USA y se te avisa.
+                </p>
+              </fieldset>
             </div>
           </section>
         )}
@@ -457,6 +502,7 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
             datos={datos}
             cambiar={cambiar}
             marcasCatalogo={marcasCatalogo}
+            sinEquivalencia={datos.escalaTalla === "peru" ? sinEquivalencia : []}
             documento={documento}
             nombreSugerido={nombreSugerido}
             alGuardarTipo={(t) => usarTipoGuardado(t, true)}

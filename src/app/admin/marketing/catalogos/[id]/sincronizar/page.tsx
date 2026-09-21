@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireMarketing } from "@/lib/marketing";
-import { ALMACENES_POR_DEFECTO, normalizarFiltros, textoFiltros } from "@/lib/marketing-catalogo";
+import { ALMACENES_POR_DEFECTO, escalaDe, normalizarFiltros, textoFiltros } from "@/lib/marketing-catalogo";
 import type { InformeSincronizacion } from "@/lib/marketing-sincronizar";
 import { opcionesDeFiltros } from "@/lib/marketing-opciones";
 import { tiposCatalogo } from "@/lib/marketing-tipos";
@@ -117,6 +117,7 @@ export default async function SincronizarCatalogoPage({
             precioMax: f.precio_max == null ? "" : String(f.precio_max),
             almacenes: f.almacenes.length > 0 ? f.almacenes : ALMACENES_POR_DEFECTO,
             plantillas: f.plantillas,
+            escalaTalla: escalaDe(f),
           },
         }}
       />

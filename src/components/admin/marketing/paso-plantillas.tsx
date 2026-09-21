@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { MarcaAfectada } from "@/lib/actions/marketing-disenos";
 import { MARCA_GENERICA, type FijaBiblioteca, type TipoCatalogo } from "@/lib/marketing-catalogo";
+import type { AvisoTallas } from "@/lib/marketing-tallas";
 import { cn } from "@/lib/utils";
 import type { DatosCatalogo, Recursos } from "./asistente-catalogo";
 import type { DocumentoCatalogo } from "./documento-catalogo";
@@ -30,6 +31,7 @@ export function PasoPlantillas({
   datos,
   cambiar,
   marcasCatalogo,
+  sinEquivalencia,
   documento,
   nombreSugerido,
   alGuardarTipo,
@@ -45,6 +47,8 @@ export function PasoPlantillas({
   datos: DatosCatalogo;
   cambiar: (parte: Partial<DatosCatalogo>) => void;
   marcasCatalogo: MarcaAfectada[] | null;
+  /** Marcas y géneros sin equivalencia de tallas (saldrán con talla USA); null = aún no se sabe; vacío = todo cubierto o escala USA. */
+  sinEquivalencia: AvisoTallas[] | null;
   documento: DocumentoCatalogo;
   /** Nombre que se sugiere al guardar los filtros como tipo. */
   nombreSugerido: string;
@@ -201,6 +205,30 @@ export function PasoPlantillas({
           </div>
         )}
       </div>
+
+      {/* Tallas peruanas: marcas y géneros que no tienen equivalencia y saldrán con talla USA */}
+      {sinEquivalencia && sinEquivalencia.length > 0 && (
+        <div className="mb-8 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-300" role="alert">
+          <p className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+            <span>
+              <strong>Sin equivalencia de tallas:</strong> estos productos saldrán con la talla <strong>USA</strong> (que sí tenemos) en vez de la peruana:{" "}
+              {sinEquivalencia
+                .slice(0, 12)
+                .map((a) => `${a.marca} ${a.genero} (${a.productos})`)
+                .join(", ")}
+              {sinEquivalencia.length > 12 ? ` y ${sinEquivalencia.length - 12} más` : ""}.
+            </span>
+          </p>
+          <p className="mt-1.5 pl-6 text-xs">
+            Puedes agregarlas en{" "}
+            <a href="/admin/marketing/tallas" target="_blank" rel="noreferrer" className="font-medium underline underline-offset-2">
+              Marketing → Tallas
+            </a>{" "}
+            (se abre en otra pestaña) y generar el catálogo después: se usan las equivalencias de ese momento.
+          </p>
+        </div>
+      )}
 
       {/* Portada, separadores opcionales y cierres que corresponden a estos filtros */}
       <div className="space-y-7">

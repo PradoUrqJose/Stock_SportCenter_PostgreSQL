@@ -35,10 +35,11 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EnlaceCatalogo } from "@/components/admin/marketing/acciones-catalogo";
 import { ReemplazarImagen } from "@/components/admin/marketing/reemplazar-imagen";
-import { guardarEdicion, publicarCatalogo } from "@/lib/actions/marketing-catalogos";
+import { cambiarEscalaTalla, guardarEdicion, publicarCatalogo } from "@/lib/actions/marketing-catalogos";
 import { enviarPaginaFija, prepararPaginaFija } from "@/lib/subir-imagen-cliente";
 import type { Ajuste, FijaBiblioteca, PaginaCat, PaginaFija, PlantillaSnap, ProductoCat, ResumenSincronizacion } from "@/lib/marketing-catalogo";
 import { fechaStock } from "@/lib/marketing-sincronizar";
+import type { EscalaTalla } from "@/lib/marketing-tallas";
 import { cn } from "@/lib/utils";
 import { BotonPdf } from "./boton-pdf";
 import { ANCHO_MAX, PaginaShell, VisorCtx, useContextoVisor } from "./visor-catalogo";
@@ -137,6 +138,10 @@ type Props = {
   stockAl?: string | null;
   /** Última sincronización con el ERP que se aplicó a este borrador. */
   sincronizacion?: ResumenSincronizacion | null;
+  /** Escala de las tallas que se muestran (las del ERP son USA; la peruana sale de las equivalencias). */
+  escalaTalla: EscalaTalla;
+  /** Marcas y géneros de este catálogo que salen con talla USA por no tener equivalencia (frases ya armadas). */
+  avisosTallas: string[];
 };
 
 export function EditorCatalogo({
@@ -156,6 +161,8 @@ export function EditorCatalogo({
   biblioteca,
   stockAl,
   sincronizacion,
+  escalaTalla,
+  avisosTallas,
 }: Props) {
   const router = useRouter();
   // Estado de partida (estable): sirve también para saber si el usuario ya cambió algo.
@@ -337,7 +344,7 @@ export function EditorCatalogo({
     const r = await publicarCatalogo(id, versionBase);
     if (r.success && r.data) {
       // La versión nueva pasa a ser la que se edita; la de partida vuelve a verse como se publicó.
-      router.replace(`/admin/marketing/catalogos/${id}/editar?version=${r.data.version}&publicado=${r.data.version}${r.data.sinImagen > 0 ? `&sinimagen=${r.data.sinImagen}` : ""}`);
+      router.replace(`/admin/marketing/catalogos/${id}/editar?version=${r.data.version}&publicado=${r.data.version}${r.data.sinImagen > 0 ? `&sinimagen=${r.data.sinImagen}` : ""}${r.data.conTallaUsa > 0 ? `&tallasusa=${r.data.conTallaUsa}` : ""}`);
     } else {
       setPublicando(false);
       setMensaje({ ok: false, texto: r.msg });
@@ -363,6 +370,26 @@ export function EditorCatalogo({
     [paginas, productos]
   );
   const codigosSinImagen = useMemo(() => new Set(sinImagen.map((x) => x.prod.cod)).size, [sinImagen]);
+  // Cambiar la escala de tallas: se guarda lo editado, se cambia en el catálogo y la página se vuelve a armar con la escala nueva.
+  const [cambiandoEscala, setCambiandoEscala] = useState(false);
+  async function elegirEscala(nueva: EscalaTalla) {
+    if (nueva === escalaTalla || cambiandoEscala) return;
+    setCambiandoEscala(true);
+    setMensaje(null);
+    clearTimeout(temporizador.current);
+    if (!(await guardarUltimo())) {
+      setCambiandoEscala(false);
+      setMensaje({ ok: false, texto: "No se pudo guardar lo que llevas editado; reintenta antes de cambiar las tallas." });
+      return;
+    }
+    const r = await cambiarEscalaTalla(id, nueva);
+    if (!r.success) {
+      setCambiandoEscala(false);
+      setMensaje({ ok: false, texto: r.msg });
+      return;
+    }
+    router.refresh();
+  }
   // Productos que la sincronización quitó por falta de stock y siguen sin restaurarse.
   const quitadosPorStock = useMemo(() => quitadas.filter((q) => q.tipo === "producto" && q.motivo === "sync").length, [quitadas]);
 
@@ -466,6 +493,35 @@ export function EditorCatalogo({
             </button>
           </div>
         )}
+
+        <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-[#2a2d35] px-4 py-2 text-xs", avisosTallas.length > 0 ? "bg-amber-500/10 text-amber-300" : "text-[#9aa0ab]")}>
+          <span className="flex items-center gap-1.5">
+            Tallas
+            <span className="inline-flex overflow-hidden rounded-md border border-[#2a2d35]" role="group" aria-label="Escala de tallas">
+              {(["peru", "usa"] as const).map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  aria-pressed={escalaTalla === e}
+                  disabled={cambiandoEscala}
+                  onClick={() => void elegirEscala(e)}
+                  className={cn("px-2 py-0.5 transition-colors", escalaTalla === e ? "bg-white/15 text-[#e8e8e8]" : "hover:bg-white/5")}
+                >
+                  {e === "peru" ? "Perú" : "USA"}
+                </button>
+              ))}
+            </span>
+          </span>
+          {avisosTallas.length > 0 && (
+            <span className="min-w-0">
+              <strong>Salen con talla USA por falta de equivalencia:</strong> {avisosTallas.slice(0, 3).join(" · ")}
+              {avisosTallas.length > 3 ? ` · y ${avisosTallas.length - 3} más` : ""}{" "}
+              <a href="/admin/marketing/tallas" target="_blank" rel="noreferrer" className="font-medium underline underline-offset-2">
+                Agregar en Tallas
+              </a>
+            </span>
+          )}
+        </div>
 
         {(stockAl || sincronizacion) && (
           <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[#2a2d35] px-4 py-2 text-xs", quitadosPorStock > 0 ? "bg-amber-500/10 text-amber-300" : "text-[#9aa0ab]")}>

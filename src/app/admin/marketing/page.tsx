@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Images, LayoutTemplate } from "lucide-react";
+import { Images, LayoutTemplate, Ruler } from "lucide-react";
 import { requireMarketing } from "@/lib/marketing";
 
 export default async function MarketingPage() {
@@ -31,6 +31,15 @@ export default async function MarketingPage() {
           <LayoutTemplate className="h-5 w-5 text-muted-foreground" />
           <p className="mt-3 text-sm font-medium text-foreground">Catálogos</p>
           <p className="mt-1 text-xs text-muted-foreground">Generar, publicar y compartir catálogos con clientes.</p>
+        </Link>
+
+        <Link
+          href="/admin/marketing/tallas"
+          className="rounded-lg border border-border bg-card p-4 transition-shadow hover:shadow-md"
+        >
+          <Ruler className="h-5 w-5 text-muted-foreground" />
+          <p className="mt-3 text-sm font-medium text-foreground">Tallas</p>
+          <p className="mt-1 text-xs text-muted-foreground">Equivalencia de tallas USA ⇄ Perú por marca y género.</p>
         </Link>
       </div>
     </div>

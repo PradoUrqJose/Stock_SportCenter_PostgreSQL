@@ -3,6 +3,8 @@
 // coordenadas están en "px de diseño" (el ancho de la plantilla); la pantalla
 // solo las escala.
 
+import type { EscalaTalla } from "./marketing-tallas";
+
 export type Zona = { x: number; y: number; w: number; h: number; color?: string; max?: number };
 export type ZonasPlantilla = { codigo: Zona; tallas: Zona; precio: Zona; zapatilla: Zona };
 
@@ -66,6 +68,8 @@ export type Snapshot = {
   generado: string;
   /** Cuándo se consultó el stock al ERP (ISO); ausente en versiones publicadas antes de que se registrara. */
   stock_al?: string;
+  /** Escala de las tallas que trae `productos` («peru» = ya convertidas); ausente = USA. */
+  escala_talla?: EscalaTalla;
   imagenes_base: string;
   plantillas: Record<string, PlantillaSnap>;
   productos: ProductoCat[];
@@ -90,6 +94,11 @@ export type FiltrosCatalogo = {
   /** Precio lista en soles; null = sin límite. */
   precio_min: number | null;
   precio_max: number | null;
+  /**
+   * Escala de las tallas que se muestran: «peru» (la peruana, según la equivalencia de cada marca y género) o «usa» (la del ERP).
+   * Los catálogos nuevos salen con «peru»; sin definir (catálogos anteriores) es «usa», para no cambiar lo que ya se publicó.
+   */
+  escala_talla?: EscalaTalla;
   /** Plantilla elegida por marca (marca → id); la clave «*» es la genérica. Sin elegir = la predeterminada. */
   plantillas: Record<string, string>;
   /** Portada elegida (id de página fija); null = sin portada; sin definir = la asociada al tipo de catálogo. */
@@ -104,6 +113,9 @@ export type FiltrosCatalogo = {
    */
   orden?: string[];
 };
+
+/** La escala de tallas de un catálogo; los anteriores a las equivalencias no la traen y siguen en USA. */
+export const escalaDe = (f: { escala_talla?: EscalaTalla }): EscalaTalla => f.escala_talla ?? "usa";
 
 /** Lugar de las páginas de producto dentro de `FiltrosCatalogo.orden`: todas juntas (por marca, una tras otra). */
 export const CLAVE_PRODUCTOS = "productos";
@@ -231,6 +243,7 @@ export function normalizarFiltros(crudo: unknown): FiltrosCatalogo {
     tallas: lista(o.tallas),
     precio_min: num(o.precio_min),
     precio_max: num(o.precio_max),
+    ...(o.escala_talla === "peru" || o.escala_talla === "usa" ? { escala_talla: o.escala_talla } : {}),
     plantillas:
       typeof o.plantillas === "object" && o.plantillas !== null
         ? Object.fromEntries(Object.entries(o.plantillas as Record<string, unknown>).filter(([, v]) => typeof v === "string") as [string, string][])
@@ -419,6 +432,7 @@ export function textoFiltros(f: FiltrosCatalogo, tipos: readonly { id: string; n
     f.generos.length > 0 && `Género: ${f.generos.join(", ")}`,
     f.tallas.length > 0 && `Talla: ${f.tallas.join(", ")}`,
     precio,
+    f.escala_talla === "peru" && "Tallas peruanas",
     `Almacenes: ${f.almacenes.join(", ")}`,
   ].filter((x): x is string => Boolean(x));
 }

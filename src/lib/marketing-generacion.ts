@@ -10,6 +10,7 @@ import {
   MARCA_GENERICA,
   conFijasAutomaticas,
   construirBorrador,
+  escalaDe,
   normalizarFiltros,
   plantillaDeMarca,
   tipoEfectivo,
@@ -18,6 +19,8 @@ import {
   type FiltrosCatalogo,
 } from "@/lib/marketing-catalogo";
 import { sincronizarBorrador } from "@/lib/marketing-sincronizar";
+import { convertirProductos, textoAviso } from "@/lib/marketing-tallas";
+import { indiceDeTallas } from "@/lib/marketing-tallas-datos";
 import { borradorDeVersion, fijasDeBiblioteca, plantillasGestion } from "@/lib/marketing-catalogos-datos";
 
 /** El ERP tiene un tope de 4 min; pasado este tiempo una generación en curso se da por perdida. */
@@ -113,9 +116,12 @@ export async function ejecutarGeneracion(id: string): Promise<void> {
       args: [catalogoId, randomBytes(9).toString("base64url"), titulo, JSON.stringify(filtros), JSON.stringify(borrador), created_by],
     });
     const nSinPlantilla = Object.values(borrador.resumen.sin_plantilla ?? {}).reduce((a, b) => a + b, 0);
+    // Tallas peruanas: lo que no tenga equivalencia sale con talla USA y se avisa.
+    const sinEquivalencia = escalaDe(filtros) === "peru" ? convertirProductos(borrador.productos, await indiceDeTallas(), "peru").avisos : [];
     const avisos = [
       nSinPlantilla > 0 ? `${nSinPlantilla} productos sin plantilla de su marca quedaron fuera` : "",
       borrador.resumen.sin_imagen.length > 0 ? `${borrador.resumen.sin_imagen.length} con la imagen por agregar` : "",
+      sinEquivalencia.length > 0 ? `talla USA por falta de equivalencia: ${sinEquivalencia.slice(0, 4).map(textoAviso).join(" | ")}${sinEquivalencia.length > 4 ? ` y ${sinEquivalencia.length - 4} más` : ""}` : "",
       borrador.resumen.consulta_parcial ? "consulta repartida por marca: pudieron faltar marcas que STOCK no conoce" : "",
       (borrador.resumen.sin_explicar ?? 0) !== 0 ? `${borrador.resumen.sin_explicar} filas del ERP sin explicación` : "",
     ].filter(Boolean);

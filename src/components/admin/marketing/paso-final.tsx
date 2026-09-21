@@ -109,6 +109,7 @@ export function PasoFinal({
         precio_min: min !== null && Number.isNaN(min) ? null : min,
         precio_max: max !== null && Number.isNaN(max) ? null : max,
         plantillas: datos.plantillas,
+        escala_talla: datos.escalaTalla,
         // Lo que se ve en el Preview es lo que se genera.
         portada: documento.portada ? documento.portada.id : null,
         separadores: documento.separadoresElegidos.map((f) => f.id),

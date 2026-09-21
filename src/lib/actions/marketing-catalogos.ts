@@ -9,6 +9,8 @@ import { IMAGENES_BASE, enlacesCatalogo, sesionMarketing } from "@/lib/marketing
 import { borradorDeVersion, enlacesDeContacto, plantillasPorId, sincronizarVersiones, zonasDeBiblioteca } from "@/lib/marketing-catalogos-datos";
 import { borradorBase, cerrarGeneracionesAbandonadas, ejecutarGeneracion, ejecutarSincronizacion } from "@/lib/marketing-generacion";
 import { sincronizarBorrador, type InformeSincronizacion } from "@/lib/marketing-sincronizar";
+import { indiceDeTallas } from "@/lib/marketing-tallas-datos";
+import { convertirProductos } from "@/lib/marketing-tallas";
 import { generarImagenCompartir } from "@/lib/marketing-og";
 import { etiquetaCatalogo } from "@/lib/marketing-publico";
 import { idsDeTipos } from "@/lib/marketing-tipos";
@@ -19,6 +21,7 @@ import {
   CLAVE_PRODUCTOS,
   conZonasClicables,
   validarPaginas,
+  escalaDe,
   normalizarFiltros,
   type Borrador,
   type FiltrosCatalogo,
@@ -38,6 +41,8 @@ type EntradaFiltros = {
   precio_max: number | null;
   /** Plantilla elegida por marca (marca → id); la clave «*» es la genérica. */
   plantillas?: Record<string, string>;
+  /** Escala de las tallas que se muestran: «peru» o «usa». */
+  escala_talla?: "peru" | "usa";
 };
 
 /** Valida los filtros que llegan del navegador (nunca se confía en ellos) y los deja en su forma guardada. */
@@ -69,7 +74,8 @@ async function filtrosDeEntrada(input: EntradaFiltros): Promise<{ filtros: Filtr
   if (grupos.length + marcas.length + generos.length + categorias.length === 0) {
     return { error: "Elige un tipo de catálogo o al menos una marca, un grupo, un género o una categoría" };
   }
-  return { filtros: { tipo, almacenes, grupos, marcas, generos, categorias, tallas, precio_min, precio_max, plantillas } };
+  const escala_talla = input.escala_talla === "peru" || input.escala_talla === "usa" ? input.escala_talla : undefined;
+  return { filtros: { tipo, almacenes, grupos, marcas, generos, categorias, tallas, precio_min, precio_max, plantillas, ...(escala_talla ? { escala_talla } : {}) } };
 }
 
 /**
@@ -91,6 +97,8 @@ export async function iniciarGeneracion(input: {
   precio_max: number | null;
   /** Plantilla elegida por marca (marca → id); la clave «*» es la genérica. */
   plantillas?: Record<string, string>;
+  /** Escala de las tallas que se muestran: «peru» (por defecto) o «usa». */
+  escala_talla?: "peru" | "usa";
   /** Portada elegida (id de página fija); null = sin portada; sin definir = la asociada al tipo. */
   portada?: string | null;
   /** Separadores elegidos (ids de páginas fijas). */
@@ -107,6 +115,8 @@ export async function iniciarGeneracion(input: {
   const base = await filtrosDeEntrada(input);
   if ("error" in base) return { success: false, msg: base.error };
   const { tipo, almacenes, grupos, marcas, generos, categorias, tallas, precio_min, precio_max, plantillas } = base.filtros;
+  // Los catálogos nuevos salen con la talla peruana salvo que se pida la USA.
+  const escala_talla = base.filtros.escala_talla ?? "peru";
 
   // Portada y separadores: ids de páginas fijas (la generación ignora los que no existan o no sean del tipo).
   const ID_FIJA = /^[a-z0-9-]{1,60}$/;
@@ -137,6 +147,7 @@ export async function iniciarGeneracion(input: {
       tallas,
       precio_min,
       precio_max,
+      escala_talla,
       plantillas,
       ...(input.portada === undefined ? {} : { portada: input.portada }),
       ...(separadores.length > 0 ? { separadores } : {}),
@@ -266,14 +277,14 @@ export async function guardarEdicion(
 export async function publicarCatalogo(
   id: string,
   base: number | null = null
-): Promise<ActionResult<{ version: number; sinImagen: number; enlaces: { principal: string; alterno: string } }>> {
+): Promise<ActionResult<{ version: number; sinImagen: number; conTallaUsa: number; enlaces: { principal: string; alterno: string } }>> {
   const sesion = await sesionMarketing();
   if (!sesion) return { success: false, msg: "Sin permisos" };
 
   try {
-    const c = await db.execute({ sql: "SELECT slug, titulo, borrador, created_at FROM mk_catalogos WHERE id = ?", args: [id] });
+    const c = await db.execute({ sql: "SELECT slug, titulo, borrador, created_at, filtros FROM mk_catalogos WHERE id = ?", args: [id] });
     if (c.rows.length === 0) return { success: false, msg: "El catálogo no existe" };
-    const { slug, titulo, borrador: crudo, created_at } = c.rows[0] as { slug: string; titulo: string; borrador: string; created_at: string };
+    const { slug, titulo, borrador: crudo, created_at, filtros: filtrosCrudos } = c.rows[0] as { slug: string; titulo: string; borrador: string; created_at: string; filtros: string };
 
     let partida: Borrador;
     if (base === null) {
@@ -296,10 +307,17 @@ export async function publicarCatalogo(
     const faltan = ids.filter((i) => !plantillas[i]);
     if (faltan.length > 0) return { success: false, msg: `Falta la plantilla ${faltan.join(", ")}` };
 
-    const armado = armarSnapshot(titulo, borrador, plantillas, IMAGENES_BASE);
+    // Las tallas que ven los clientes: en la escala del catálogo (peruana con la equivalencia de cada marca y género). El borrador
+    // se guarda siempre con la talla USA del ERP; solo el snapshot publicado lleva las tallas ya convertidas.
+    const escala = escalaDe(normalizarFiltros(JSON.parse(filtrosCrudos)));
+    const usados = [...new Set(borrador.paginas.flatMap((p) => (p.tipo === "producto" ? [p.prod] : [])))].map((i) => borrador.productos[i]);
+    const idxTallas = await indiceDeTallas();
+    const convertidos = convertirProductos(borrador.productos, idxTallas, escala);
+    const conTallaUsa = escala === "peru" ? convertirProductos(usados, idxTallas, "peru").avisos.reduce((a, x) => a + x.productos, 0) : 0;
+    const armado = armarSnapshot(titulo, { ...borrador, productos: convertidos.productos }, plantillas, IMAGENES_BASE);
     // Enlaces sobre las páginas fijas (portada, redes…): salen de la biblioteca y de los enlaces de contacto vigentes.
     const [zonas, enlaces] = await Promise.all([zonasDeBiblioteca(), enlacesDeContacto()]);
-    const datosSnapshot = { ...armado, paginas: conZonasClicables(armado.paginas, zonas, enlaces) };
+    const datosSnapshot = { ...armado, ...(escala === "peru" ? { escala_talla: "peru" as const } : {}), paginas: conZonasClicables(armado.paginas, zonas, enlaces) };
 
     const v = await db.execute({
       sql: "SELECT COALESCE(MAX(version), 0) + 1 AS siguiente FROM mk_catalogo_versiones WHERE catalogo_id = ?",
@@ -336,8 +354,8 @@ export async function publicarCatalogo(
     const sinImagen = new Set(borrador.paginas.flatMap((p) => (p.tipo === "producto" && borrador.productos[p.prod]?.v === 0 ? [borrador.productos[p.prod].cod] : []))).size;
     return {
       success: true,
-      msg: `Versión ${version} publicada${sinImagen > 0 ? `; ${sinImagen} producto${sinImagen === 1 ? "" : "s"} sin imagen` : ""}`,
-      data: { version, sinImagen, enlaces: await enlacesCatalogo(slug) },
+      msg: `Versión ${version} publicada${sinImagen > 0 ? `; ${sinImagen} producto${sinImagen === 1 ? "" : "s"} sin imagen` : ""}${conTallaUsa > 0 ? `; ${conTallaUsa} con talla USA (falta la equivalencia)` : ""}`,
+      data: { version, sinImagen, conTallaUsa, enlaces: await enlacesCatalogo(slug) },
     };
   } catch (e) {
     console.error("[marketing] publicarCatalogo falló:", e);
@@ -437,5 +455,22 @@ export async function aplicarSincronizacion(generacionId: string): Promise<Actio
   } catch (e) {
     console.error("[marketing] aplicarSincronizacion falló:", e);
     return { success: false, msg: "No se pudo aplicar la sincronización" };
+  }
+}
+
+/** Cambia la escala de tallas de un catálogo (peruana o USA): rige el editor y lo que se publique desde ahora; las versiones ya publicadas no cambian. */
+export async function cambiarEscalaTalla(id: string, escala: "peru" | "usa"): Promise<ActionResult> {
+  if (!(await sesionMarketing())) return { success: false, msg: "Sin permisos" };
+  if (escala !== "peru" && escala !== "usa") return { success: false, msg: "Escala no válida" };
+  try {
+    const c = await db.execute({ sql: "SELECT filtros FROM mk_catalogos WHERE id = ?", args: [id] });
+    if (c.rows.length === 0) return { success: false, msg: "El catálogo no existe" };
+    const filtros: FiltrosCatalogo = { ...normalizarFiltros(JSON.parse(c.rows[0].filtros as string)), escala_talla: escala };
+    await db.execute({ sql: "UPDATE mk_catalogos SET filtros = ?, updated_at = now_text() WHERE id = ?", args: [JSON.stringify(filtros), id] });
+    revalidatePath(`/admin/marketing/catalogos/${id}`);
+    return { success: true, msg: escala === "peru" ? "Tallas peruanas" : "Tallas USA" };
+  } catch (e) {
+    console.error("[marketing] cambiarEscalaTalla falló:", e);
+    return { success: false, msg: "No se pudo cambiar la escala de tallas" };
   }
 }
