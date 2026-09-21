@@ -17,7 +17,7 @@ import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
 import { marcasAfectadas, type MarcaAfectada } from "@/lib/actions/marketing-disenos";
 import { ALMACENES, ALMACENES_POR_DEFECTO, type FijaBiblioteca, type PlantillaLista, type TipoCatalogo } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
-import { documentoDelCatalogo } from "./documento-catalogo";
+import { documentoDelCatalogo, ordenConPortada, ordenConSeparador, ordenConSeparadorDeMarca } from "./documento-catalogo";
 import { PasoPlantillas } from "./paso-plantillas";
 import { PasoFinal } from "./paso-final";
 import { crearTipo } from "@/lib/actions/marketing-tipos";
@@ -57,6 +57,8 @@ export type DatosCatalogo = {
   portada: string | null | undefined;
   /** Separadores elegidos (ids). */
   separadores: string[];
+  /** Orden del documento fijado en el Preview (ids de fijas y «productos»); undefined = automático. */
+  orden: string[] | undefined;
 };
 
 type Paso = "filtros" | "plantillas" | "final";
@@ -112,6 +114,7 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
     plantillas: {},
     portada: undefined,
     separadores: [],
+    orden: undefined,
   });
   const [marcasCatalogo, setMarcasCatalogo] = useState<MarcaAfectada[] | null>(null);
   // Tipos disponibles: los de la base de datos más los que se guarden desde este asistente.
@@ -176,6 +179,7 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
       tipo: id,
       portada: undefined,
       separadores: [],
+      orden: undefined,
       categorias: [...t.categorias],
       grupos: [...t.grupos],
       generos: [...t.generos],
@@ -195,12 +199,12 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
     const sugerido = `${t.nombre} — ${mesYAnio()}`;
     cambiar({
       tipo: t.id,
-      ...(conservar ? {} : { portada: undefined, separadores: [] }),
+      ...(conservar ? {} : { portada: undefined, separadores: [], orden: undefined }),
       ...(datos.titulo.trim() === "" || datos.titulo === datos.tituloSugerido ? { titulo: sugerido, tituloSugerido: sugerido } : {}),
     });
   }
   // Cambiar a mano lo que define el tipo lo vuelve un catálogo «a mano».
-  const editar = (campo: "categorias" | "grupos" | "generos") => (v: string[]) => cambiar({ tipo: "", portada: undefined, separadores: [], [campo]: v });
+  const editar = (campo: "categorias" | "grupos" | "generos") => (v: string[]) => cambiar({ tipo: "", portada: undefined, separadores: [], orden: undefined, [campo]: v });
   const alternarAlmacen = (a: string, on: boolean) => cambiar({ almacenes: on ? [...datos.almacenes, a] : datos.almacenes.filter((x) => x !== a) });
 
   const indice = PASOS.findIndex((p) => p.id === paso);
@@ -208,6 +212,36 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
   const documento = useMemo(
     () => documentoDelCatalogo(datos, recursos.plantillas, recursos.fijas, marcasCatalogo),
     [datos, recursos.plantillas, recursos.fijas, marcasCatalogo]
+  );
+
+  // Portada y separadores se eligen en el paso Plantillas; si Marketing ya ordenó el documento en el Preview, ese
+  // orden se ajusta (la portada nueva sustituye a la anterior; el separador entra justo antes de los productos).
+  const idsPortadas = useMemo(() => new Set(recursos.fijas.filter((f) => f.tipo === "portada").map((f) => f.id)), [recursos.fijas]);
+  const elegirPortada = useCallback(
+    (id: string | null) => setDatos((d) => ({ ...d, portada: id, ...(d.orden ? { orden: ordenConPortada(d.orden, idsPortadas, id) } : {}) })),
+    [idsPortadas]
+  );
+  const marcarSeparador = useCallback(
+    (id: string, marcado: boolean) =>
+      setDatos((d) => ({
+        ...d,
+        separadores: marcado ? [...d.separadores, id] : d.separadores.filter((x) => x !== id),
+        ...(d.orden ? { orden: ordenConSeparador(d.orden, id, marcado) } : {}),
+      })),
+    []
+  );
+  // Un orden fijado en el Preview manda: la portada y los separadores pasan a ser los que hay en él.
+  const ordenarDocumento = useCallback(
+    (orden: string[]) => {
+      const fija = (id: string) => recursos.fijas.find((f) => f.id === id);
+      const enOrden = orden.map(fija).filter((f): f is NonNullable<ReturnType<typeof fija>> => Boolean(f));
+      cambiar({
+        orden,
+        portada: enOrden.find((f) => f.tipo === "portada")?.id ?? null,
+        separadores: enOrden.filter((f) => f.tipo === "separador").map((f) => f.id),
+      });
+    },
+    [cambiar, recursos.fijas]
   );
 
   return (
@@ -363,6 +397,11 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
             documento={documento}
             nombreSugerido={nombreSugerido}
             alGuardarTipo={(t) => usarTipoGuardado(t, true)}
+            alElegirPortada={elegirPortada}
+            alMarcarSeparador={marcarSeparador}
+            alOrdenar={ordenarDocumento}
+            alRestablecerOrden={() => cambiar({ orden: undefined })}
+            alSubirSeparadorDeMarca={(marca, id) => setDatos((d) => (d.orden ? { ...d, orden: ordenConSeparadorDeMarca(d.orden, marca, id) } : d))}
             alVolver={() => ir("filtros")}
             alAvanzar={() => ir("final")}
           />

@@ -5,6 +5,7 @@
 //   PORTADA CATALOGO HOMBRES.jpg     → portada del tipo «Hombres» (también MUJERES, NIÑOS, ROPA HOMBRE, ROPA MUJER,
 //                                      ROPA, SANDALIAS, ACCESORIOS, FUTBOL)
 //   SEPARADOR FUTBOL LOSA.jpg        → separador de fútbol (opcional; se ubica en el editor)
+//   SEPARADOR MARCA ADIDAS.jpg       → separador de la marca Adidas (uno por marca; también «SEPARADOR ADIDAS» si Adidas es una marca conocida)
 //   TERMINOS Y CONDICIONES.jpg / REDES.jpg / CIERRE… → cierre, al final de todos los catálogos
 // Lo que no encaje queda como «otra» a mano. Todo se puede corregir en la tabla antes de subir.
 import { MARCA_GENERICA, type FijaBiblioteca } from "./marketing-catalogo";
@@ -46,9 +47,9 @@ export function interpretarNombreDiseno(archivo: string, marcasConocidas: readon
   const primera = n[0] ?? "";
   const resto = (desde: number) => o.slice(desde);
 
-  const fija = (tipo: FijaBiblioteca["tipo"], nombre: string, aplica: string[], posicion: DisenoInterpretado["posicion"]): DisenoInterpretado => ({
+  const fija = (tipo: FijaBiblioteca["tipo"], nombre: string, aplica: string[], posicion: DisenoInterpretado["posicion"], marca = ""): DisenoInterpretado => ({
     clase: "fija",
-    marca: "",
+    marca,
     tipo,
     nombre: nombre || titulo(o) || "Sin nombre",
     aplica,
@@ -94,6 +95,11 @@ export function interpretarNombreDiseno(archivo: string, marcasConocidas: readon
     return fija("portada", nombre, tipo ? [tipo] : [], tipo ? "inicio" : "");
   }
   if (primera === "SEPARADOR" || primera === "SEPARADORES") {
+    // De marca: «SEPARADOR MARCA ADIDAS» o «SEPARADOR ADIDAS» (si Adidas es una marca conocida); la más larga gana.
+    const r = n.slice(n[1] === "MARCA" ? 2 : 1);
+    const conocida = [...marcasConocidas].map((m) => ({ m, k: sinTildes(m).split(/\s+/) })).sort((a, b) => b.k.length - a.k.length).find(({ k }) => r.length >= k.length && k.every((w, i) => r[i] === w));
+    if (conocida) return fija("separador_marca", `Separador ${titulo(conocida.m.split(/\s+/))}`, [], "", conocida.m.toUpperCase());
+    if (n[1] === "MARCA" && r.length > 0) return fija("separador_marca", `Separador ${titulo(r.map((w) => w.toLowerCase()))}`, [], "", r.join(" "));
     return fija("separador", titulo(o), contiene("FUTBOL") ? ["futbol"] : [], "");
   }
   if (contiene("TERMINOS", "CONDICIONES", "REDES", "CIERRE", "CONTACTO")) {

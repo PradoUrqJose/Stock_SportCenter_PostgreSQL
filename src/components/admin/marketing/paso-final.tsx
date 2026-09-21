@@ -112,6 +112,8 @@ export function PasoFinal({
         // Lo que se ve en el Preview es lo que se genera.
         portada: documento.portada ? documento.portada.id : null,
         separadores: documento.separadoresElegidos.map((f) => f.id),
+        // El orden fijado en el Preview (si Marketing lo tocó); si no, la generación arma el automático.
+        ...(documento.personalizado ? { orden: documento.orden } : {}),
       });
       // La generación sigue en segundo plano: se pasa a la pantalla de avance.
       if (r.success && r.data) router.push(`/admin/marketing/catalogos/nuevo?generacion=${r.data.id}`);

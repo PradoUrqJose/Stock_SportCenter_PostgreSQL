@@ -66,10 +66,16 @@ export async function borradorDeVersion(
   };
 }
 
+/**
+ * La marca de un separador de marca (columna `marca`, migración 016). Se lee así para que las pantallas sigan
+ * funcionando si el código llega antes que la migración: sin la columna, sale NULL en vez de fallar.
+ */
+const MARCA_FIJA = "to_jsonb(mk_paginas_fijas) ->> 'marca' AS marca";
+
 /** Páginas fijas activas de la biblioteca, en su orden. */
 export async function fijasDeBiblioteca(): Promise<FijaBiblioteca[]> {
   const r = await db.execute(
-    "SELECT id, nombre, tipo, imagen, ancho, alto, auto_tipo, auto_posicion FROM mk_paginas_fijas WHERE activa = 1 ORDER BY orden, id"
+    `SELECT id, nombre, tipo, imagen, ancho, alto, auto_tipo, auto_posicion, ${MARCA_FIJA} FROM mk_paginas_fijas WHERE activa = 1 ORDER BY orden, id`
   );
   return r.rows as unknown as FijaBiblioteca[];
 }
@@ -96,7 +102,7 @@ export async function plantillasGestion(): Promise<PlantillaLista[]> {
 /** Todas las páginas fijas (activas o no) con sus zonas clicables, para la pantalla de diseños y el asistente. */
 export async function fijasGestion(): Promise<(FijaBiblioteca & { activa: boolean; zonas: ZonaEnlace[] })[]> {
   const r = await db.execute(
-    "SELECT id, nombre, tipo, imagen, ancho, alto, auto_tipo, auto_posicion, activa, zonas FROM mk_paginas_fijas ORDER BY orden, id"
+    `SELECT id, nombre, tipo, imagen, ancho, alto, auto_tipo, auto_posicion, ${MARCA_FIJA}, activa, zonas FROM mk_paginas_fijas ORDER BY orden, id`
   );
   return r.rows.map((f) => ({
     ...(f as unknown as FijaBiblioteca),

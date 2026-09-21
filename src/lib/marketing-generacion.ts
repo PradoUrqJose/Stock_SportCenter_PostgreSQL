@@ -87,6 +87,7 @@ export async function ejecutarGeneracion(id: string): Promise<void> {
     const borrador = conFijasAutomaticas(sinFijas, tipoEfectivo(filtros), (await fijasDeBiblioteca()) as FijaBiblioteca[], {
       portada: filtros.portada,
       separadores: filtros.separadores,
+      orden: filtros.orden,
     });
 
     await etapa(id, "guardando");

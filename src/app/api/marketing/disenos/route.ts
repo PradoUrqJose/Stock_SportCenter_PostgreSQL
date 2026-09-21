@@ -14,7 +14,7 @@ export const maxDuration = 30;
 
 const error = (mensaje: string, status: number) => NextResponse.json({ error: mensaje }, { status });
 const TIPOS_IMAGEN = new Set(["image/webp", "image/png", "image/jpeg"]);
-const TIPOS_FIJA = new Set(["portada", "separador", "cierre", "otra"]);
+const TIPOS_FIJA = new Set(["portada", "separador", "separador_marca", "cierre", "otra"]);
 const ANCHO = 2000;
 const CACHE = "public, max-age=31536000, immutable";
 
@@ -33,6 +33,8 @@ const slug = (t: string) =>
  *   ?clase=plantilla&marca=NIKE&nombre=Nike Navidad      (marca=* → plantilla genérica)
  *   ?clase=fija&tipo=portada|separador|cierre|otra&nombre=Portada Hombres&aplica=hombre,mujer|*&posicion=inicio|final
  *      (aplica y posicion vacíos = página a mano; con aplica y sin posicion = solo se sugiere en esos catálogos)
+ *   ?clase=fija&tipo=separador_marca&marca=ADIDAS&nombre=Separador Adidas
+ *      (uno por marca: si esa marca ya tiene separador, se reemplaza su imagen; no lleva aplica ni posicion)
  * Si ya existe un diseño con ese nombre (y la misma marca o tipo), se REEMPLAZA su imagen y se conserva lo demás.
  * Cuerpo: la imagen (WebP, PNG o JPEG, hasta 4 MB), en formato 16:9.
  * La plantilla nueva copia las zonas (código, tallas, precio, zapatilla) de la plantilla de referencia:
@@ -102,19 +104,23 @@ export async function POST(req: NextRequest) {
     if (clase === "fija") {
       const tipoFija = q.get("tipo") ?? "";
       if (!TIPOS_FIJA.has(tipoFija)) return error("Tipo de página no válido", 400);
-      const aplica = (q.get("aplica") ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+      const deMarca = tipoFija === "separador_marca";
+      const marcaFija = (q.get("marca") ?? "").trim().toUpperCase();
+      if (deMarca && !/^[A-Z0-9 &.'-]{1,40}$/.test(marcaFija)) return error("Marca no válida", 400);
+      const aplica = deMarca ? [] : (q.get("aplica") ?? "").split(",").map((t) => t.trim()).filter(Boolean);
       const tiposValidos = new Set([...(await idsDeTipos()), "*"]);
       if (!aplica.every((t) => tiposValidos.has(t))) return error("Tipo de catálogo no válido", 400);
-      const posicion = q.get("posicion") ?? "";
+      const posicion = deMarca ? "" : (q.get("posicion") ?? "");
       if (!["", "inicio", "final"].includes(posicion)) return error("Posición no válida", 400);
       if (posicion !== "" && aplica.length === 0) return error("Elige en qué catálogos se usa antes de fijar su posición", 400);
 
       // Mismo diseño = mismo nombre sin contar tildes, mayúsculas ni símbolos.
-      const delTipo = await db.execute({ sql: "SELECT id, nombre FROM mk_paginas_fijas WHERE tipo = ?", args: [tipoFija] });
-      const previa = delTipo.rows.find((r) => claveNombre(r.nombre as string) === claveNombre(nombre));
+      // El separador de marca es único por marca (con cualquier nombre).
+      const delTipo = await db.execute({ sql: "SELECT id, nombre, to_jsonb(mk_paginas_fijas) ->> 'marca' AS marca FROM mk_paginas_fijas WHERE tipo = ?", args: [tipoFija] });
+      const previa = delTipo.rows.find((r) => (deMarca ? (r.marca as string | null) === marcaFija : claveNombre(r.nombre as string) === claveNombre(nombre)));
       const existente = { rows: previa ? [previa] : [] };
-      const id = (previa?.id as string | undefined) ?? `${slug(nombre)}-${hash}`.slice(0, 60);
-      const clave = `paginas-fijas/${slug(nombre)}-${hash}`;
+      const id = (previa?.id as string | undefined) ?? (deMarca ? `separador-${slug(marcaFija)}-${hash}` : `${slug(nombre)}-${hash}`).slice(0, 60);
+      const clave = `paginas-fijas/${deMarca ? `separador-${slug(marcaFija)}` : slug(nombre)}-${hash}`;
       const { data, info } = await sharp(cuerpo)
         .resize({ width: ANCHO, withoutEnlargement: true })
         .webp({ quality: 86, effort: 5 })
@@ -127,10 +133,11 @@ export async function POST(req: NextRequest) {
         await db.execute({ sql: "UPDATE mk_paginas_fijas SET imagen = ?, ancho = ?, alto = ?, activa = 1 WHERE id = ?", args: [clave, info.width, info.height, id] });
         return NextResponse.json({ id, reemplazo: true });
       }
+      // La columna `marca` (migración 016) solo se toca en los separadores de marca.
       await db.execute({
-        sql: `INSERT INTO mk_paginas_fijas (id, nombre, tipo, imagen, ancho, alto, auto_tipo, auto_posicion, orden)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(orden), 0) + 1 FROM mk_paginas_fijas))`,
-        args: [id, nombre, tipoFija, clave, info.width, info.height, aplica.length > 0 ? aplica.join(",") : null, posicion || null],
+        sql: `INSERT INTO mk_paginas_fijas (id, nombre, tipo, imagen, ancho, alto, auto_tipo, auto_posicion, ${deMarca ? "marca, " : ""}orden)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ${deMarca ? "?, " : ""}(SELECT COALESCE(MAX(orden), 0) + 1 FROM mk_paginas_fijas))`,
+        args: [id, nombre, tipoFija, clave, info.width, info.height, aplica.length > 0 ? aplica.join(",") : null, posicion || null, ...(deMarca ? [marcaFija] : [])],
       });
       return NextResponse.json({ id, reemplazo: false });
     }

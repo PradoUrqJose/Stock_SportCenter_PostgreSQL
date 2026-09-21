@@ -92,7 +92,24 @@ export type FiltrosCatalogo = {
   portada?: string | null;
   /** Separadores elegidos (ids de páginas fijas): entran al principio y se ubican a mano en el editor. */
   separadores?: string[];
+  /**
+   * Orden del documento fijado por Marketing en el Preview: ids de páginas fijas y el lugar de los productos:
+   * CLAVE_PRODUCTOS (todas las páginas de producto juntas) o, si se separó por marcas, un `productos:MARCA` por cada
+   * marca (los separadores de marca van antes de su bloque). Lo de antes de los productos abre el catálogo. Sin definir = orden automático
+   * (portada, páginas iniciales, separadores elegidos, productos, cierres).
+   */
+  orden?: string[];
 };
+
+/** Lugar de las páginas de producto dentro de `FiltrosCatalogo.orden`: todas juntas (por marca, una tras otra). */
+export const CLAVE_PRODUCTOS = "productos";
+/** Con el bloque separado por marcas: `productos:ADIDAS` es el lugar de las páginas de esa marca. */
+const PREFIJO_MARCA = `${CLAVE_PRODUCTOS}:`;
+export const claveDeMarca = (marca: string) => `${PREFIJO_MARCA}${marca.trim().toUpperCase()}`;
+/** La marca de un `productos:MARCA`; null si no lo es. */
+export const marcaDeClave = (clave: string): string | null => (clave.startsWith(PREFIJO_MARCA) && clave.length > PREFIJO_MARCA.length ? clave.slice(PREFIJO_MARCA.length) : null);
+/** ¿Es el lugar de páginas de producto (todas o de una marca)? */
+export const esClaveProductos = (clave: string) => clave === CLAVE_PRODUCTOS || marcaDeClave(clave) !== null;
 
 /** Grupos del ERP que son ropa y grupos que son accesorios (los demás: calzado, sandalias, bebidas…). */
 const GRUPOS_ROPA = ["POLOS", "POLERA", "SHORT", "CASACAS", "CAMISETAS", "BUZOS", "CONJUNTOS", "LEGGINS", "CANGUROS", "BIVIDIS"];
@@ -216,6 +233,7 @@ export function normalizarFiltros(crudo: unknown): FiltrosCatalogo {
         : {},
     ...(o.portada === null ? { portada: null } : typeof o.portada === "string" ? { portada: o.portada } : {}),
     ...(Array.isArray(o.separadores) ? { separadores: o.separadores.filter((x): x is string => typeof x === "string") } : {}),
+    ...(Array.isArray(o.orden) ? { orden: o.orden.filter((x): x is string => typeof x === "string") } : {}),
   };
 }
 
@@ -254,7 +272,9 @@ export function plantillaDeMarca(marca: string, todas: readonly PlantillaLista[]
 export type FijaBiblioteca = {
   id: string;
   nombre: string;
-  tipo: "portada" | "separador" | "cierre" | "otra";
+  tipo: "portada" | "separador" | "separador_marca" | "cierre" | "otra";
+  /** Solo en los separadores de marca: la marca (mayúsculas, como en el ERP). */
+  marca?: string | null;
   /** Ruta en el bucket sin extensión; la miniatura es `<imagen>-min.webp`. */
   imagen: string;
   ancho: number;
@@ -308,21 +328,65 @@ export function fijasAplicables<T extends FijaBiblioteca>(tipo: string, bibliote
  * Pone en el borrador las páginas fijas: la portada (la elegida o, si no se eligió, la del tipo), los separadores
  * elegidos, y los términos y redes al final. Se pueden quitar o mover en el editor.
  * @param opciones.portada id de la portada; null = sin portada; sin definir = la asociada al tipo
+ * @param opciones.orden orden fijado en el Preview (ver `FiltrosCatalogo.orden`): sustituye a todo lo anterior
  */
 export function conFijasAutomaticas(
   b: Borrador,
   tipo: string,
   biblioteca: FijaBiblioteca[],
-  opciones: { portada?: string | null; separadores?: string[] } = {}
+  opciones: { portada?: string | null; separadores?: string[]; orden?: string[] } = {}
 ): Borrador {
   const pagina = (f: FijaBiblioteca): PaginaFija => ({ id: `f-${f.id}`, tipo: "fija", imagen: f.imagen, ancho: f.ancho, alto: f.alto });
-  const portada = opciones.portada === undefined ? portadaDelTipo(tipo, biblioteca) : (biblioteca.find((f) => f.id === opciones.portada && f.tipo === "portada") ?? null);
-  const { inicio, final } = fijasAplicables(tipo, biblioteca);
-  const separadores = (opciones.separadores ?? []).map((id) => biblioteca.find((f) => f.id === id && f.tipo === "separador")).filter((f): f is FijaBiblioteca => Boolean(f));
-  const delInicio = [...(portada ? [portada] : []), ...inicio, ...separadores];
-  if (delInicio.length + final.length === 0) return b;
-  const paginas = [...delInicio.map(pagina), ...b.paginas, ...final.map(pagina)];
-  return { ...b, paginas, resumen: { ...b.resumen, paginas: paginas.length, fijas: delInicio.length + final.length } };
+  let delInicio: FijaBiblioteca[];
+  let delFinal: FijaBiblioteca[];
+  if (opciones.orden) {
+    // Sin repetidos ni ids que ya no existan. Los lugares de productos parten las páginas de producto: `productos`
+    // toma todas las que queden y `productos:MARCA` las de esa marca; las marcas que no tengan lugar se ponen tras el último.
+    const ids = [...new Set(opciones.orden)];
+    const enBiblioteca = (id: string) => biblioteca.find((f) => f.id === id);
+    const marcaDe = (p: PaginaCat) => (p.tipo === "producto" ? (b.productos[p.prod]?.marca ?? "").trim().toUpperCase() : "");
+    const conBloque = new Set(ids.map(marcaDeClave).filter((m): m is string => m !== null));
+    const hayBloques = ids.some(esClaveProductos);
+    const productos = b.paginas;
+    const usadas = new Set<PaginaCat>();
+    const tomar = (m: string | null): PaginaCat[] => {
+      const l = productos.filter((p) => !usadas.has(p) && (m === null ? !conBloque.has(marcaDe(p)) : marcaDe(p) === m));
+      l.forEach((p) => usadas.add(p));
+      return l;
+    };
+    const ultimo = ids.map(esClaveProductos).lastIndexOf(true);
+    const secuencia: PaginaCat[] = [];
+    let fijas = 0;
+    ids.forEach((id, i) => {
+      const m = marcaDeClave(id);
+      const bloque = id === CLAVE_PRODUCTOS ? tomar(null) : m !== null ? tomar(m) : null;
+      if (bloque) {
+        secuencia.push(...bloque);
+        // Las marcas sin lugar propio (y el resto, si no hay ninguno) van tras el último lugar de productos.
+        if (i === ultimo && id !== CLAVE_PRODUCTOS) secuencia.push(...tomar(null));
+        return;
+      }
+      const f = enBiblioteca(id);
+      if (!f) return;
+      // Un separador de marca sin páginas de esa marca (no hubo productos) no se pone.
+      if (f.tipo === "separador_marca" && !productos.some((p) => marcaDe(p) === (f.marca ?? "").trim().toUpperCase())) return;
+      secuencia.push(pagina(f));
+      fijas++;
+    });
+    // Sin lugar de productos: las fijas van primero y todos los productos después.
+    const paginas = hayBloques ? secuencia : [...secuencia, ...tomar(null)];
+    if (fijas === 0 && paginas.every((p, i) => p === b.paginas[i])) return b;
+    return { ...b, paginas, resumen: { ...b.resumen, paginas: paginas.length, fijas } };
+  } else {
+    const portada = opciones.portada === undefined ? portadaDelTipo(tipo, biblioteca) : (biblioteca.find((f) => f.id === opciones.portada && f.tipo === "portada") ?? null);
+    const { inicio, final } = fijasAplicables(tipo, biblioteca);
+    const separadores = (opciones.separadores ?? []).map((id) => biblioteca.find((f) => f.id === id && f.tipo === "separador")).filter((f): f is FijaBiblioteca => Boolean(f));
+    delInicio = [...(portada ? [portada] : []), ...inicio, ...separadores];
+    delFinal = final;
+  }
+  if (delInicio.length + delFinal.length === 0) return b;
+  const paginas = [...delInicio.map(pagina), ...b.paginas, ...delFinal.map(pagina)];
+  return { ...b, paginas, resumen: { ...b.resumen, paginas: paginas.length, fijas: delInicio.length + delFinal.length } };
 }
 
 /** Fecha de la base («2026-09-19 22:35:10», UTC) a hora de Lima («2026-09-19 17:35»); Perú no tiene horario de verano. */

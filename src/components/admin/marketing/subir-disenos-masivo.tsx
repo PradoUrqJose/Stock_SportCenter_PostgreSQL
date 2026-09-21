@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 const SELECT =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
-type Clase = "plantilla" | "portada" | "separador" | "cierre" | "otra";
+type Clase = "plantilla" | "portada" | "separador" | "separador_marca" | "cierre" | "otra";
 type Fila = {
   id: number;
   archivo: File;
@@ -37,6 +37,7 @@ const CLASES: { valor: Clase; texto: string }[] = [
   { valor: "plantilla", texto: "Plantilla de marca" },
   { valor: "portada", texto: "Portada" },
   { valor: "separador", texto: "Separador" },
+  { valor: "separador_marca", texto: "Separador de marca" },
   { valor: "cierre", texto: "Cierre (términos, redes)" },
   { valor: "otra", texto: "Otra" },
 ];
@@ -108,7 +109,9 @@ export function SubirDisenosMasivo({ marcas, tipos, className }: { marcas: strin
           const r =
             f.clase === "plantilla"
               ? await enviarDiseno(blob, { clase: "plantilla", marca: f.marca, nombre: f.nombre })
-              : await enviarDiseno(blob, { clase: "fija", tipo: f.clase, nombre: f.nombre, aplica: f.aplica, posicion: f.posicion });
+              : f.clase === "separador_marca"
+                ? await enviarDiseno(blob, { clase: "fija", tipo: "separador_marca", nombre: f.nombre, aplica: "", posicion: "", marca: f.marca })
+                : await enviarDiseno(blob, { clase: "fija", tipo: f.clase, nombre: f.nombre, aplica: f.aplica, posicion: f.posicion });
           cambiar(f.id, r.ok ? { estado: r.reemplazo ? "reemplazo" : "ok" } : { estado: "error", error: r.error });
         } catch (e) {
           cambiar(f.id, { estado: "error", error: e instanceof Error ? e.message : "No se pudo procesar la imagen" });
@@ -122,9 +125,10 @@ export function SubirDisenosMasivo({ marcas, tipos, className }: { marcas: strin
 
   const porSubir = filas.filter((f) => f.estado === "pendiente" || f.estado === "error");
   // Dos archivos de la lista con el mismo nombre serían el mismo diseño (el segundo reemplazaría al primero).
-  const identidad = (f: Fila) => `${f.clase === "plantilla" ? `p:${f.marca}` : `f:${f.clase}`}|${claveNombre(f.nombre)}`;
+  // Un separador de marca es único por marca: dos de la misma marca serían el mismo diseño, con cualquier nombre.
+  const identidad = (f: Fila) => (f.clase === "separador_marca" ? `m:${f.marca}` : `${f.clase === "plantilla" ? `p:${f.marca}` : `f:${f.clase}`}|${claveNombre(f.nombre)}`);
   const repetida = (f: Fila) => filas.filter((x) => identidad(x) === identidad(f)).length > 1;
-  const invalida = (f: Fila) => f.nombre.trim().length < 2 || (f.clase === "plantilla" && !f.marca.trim()) || repetida(f);
+  const invalida = (f: Fila) => f.nombre.trim().length < 2 || ((f.clase === "plantilla" || f.clase === "separador_marca") && !f.marca.trim()) || repetida(f);
   const hechas = filas.filter((f) => f.estado === "ok" || f.estado === "reemplazo").length;
   // Una portada nueva no trae enlaces clicables (hay que dibujarlos); al reemplazar una, se conservan los anteriores.
   const portadasNuevas = filas.filter((f) => f.clase === "portada" && f.estado === "ok");
@@ -179,7 +183,7 @@ export function SubirDisenosMasivo({ marcas, tipos, className }: { marcas: strin
 
           <p className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
             <span className="font-medium text-foreground">Nombres que se reconocen:</span> <code>PLANTILLA NIKE</code> · <code>PLANTILLA NIKE NAVIDAD</code> (otra de la misma marca) · <code>PLANTILLA GENERICA</code> ·{" "}
-            <code>PORTADA HOMBRES</code> (también MUJERES y NIÑOS) · <code>SEPARADOR FUTBOL LOSA</code> · <code>TERMINOS Y CONDICIONES</code> · <code>REDES</code>
+            <code>PORTADA HOMBRES</code> (también MUJERES y NIÑOS) · <code>SEPARADOR MARCA ADIDAS</code> (uno por marca) · <code>SEPARADOR FUTBOL LOSA</code> · <code>TERMINOS Y CONDICIONES</code> · <code>REDES</code>
           </p>
 
           {filas.length > 0 && (
@@ -202,10 +206,10 @@ export function SubirDisenosMasivo({ marcas, tipos, className }: { marcas: strin
                     ))}
                   </select>
                   <div className="flex gap-1.5">
-                    {f.clase === "plantilla" ? (
+                    {f.clase === "plantilla" || f.clase === "separador_marca" ? (
                       <select className={SELECT} value={f.marca} onChange={(e) => cambiar(f.id, { marca: e.target.value })} disabled={subiendo || f.estado === "ok" || f.estado === "reemplazo"} aria-label="Marca">
                         <option value="">Marca…</option>
-                        <option value={MARCA_GENERICA}>Genérica (sin marca)</option>
+                        {f.clase === "plantilla" && <option value={MARCA_GENERICA}>Genérica (sin marca)</option>}
                         {marcas.map((m) => (
                           <option key={m} value={m}>
                             {m}
@@ -280,7 +284,7 @@ export function SubirDisenosMasivo({ marcas, tipos, className }: { marcas: strin
                   <Link href="/admin/marketing/catalogos/disenos" className="font-medium underline underline-offset-2">Diseños → Zonas clicables</Link>.
                 </p>
               )}
-              {porSubir.some(invalida) && <p className="text-xs text-destructive">Revisa los nombres (sin repetir) y la marca de cada plantilla.</p>}
+              {porSubir.some(invalida) && <p className="text-xs text-destructive">Revisa los nombres (sin repetir) y la marca de cada plantilla o separador de marca.</p>}
               {hayGenerica && <p className="text-xs text-muted-foreground">La genérica se usará con las marcas que no tengan plantilla propia.</p>}
               {hechas > 0 && porSubir.length === 0 && (
                 <Button variant="outline" className="ml-auto" onClick={cerrar}>

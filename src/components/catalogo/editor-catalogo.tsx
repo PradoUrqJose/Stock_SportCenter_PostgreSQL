@@ -607,6 +607,7 @@ export function EditorCatalogo({
 const TIPOS_FIJA: { tipo: FijaBiblioteca["tipo"]; titulo: string }[] = [
   { tipo: "portada", titulo: "Portadas" },
   { tipo: "separador", titulo: "Separadores" },
+  { tipo: "separador_marca", titulo: "Separadores de marca" },
   { tipo: "cierre", titulo: "Cierres" },
   { tipo: "otra", titulo: "Otras" },
 ];

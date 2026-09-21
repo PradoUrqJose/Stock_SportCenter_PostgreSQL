@@ -15,7 +15,7 @@ import { claveNombre } from "@/lib/marketing-disenos-nombres";
 import { MARCA_GENERICA } from "@/lib/marketing-catalogo";
 import { enviarDiseno, prepararPaginaFija } from "@/lib/subir-imagen-cliente";
 
-export type DestinoSubida = { clase: "portada" } | { clase: "plantilla"; marca: string };
+export type DestinoSubida = { clase: "portada" } | { clase: "plantilla"; marca: string } | { clase: "separador_marca"; marca: string };
 
 /** Nombre sugerido a partir del archivo: sin extensiones ni guiones bajos, y «Así» si venía TODO EN MAYÚSCULAS. */
 export function nombreDesdeArchivo(archivo: string): string {
@@ -44,13 +44,15 @@ export function SubirDisenoAqui({
 }) {
   const router = useRouter();
   const [archivo, setArchivo] = useState<File | null>(null);
-  const [nombre, setNombre] = useState("");
+  // El separador de marca ya tiene nombre (uno por marca): «Separador Adidas».
+  const [nombre, setNombre] = useState(destino.clase === "separador_marca" ? `Separador ${nombreDesdeArchivo(destino.marca)}` : "");
   const [asociar, setAsociar] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const esPortada = destino.clase === "portada";
-  const titulo = esPortada ? "Subir portada" : destino.marca === MARCA_GENERICA ? "Subir plantilla genérica" : `Subir plantilla de ${destino.marca}`;
+  const esSeparador = destino.clase === "separador_marca";
+  const titulo = esPortada ? "Subir portada" : esSeparador ? `Subir separador de ${destino.marca}` : destino.marca === MARCA_GENERICA ? "Subir plantilla genérica" : `Subir plantilla de ${destino.marca}`;
   const repetido = existentes.some((n) => claveNombre(n) === claveNombre(nombre));
 
   // Vista previa del archivo elegido; se libera la dirección temporal al cambiarlo o cerrar.
@@ -72,7 +74,9 @@ export function SubirDisenoAqui({
       const r =
         destino.clase === "plantilla"
           ? await enviarDiseno(blob, { clase: "plantilla", marca: destino.marca, nombre: nombre.trim() })
-          : await enviarDiseno(blob, { clase: "fija", tipo: "portada", nombre: nombre.trim(), aplica: "", posicion: "" });
+          : destino.clase === "separador_marca"
+            ? await enviarDiseno(blob, { clase: "fija", tipo: "separador_marca", nombre: nombre.trim(), aplica: "", posicion: "", marca: destino.marca })
+            : await enviarDiseno(blob, { clase: "fija", tipo: "portada", nombre: nombre.trim(), aplica: "", posicion: "" });
       if (!r.ok) {
         setError(r.error);
         return;
@@ -104,7 +108,9 @@ export function SubirDisenoAqui({
             <DialogDescription>
               {esPortada
                 ? "Imagen horizontal en formato 16:9 (por ejemplo 2000×1125). Se usará en este catálogo y queda en la biblioteca de Diseños."
-                : "Imagen horizontal 16:9 con la misma composición que las demás plantillas (código, tallas y precio en el mismo lugar): toma sus zonas de una plantilla existente."}
+                : esSeparador
+                  ? `Imagen horizontal 16:9 que dice ${destino.marca}. Irá antes de las páginas de esa marca en este catálogo y en todos los que separes por marcas; queda en la biblioteca de Diseños.`
+                  : "Imagen horizontal 16:9 con la misma composición que las demás plantillas (código, tallas y precio en el mismo lugar): toma sus zonas de una plantilla existente."}
             </DialogDescription>
           </DialogHeader>
 
@@ -118,7 +124,7 @@ export function SubirDisenoAqui({
               onChange={(e) => {
                 const f = e.target.files?.[0] ?? null;
                 setArchivo(f);
-                if (f) setNombre(nombreDesdeArchivo(f.name));
+                if (f && !esSeparador) setNombre(nombreDesdeArchivo(f.name));
               }}
             />
             {miniatura && (

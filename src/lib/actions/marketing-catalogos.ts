@@ -15,6 +15,7 @@ import { precioFiltro, valoresFiltro, valoresTalla } from "@/lib/marketing-valid
 import {
   ALMACENES,
   armarSnapshot,
+  CLAVE_PRODUCTOS,
   conZonasClicables,
   validarPaginas,
   type Borrador,
@@ -45,6 +46,8 @@ export async function iniciarGeneracion(input: {
   portada?: string | null;
   /** Separadores elegidos (ids de páginas fijas). */
   separadores?: string[];
+  /** Orden del documento fijado en el Preview: ids de páginas fijas y «productos» (ver `FiltrosCatalogo.orden`). */
+  orden?: string[];
 }): Promise<ActionResult<{ id: string }>> {
   const sesion = await sesionMarketing();
   if (!sesion) return { success: false, msg: "Sin permisos" };
@@ -82,6 +85,8 @@ export async function iniciarGeneracion(input: {
   if (input.portada != null && !ID_FIJA.test(String(input.portada))) return { success: false, msg: "Portada no válida" };
   const separadores = (Array.isArray(input.separadores) ? input.separadores : []).filter((x) => ID_FIJA.test(String(x))).slice(0, 20).map(String);
 
+  const orden = Array.isArray(input.orden) ? [...new Set(input.orden.map(String))].filter((x) => ID_FIJA.test(x) || x === CLAVE_PRODUCTOS || /^productos:[\p{L}\p{N} &.'*-]{1,40}$/u.test(x)).slice(0, 60) : [];
+
   // Sin ningún filtro se traería todo el ERP (miles de filas): se evita por error.
   if (grupos.length + marcas.length + generos.length + categorias.length === 0) {
     return { success: false, msg: "Elige un tipo de catálogo o al menos una marca, un grupo, un género o una categoría" };
@@ -111,6 +116,7 @@ export async function iniciarGeneracion(input: {
       plantillas,
       ...(input.portada === undefined ? {} : { portada: input.portada }),
       ...(separadores.length > 0 ? { separadores } : {}),
+      ...(orden.length > 0 ? { orden } : {}),
     };
     const id = randomUUID();
     await db.execute({

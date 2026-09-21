@@ -62,7 +62,7 @@ export type ResultadoDiseno = { ok: true; id: string; reemplazo: boolean } | { o
 /** Sube un diseño (plantilla de una marca o página fija) ya reducido con `prepararPaginaFija`. */
 export async function enviarDiseno(
   imagen: Blob,
-  datos: { clase: "plantilla"; marca: string; nombre: string } | { clase: "fija"; tipo: string; nombre: string; aplica: string; posicion: string }
+  datos: { clase: "plantilla"; marca: string; nombre: string } | { clase: "fija"; tipo: string; nombre: string; aplica: string; posicion: string; /** Solo separadores de marca. */ marca?: string }
 ): Promise<ResultadoDiseno> {
   try {
     const params = new URLSearchParams(datos as Record<string, string>);

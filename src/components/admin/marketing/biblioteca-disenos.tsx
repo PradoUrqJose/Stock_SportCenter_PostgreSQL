@@ -19,6 +19,7 @@ const SELECT_MINI = "h-8 w-full rounded-lg border border-input bg-transparent px
 const TIPOS_FIJA: { tipo: FijaBiblioteca["tipo"]; plural: string }[] = [
   { tipo: "portada", plural: "Portadas" },
   { tipo: "separador", plural: "Separadores" },
+  { tipo: "separador_marca", plural: "Separadores de marca (uno por marca)" },
   { tipo: "cierre", plural: "Cierres (términos, redes)" },
   { tipo: "otra", plural: "Otras" },
 ];
@@ -135,15 +136,17 @@ export function BibliotecaDisenos({
             <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {lista.map((f) => {
                 const tipoUso = (f.auto_tipo ?? "").split(",")[0] ?? "";
+                // El separador de marca no se configura: va antes de las páginas de su marca cuando se separa el bloque de productos.
+                const deMarca = f.tipo === "separador_marca";
                 return (
                   <li key={f.id} className={cn(!f.activa && "opacity-55")}>
                     <TarjetaDiseno
                       src={`${base}/${f.imagen}-min.webp`}
                       nombre={f.nombre}
-                      insignias={[textoUso(f, USOS), f.zonas.length > 0 && `${f.zonas.length} enlace${f.zonas.length === 1 ? "" : "s"}`, !f.activa && "Inactiva"]}
+                      insignias={[deMarca ? `Marca: ${f.marca ?? "sin marca"}` : textoUso(f, USOS), f.zonas.length > 0 && `${f.zonas.length} enlace${f.zonas.length === 1 ? "" : "s"}`, !f.activa && "Inactiva"]}
                       alAbrir={() => setGrande({ src: `${base}/${f.imagen}.webp`, titulo: f.nombre })}
                     >
-                      <label className="block space-y-1 text-[11px] font-medium text-muted-foreground">
+                      {!deMarca && <label className="block space-y-1 text-[11px] font-medium text-muted-foreground">
                         {f.tipo === "portada" ? "Portada de" : "Se usa en"}
                         <select
                           className={SELECT_MINI}
@@ -156,8 +159,8 @@ export function BibliotecaDisenos({
                             </option>
                           ))}
                         </select>
-                      </label>
-                      {tipoUso !== "" && f.tipo !== "portada" && (
+                      </label>}
+                      {!deMarca && tipoUso !== "" && f.tipo !== "portada" && (
                         <select
                           className={SELECT_MINI}
                           value={f.auto_posicion ?? ""}
@@ -175,9 +178,11 @@ export function BibliotecaDisenos({
                         </p>
                       )}
                       <div className="flex flex-wrap gap-1.5">
-                        <AccionMini icono={<MousePointerClick />} destacada={f.tipo === "portada" && f.zonas.length === 0} onClick={() => setZonasDe(f.id)}>
-                          {f.zonas.length === 0 ? "Dibujar enlaces" : "Zonas clicables"}
-                        </AccionMini>
+                        {!deMarca && (
+                          <AccionMini icono={<MousePointerClick />} destacada={f.tipo === "portada" && f.zonas.length === 0} onClick={() => setZonasDe(f.id)}>
+                            {f.zonas.length === 0 ? "Dibujar enlaces" : "Zonas clicables"}
+                          </AccionMini>
+                        )}
                         <AccionMini icono={f.activa ? <EyeOff /> : <Eye />} onClick={() => accion(() => activarDiseno("fija", f.id, !f.activa))}>
                           {f.activa ? "Desactivar" : "Activar"}
                         </AccionMini>

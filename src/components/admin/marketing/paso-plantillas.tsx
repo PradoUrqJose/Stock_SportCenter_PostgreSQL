@@ -22,6 +22,9 @@ import { SubirDisenoAqui, type DestinoSubida } from "./subir-diseno-aqui";
 const SELECT =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
+/** Columnas de la tabla de marcas: marca · productos · plantilla · botón · miniatura (en móvil se apilan). */
+const COLUMNAS = "grid grid-cols-2 items-center gap-x-4 gap-y-2 md:grid-cols-[9rem_6.5rem_minmax(0,1fr)_9.5rem_5rem]";
+
 export function PasoPlantillas({
   recursos,
   datos,
@@ -30,6 +33,11 @@ export function PasoPlantillas({
   documento,
   nombreSugerido,
   alGuardarTipo,
+  alElegirPortada,
+  alMarcarSeparador,
+  alOrdenar,
+  alRestablecerOrden,
+  alSubirSeparadorDeMarca,
   alVolver,
   alAvanzar,
 }: {
@@ -42,6 +50,14 @@ export function PasoPlantillas({
   nombreSugerido: string;
   /** Un tipo recién guardado desde aquí: el asistente lo agrega y lo deja elegido. */
   alGuardarTipo: (tipo: TipoCatalogo) => void;
+  /** Elige la portada (null = ninguna); ajusta también el orden si Marketing ya lo fijó en el Preview. */
+  alElegirPortada: (id: string | null) => void;
+  alMarcarSeparador: (id: string, marcado: boolean) => void;
+  /** Orden del documento fijado en el Preview. */
+  alOrdenar: (orden: string[]) => void;
+  alRestablecerOrden: () => void;
+  /** Se subió el separador de esa marca: el asistente lo pone antes de su bloque en el orden. */
+  alSubirSeparadorDeMarca: (marca: string, id: string) => void;
   alVolver: () => void;
   alAvanzar: () => void;
 }) {
@@ -81,7 +97,7 @@ export function PasoPlantillas({
         <div>
           <h2 className="text-lg font-semibold text-foreground">Plantillas</h2>
           <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-            Solo lo que corresponde a estos filtros{nombreTipo ? ` (${nombreTipo})` : ""}. Cada marca usa su plantilla predeterminada; puedes elegir otra. La portada va asociada al tipo de catálogo. El Preview muestra el documento completo.
+            Solo lo que corresponde a estos filtros{nombreTipo ? ` (${nombreTipo})` : ""}. Cada marca usa su plantilla predeterminada; puedes elegir otra. La portada va asociada al tipo de catálogo. En el Preview ves el documento completo, ordenas las páginas y agregas más (por ejemplo, los términos al inicio).
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -105,62 +121,68 @@ export function PasoPlantillas({
         ) : marcas.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">No se encontraron productos con stock para estos filtros en el sistema; igual se consultará el ERP al generar.</p>
         ) : (
-          <ul className="mt-3 divide-y divide-border">
-            {marcas.map((m, i) => {
-              const lista = propias(m.marca);
-              return (
-                <li key={m.marca} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 py-2 animate-in fade-in slide-in-from-left-2 fill-mode-both duration-500" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
-                  <span className="w-32 shrink-0 text-sm font-medium text-foreground">{m.marca}</span>
-                  <span className="w-24 shrink-0 text-xs text-muted-foreground">{m.productos.toLocaleString("en-US")} {m.productos === 1 ? "producto" : "productos"}</span>
-                  {lista.length > 0 ? (
-                    <div className="flex min-w-0 flex-1 items-center gap-2">
-                      <select
-                        className={cn(SELECT, "min-w-0 max-w-xs flex-1")}
-                        value={elegida(m.marca)}
-                        onChange={(e) => cambiar({ plantillas: { ...datos.plantillas, [m.marca]: e.target.value } })}
-                        aria-label={`Plantilla de ${m.marca}`}
-                      >
-                        {lista.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.nombre}
-                            {p.predeterminada ? " (predeterminada)" : ""}
-                          </option>
-                        ))}
-                      </select>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setSubir({ clase: "plantilla", marca: m.marca })} aria-label={`Subir otra plantilla de ${m.marca}`}>
-                        <Upload data-icon="inline-start" /> Subir otra
-                      </Button>
-                      {(() => {
-                        const p = lista.find((x) => x.id === elegida(m.marca));
-                        return p ? (
-                          <button type="button" onClick={() => setGrande({ src: `${base}/${p.fondo}.webp`, titulo: `${m.marca} · ${p.nombre}` })} className="shrink-0 overflow-hidden rounded border border-border" aria-label={`Ver la plantilla de ${m.marca} en grande`}>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={`${base}/${p.fondo}.webp`} alt="" loading="lazy" className="aspect-video w-16 object-cover" />
-                          </button>
-                        ) : null;
-                      })()}
+          <div className="mt-3">
+            <div className={cn(COLUMNAS, "hidden pb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground md:grid")}>
+              <span>Marca</span>
+              <span>Productos</span>
+              <span>Plantilla</span>
+              <span />
+              <span />
+            </div>
+            <ul className="divide-y divide-border border-t border-border">
+              {marcas.map((m, i) => {
+                const lista = propias(m.marca);
+                const actual = lista.find((x) => x.id === elegida(m.marca));
+                return (
+                  <li key={m.marca} className={cn(COLUMNAS, "py-2.5 animate-in fade-in slide-in-from-left-2 fill-mode-both duration-500")} style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+                    <span className="text-sm font-medium text-foreground">{m.marca}</span>
+                    <span className="text-xs text-muted-foreground">{m.productos.toLocaleString("en-US")} {m.productos === 1 ? "producto" : "productos"}</span>
+                    <div className="col-span-2 min-w-0 md:col-span-1">
+                      {lista.length > 0 ? (
+                        <select
+                          className={cn(SELECT, "w-full max-w-xs")}
+                          value={elegida(m.marca)}
+                          onChange={(e) => cambiar({ plantillas: { ...datos.plantillas, [m.marca]: e.target.value } })}
+                          aria-label={`Plantilla de ${m.marca}`}
+                        >
+                          {lista.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.nombre}
+                              {p.predeterminada ? " (predeterminada)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      ) : hayGenerica ? (
+                        <span className="text-xs text-muted-foreground">Usa la plantilla genérica</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> Sin plantilla: estos productos no entrarán
+                        </span>
+                      )}
                     </div>
-                  ) : hayGenerica ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-muted-foreground">Usa la plantilla genérica</span>
-                      <Button type="button" variant="outline" size="sm" onClick={() => setSubir({ clase: "plantilla", marca: m.marca })}>
-                        <Upload data-icon="inline-start" /> Subir plantilla de {m.marca}
-                      </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setSubir({ clase: "plantilla", marca: m.marca })}
+                      aria-label={lista.length > 0 ? `Subir otra plantilla de ${m.marca}` : `Subir plantilla de ${m.marca}`}
+                    >
+                      <Upload data-icon="inline-start" /> {lista.length > 0 ? "Subir otra" : "Subir plantilla"}
+                    </Button>
+                    <div className="justify-self-end">
+                      {actual && (
+                        <button type="button" onClick={() => setGrande({ src: `${base}/${actual.fondo}.webp`, titulo: `${m.marca} · ${actual.nombre}` })} className="block overflow-hidden rounded border border-border" aria-label={`Ver la plantilla de ${m.marca} en grande`}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={`${base}/${actual.fondo}.webp`} alt="" loading="lazy" className="aspect-video w-20 object-cover" />
+                        </button>
+                      )}
                     </div>
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
-                        <AlertTriangle className="h-3.5 w-3.5" /> Sin plantilla: estos productos no entrarán
-                      </span>
-                      <Button type="button" variant="outline" size="sm" onClick={() => setSubir({ clase: "plantilla", marca: m.marca })}>
-                        <Upload data-icon="inline-start" /> Subir plantilla de {m.marca}
-                      </Button>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
 
         {documento.faltaGenerica && documento.sinPlantilla.length > 0 && (
@@ -213,7 +235,7 @@ export function PasoPlantillas({
             <li className="w-40">
               <button
                 type="button"
-                onClick={() => cambiar({ portada: null })}
+                onClick={() => alElegirPortada(null)}
                 aria-pressed={!documento.portadaPendiente && documento.portada === null}
                 className={cn(
                   "flex aspect-video w-full items-center justify-center rounded-lg border text-xs transition-all hover:-translate-y-0.5",
@@ -228,7 +250,7 @@ export function PasoPlantillas({
               return (
                 <li key={f.id} className="w-40 animate-in fade-in zoom-in-95 fill-mode-both duration-500">
                   <div className={cn("overflow-hidden rounded-lg border transition-all hover:-translate-y-0.5 hover:shadow-md", elegida ? "border-foreground ring-2 ring-foreground/70" : "border-border")}>
-                    <button type="button" onClick={() => cambiar({ portada: f.id })} aria-pressed={elegida} className="block w-full text-left" aria-label={`Elegir ${f.nombre}`}>
+                    <button type="button" onClick={() => alElegirPortada(f.id)} aria-pressed={elegida} className="block w-full text-left" aria-label={`Elegir ${f.nombre}`}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={`${base}/${f.imagen}-min.webp`} alt="" loading="lazy" className="aspect-video w-full object-cover" />
                       <span className="block truncate px-2 pt-1 text-[11px] font-medium text-foreground">{f.nombre}</span>
@@ -259,7 +281,7 @@ export function PasoPlantillas({
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={`${base}/${f.imagen}-min.webp`} alt="" loading="lazy" className="aspect-video w-full object-cover" />
                       <span className="flex items-center gap-2 px-2 py-1.5 text-[11px] font-medium text-foreground">
-                        <Checkbox checked={marcado} onCheckedChange={(v) => cambiar({ separadores: v === true ? [...(datos.separadores ?? []), f.id] : (datos.separadores ?? []).filter((x) => x !== f.id) })} />
+                        <Checkbox checked={marcado} onCheckedChange={(v) => alMarcarSeparador(f.id, v === true)} />
                         <span className="truncate">{f.nombre}</span>
                       </span>
                     </label>
@@ -293,16 +315,18 @@ export function PasoPlantillas({
 
       {subir && (
         <SubirDisenoAqui
-          key={subir.clase === "plantilla" ? `p-${subir.marca}` : "portada"}
+          key={subir.clase === "portada" ? "portada" : `${subir.clase}-${subir.marca}`}
           destino={subir}
-          existentes={subir.clase === "portada" ? recursos.fijas.filter((f) => f.tipo === "portada").map((f) => f.nombre) : plantillas.filter((p) => p.marca === subir.marca).map((p) => p.nombre)}
+          existentes={subir.clase === "portada" ? recursos.fijas.filter((f) => f.tipo === "portada").map((f) => f.nombre) : subir.clase === "separador_marca" ? [] : plantillas.filter((p) => p.marca === subir.marca).map((p) => p.nombre)}
           tipo={(() => {
             const t = recursos.tipos.find((x) => x.id === datos.tipo);
             return t ? { id: t.id, nombre: t.nombre } : null;
           })()}
           slotTipo={<GuardarComoTipo filtros={datos} nombreSugerido={nombreSugerido} alGuardar={alGuardarTipo} />}
           alSubir={({ id, reemplazo }) => {
-            cambiar(subir.clase === "portada" ? { portada: id } : { plantillas: { ...datos.plantillas, [subir.marca]: id } });
+            if (subir.clase === "portada") alElegirPortada(id);
+            else if (subir.clase === "separador_marca") alSubirSeparadorDeMarca(subir.marca, id);
+            else cambiar({ plantillas: { ...datos.plantillas, [subir.marca]: id } });
             if (subir.clase === "plantilla" && !reemplazo) setTextosDe(id);
           }}
           alCerrar={() => setSubir(null)}
@@ -327,7 +351,11 @@ export function PasoPlantillas({
       {preview && (
         <PreviewPlantillas
           base={base}
-          hojas={documento.hojas}
+          documento={documento}
+          alCambiarOrden={alOrdenar}
+          alRestablecer={alRestablecerOrden}
+          alSubirSeparador={(marca) => setSubir({ clase: "separador_marca", marca })}
+          bloqueado={subir !== null}
           alCerrar={() => setPreview(false)}
           alSiguiente={documento.portadaPendiente ? undefined : () => {
             setPreview(false);
