@@ -1,6 +1,8 @@
 "use client";
 
 // Tarjeta de un diseño (miniatura, nombre, insignias y acciones); se abre en grande con un clic.
+import { Button } from "@/components/ui/button";
+
 export function TarjetaDiseno({
   src,
   nombre,
@@ -31,16 +33,18 @@ export function TarjetaDiseno({
             </span>
           ))}
         </div>
-        {children && <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5">{children}</div>}
+        {children && <div className="space-y-2 border-t border-border pt-2">{children}</div>}
       </div>
     </div>
   );
 }
 
-export function AccionMini({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+/** Acción de una tarjeta: un botón de verdad (con borde), para que se note que se puede pulsar. */
+export function AccionMini({ onClick, icono, children }: { onClick: () => void; icono?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className="text-[11px] text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline">
+    <Button type="button" variant="outline" size="sm" onClick={onClick}>
+      {icono && <span data-icon="inline-start">{icono}</span>}
       {children}
-    </button>
+    </Button>
   );
 }

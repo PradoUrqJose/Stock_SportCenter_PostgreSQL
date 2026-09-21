@@ -4,6 +4,7 @@
 // plantilla predeterminada de cada marca y dónde se usa cada página fija. La subida masiva está aquí y en Catálogos.
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Eye, EyeOff, MousePointerClick, Star } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { activarDiseno, guardarUsoFija, marcarPredeterminada } from "@/lib/actions/marketing-disenos";
 import { MARCA_GENERICA, type Enlaces, type FijaBiblioteca, type PlantillaLista, type ZonaEnlace } from "@/lib/marketing-catalogo";
@@ -13,7 +14,7 @@ import { EditorZonas } from "./editor-zonas";
 import { EnlacesContacto } from "./enlaces-contacto";
 import { SubirDisenosMasivo } from "./subir-disenos-masivo";
 
-const SELECT_MINI = "h-6 rounded border border-input bg-transparent px-1 text-[11px] outline-none focus-visible:border-ring";
+const SELECT_MINI = "h-8 w-full rounded-lg border border-input bg-transparent px-2 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 const TIPOS_FIJA: { tipo: FijaBiblioteca["tipo"]; plural: string }[] = [
   { tipo: "portada", plural: "Portadas" },
   { tipo: "separador", plural: "Separadores" },
@@ -99,8 +100,16 @@ export function BibliotecaDisenos({
                       insignias={[p.predeterminada && "Predeterminada", !p.activa && "Inactiva"]}
                       alAbrir={() => setGrande({ src: `${base}/${p.fondo}.webp`, titulo: `${etiquetaMarca(p.marca)} · ${p.nombre}` })}
                     >
-                      {p.activa && !p.predeterminada && <AccionMini onClick={() => accion(() => marcarPredeterminada(p.id))}>Predeterminada</AccionMini>}
-                      <AccionMini onClick={() => accion(() => activarDiseno("plantilla", p.id, !p.activa))}>{p.activa ? "Desactivar" : "Activar"}</AccionMini>
+                      <div className="flex flex-wrap gap-1.5">
+                        {p.activa && !p.predeterminada && (
+                          <AccionMini icono={<Star />} onClick={() => accion(() => marcarPredeterminada(p.id))}>
+                            Hacer predeterminada
+                          </AccionMini>
+                        )}
+                        <AccionMini icono={p.activa ? <EyeOff /> : <Eye />} onClick={() => accion(() => activarDiseno("plantilla", p.id, !p.activa))}>
+                          {p.activa ? "Desactivar" : "Activar"}
+                        </AccionMini>
+                      </div>
                     </TarjetaDiseno>
                   </li>
                 ))}
@@ -126,7 +135,7 @@ export function BibliotecaDisenos({
                       insignias={[textoUso(f, USOS), f.zonas.length > 0 && `${f.zonas.length} enlace${f.zonas.length === 1 ? "" : "s"}`, !f.activa && "Inactiva"]}
                       alAbrir={() => setGrande({ src: `${base}/${f.imagen}.webp`, titulo: f.nombre })}
                     >
-                      <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <label className="block space-y-1 text-[11px] font-medium text-muted-foreground">
                         {f.tipo === "portada" ? "Portada de" : "Se usa en"}
                         <select
                           className={SELECT_MINI}
@@ -152,8 +161,14 @@ export function BibliotecaDisenos({
                           <option value="final">Al final</option>
                         </select>
                       )}
-                      <AccionMini onClick={() => setZonasDe(f.id)}>Zonas clicables</AccionMini>
-                      <AccionMini onClick={() => accion(() => activarDiseno("fija", f.id, !f.activa))}>{f.activa ? "Desactivar" : "Activar"}</AccionMini>
+                      <div className="flex flex-wrap gap-1.5">
+                        <AccionMini icono={<MousePointerClick />} onClick={() => setZonasDe(f.id)}>
+                          Zonas clicables
+                        </AccionMini>
+                        <AccionMini icono={f.activa ? <EyeOff /> : <Eye />} onClick={() => accion(() => activarDiseno("fija", f.id, !f.activa))}>
+                          {f.activa ? "Desactivar" : "Activar"}
+                        </AccionMini>
+                      </div>
                     </TarjetaDiseno>
                   </li>
                 );
