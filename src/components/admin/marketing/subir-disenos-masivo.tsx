@@ -9,7 +9,7 @@ import { AlertTriangle, Check, ImagePlus, Loader2, Upload, X } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { MARCA_GENERICA, TIPOS_CATALOGO } from "@/lib/marketing-catalogo";
+import { MARCA_GENERICA } from "@/lib/marketing-catalogo";
 import { claveNombre, interpretarNombreDiseno, type DisenoInterpretado } from "@/lib/marketing-disenos-nombres";
 import { enviarDiseno, prepararPaginaFija } from "@/lib/subir-imagen-cliente";
 import { cn } from "@/lib/utils";
@@ -39,7 +39,8 @@ const CLASES: { valor: Clase; texto: string }[] = [
   { valor: "cierre", texto: "Cierre (términos, redes)" },
   { valor: "otra", texto: "Otra" },
 ];
-const USOS = [{ valor: "", texto: "A mano" }, ...TIPOS_CATALOGO.map((t) => ({ valor: t.id as string, texto: t.nombre as string })), { valor: "*", texto: "Todos" }];
+/** Opciones de «dónde se usa» una página fija: a mano, cada tipo de catálogo (de fábrica y personalizados) o todos. */
+const usosDe = (tipos: readonly { id: string; nombre: string }[]) => [{ valor: "", texto: "A mano" }, ...tipos.map((t) => ({ valor: t.id, texto: t.nombre })), { valor: "*", texto: "Todos" }];
 
 function aFila(id: number, archivo: File, marcas: string[]): Fila {
   const d: DisenoInterpretado = interpretarNombreDiseno(archivo.name, marcas);
@@ -56,7 +57,8 @@ function aFila(id: number, archivo: File, marcas: string[]): Fila {
   };
 }
 
-export function SubirDisenosMasivo({ marcas, className }: { marcas: string[]; className?: string }) {
+export function SubirDisenosMasivo({ marcas, tipos, className }: { marcas: string[]; tipos: { id: string; nombre: string }[]; className?: string }) {
+  const USOS = usosDe(tipos);
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [filas, setFilas] = useState<Fila[]>([]);

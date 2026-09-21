@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Palette, Plus } from "lucide-react";
+import { Palette, Plus, Tags } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireMarketing } from "@/lib/marketing";
 import { SubirDisenosMasivo } from "@/components/admin/marketing/subir-disenos-masivo";
 import { cerrarGeneracionesAbandonadas } from "@/lib/marketing-generacion";
 import { fechaLima, normalizarFiltros, textoFiltros } from "@/lib/marketing-catalogo";
+import { tiposCatalogo } from "@/lib/marketing-tipos";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +39,7 @@ export default async function CatalogosPage() {
   await requireMarketing();
   await cerrarGeneracionesAbandonadas();
   const marcas = (await db.execute("SELECT marca FROM productos WHERE marca IS NOT NULL GROUP BY 1 ORDER BY COUNT(*) DESC, 1")).rows.map((r) => r.marca as string);
+  const tipos = await tiposCatalogo();
 
   const r = await db.execute(
     `SELECT c.id, c.titulo, c.version_publicada, c.updated_at,
@@ -69,7 +71,10 @@ export default async function CatalogosPage() {
           <Link href="/admin/marketing/catalogos/disenos" className={cn(buttonVariants({ variant: "ghost" }))}>
             <Palette data-icon="inline-start" /> Diseños
           </Link>
-          <SubirDisenosMasivo marcas={marcas} />
+          <Link href="/admin/marketing/catalogos/tipos" className={cn(buttonVariants({ variant: "ghost" }))}>
+            <Tags data-icon="inline-start" /> Tipos
+          </Link>
+          <SubirDisenosMasivo marcas={marcas} tipos={tipos.map((t) => ({ id: t.id, nombre: t.nombre }))} />
           <Link href="/admin/marketing/catalogos/nuevo" className={cn(buttonVariants())}>
             <Plus data-icon="inline-start" /> Nuevo catálogo
           </Link>
@@ -124,7 +129,7 @@ export default async function CatalogosPage() {
                 <>
                   <div className="min-w-0">
                     <p className="truncate font-medium text-foreground">{g.titulo}</p>
-                    <p className="truncate text-xs text-muted-foreground">{textoFiltros(normalizarFiltros(JSON.parse(g.filtros))).join(" · ")}</p>
+                    <p className="truncate text-xs text-muted-foreground">{textoFiltros(normalizarFiltros(JSON.parse(g.filtros)), tipos).join(" · ")}</p>
                     {g.estado === "error" && g.mensaje && <p className="mt-0.5 text-xs text-destructive">{g.mensaje}</p>}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">

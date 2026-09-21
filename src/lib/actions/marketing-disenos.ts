@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { sesionMarketing } from "@/lib/marketing";
-import { TIPOS_IDS, enlaceDeContacto, validarZonasEnlace, type ZonasPlantilla } from "@/lib/marketing-catalogo";
+import { enlaceDeContacto, validarZonasEnlace, type ZonasPlantilla } from "@/lib/marketing-catalogo";
+import { idsDeTipos } from "@/lib/marketing-tipos";
 import type { ActionResult } from "@/types";
 
 const ID = /^[a-z0-9-]{1,80}$/;
@@ -55,8 +56,6 @@ export async function activarDiseno(clase: "plantilla" | "fija", id: string, act
     return { success: false, msg: "No se pudo cambiar el diseño" };
   }
 }
-
-const TIPOS_CATALOGO = new Set([...TIPOS_IDS, "*"]);
 
 /**
  * Guarda las zonas clicables de una página fija (rectángulos sobre la imagen, en fracciones de 0 a 1). Los catálogos
@@ -122,7 +121,8 @@ export async function guardarEnlaces(datos: Record<"whatsapp" | "instagram" | "t
 export async function guardarUsoFija(id: string, aplica: string[], posicion: "" | "inicio" | "final"): Promise<ActionResult> {
   if (!(await sesionMarketing())) return { success: false, msg: "Sin permisos" };
   if (!ID.test(id)) return { success: false, msg: "Página no válida" };
-  if (!Array.isArray(aplica) || !aplica.every((t) => TIPOS_CATALOGO.has(t))) return { success: false, msg: "Tipo de catálogo no válido" };
+  const tiposValidos = new Set([...(await idsDeTipos()), "*"]);
+  if (!Array.isArray(aplica) || !aplica.every((t) => tiposValidos.has(t))) return { success: false, msg: "Tipo de catálogo no válido" };
   if (!["", "inicio", "final"].includes(posicion)) return { success: false, msg: "Posición no válida" };
   if (aplica.length === 0 && posicion !== "") return { success: false, msg: "Elige en qué catálogos se usa" };
   try {

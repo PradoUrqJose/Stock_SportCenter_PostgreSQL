@@ -61,6 +61,7 @@ export async function ejecutarGeneracion(id: string): Promise<void> {
     const sinFijas = construirBorrador(items, versiones, (marca) => plantillaDeMarca(marca, plantillas, filtros.plantillas), {
       min: filtros.precio_min,
       max: filtros.precio_max,
+      tallas: filtros.tallas,
     });
     const conPropia = new Set(plantillas.filter((p) => p.activa && p.marca !== MARCA_GENERICA).map((p) => p.marca));
     const genericas: Record<string, number> = {};
@@ -72,7 +73,9 @@ export async function ejecutarGeneracion(id: string): Promise<void> {
     if (Object.keys(genericas).length > 0) sinFijas.resumen.con_generica = genericas;
     if (sinFijas.paginas.length === 0) {
       const r = sinFijas.resumen;
-      const fuera = r.fuera_de_precio ? `, ${r.fuera_de_precio} fuera del rango de precio` : "";
+      const fuera =
+        (r.fuera_de_precio ? `, ${r.fuera_de_precio} fuera del rango de precio` : "") +
+        (r.fuera_de_talla ? `, ${r.fuera_de_talla} sin stock en las tallas elegidas (${filtros.tallas.join(", ")})` : "");
       const sinPl = r.sin_plantilla ? `, ${Object.values(r.sin_plantilla).reduce((a, b) => a + b, 0)} de marcas sin plantilla (${Object.keys(r.sin_plantilla).join(", ")})` : "";
       return await terminar(
         id,

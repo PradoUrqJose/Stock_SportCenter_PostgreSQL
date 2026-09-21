@@ -77,6 +77,12 @@ export type FiltrosCatalogo = {
   marcas: string[];
   generos: string[];
   categorias: string[];
+  /**
+   * Tallas (escala USA del ERP: «9», «9.5», «M», «OSFA»…). Vacío = sin filtro. Entra el producto que tenga stock
+   * en ALGUNA de ellas; la página sigue mostrando todas sus tallas con stock. El filtro se aplica aquí, sobre lo
+   * que devuelve el ERP (su propio filtro `p_talla` rechaza todos los formatos probados).
+   */
+  tallas: string[];
   /** Precio lista en soles; null = sin límite. */
   precio_min: number | null;
   precio_max: number | null;
@@ -119,8 +125,72 @@ export const TIPOS_CATALOGO = [
   { id: "accesorios", nombre: "Accesorios", descripcion: "Pelotas, gorras, mochilas, medias, canilleras y demás", categorias: [], grupos: GRUPOS_ACCESORIOS, generos: [] },
 ] as const satisfies readonly { id: string; nombre: string; descripcion: string; categorias: readonly string[]; grupos: readonly string[]; generos: readonly string[] }[];
 
-/** Ids de los tipos de catálogo. */
+/** Ids de los tipos de catálogo de fábrica. */
 export const TIPOS_IDS: readonly string[] = TIPOS_CATALOGO.map((t) => t.id);
+
+/** Filtros que un tipo de catálogo llena al elegirlo (lista vacía / null = no toca ese filtro). */
+export type FiltrosDeTipo = {
+  categorias: string[];
+  grupos: string[];
+  generos: string[];
+  marcas: string[];
+  tallas: string[];
+  precio_min: number | null;
+  precio_max: number | null;
+};
+
+/**
+ * Tipo de catálogo tal como vive en la base de datos (tabla `mk_tipos`): los 9 de fábrica (`base`) y los que crea
+ * Marketing. Todos hacen lo mismo: llenan los filtros, llevan su portada asociada y sus páginas automáticas.
+ */
+export type TipoCatalogo = FiltrosDeTipo & {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  /** Tipo de fábrica: se puede editar y desactivar, no borrar. */
+  base: boolean;
+  activo: boolean;
+};
+
+const listaTipo = (v: unknown): string[] =>
+  Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim().toUpperCase()))] : [];
+const precioTipo = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
+
+/** Lee los filtros guardados de un tipo (JSON de `mk_tipos.filtros`); lo que falta o viene mal queda vacío. */
+export function normalizarFiltrosTipo(crudo: unknown): FiltrosDeTipo {
+  let o: Record<string, unknown> = {};
+  try {
+    const v = typeof crudo === "string" ? JSON.parse(crudo) : crudo;
+    if (typeof v === "object" && v !== null) o = v as Record<string, unknown>;
+  } catch {
+    // JSON dañado: el tipo queda sin filtros y se ve en la pantalla de tipos.
+  }
+  return {
+    categorias: listaTipo(o.categorias),
+    grupos: listaTipo(o.grupos),
+    generos: listaTipo(o.generos),
+    marcas: listaTipo(o.marcas),
+    tallas: listaTipo(o.tallas),
+    precio_min: precioTipo(o.precio_min),
+    precio_max: precioTipo(o.precio_max),
+  };
+}
+
+/** Los tipos de fábrica del código: valores iniciales de la tabla, «restaurar» y respaldo si la tabla aún no existe. */
+export const TIPOS_DE_FABRICA: readonly TipoCatalogo[] = TIPOS_CATALOGO.map((t) => ({
+  id: t.id,
+  nombre: t.nombre,
+  descripcion: t.descripcion,
+  base: true,
+  activo: true,
+  categorias: [...t.categorias],
+  grupos: [...t.grupos],
+  generos: [...t.generos],
+  marcas: [],
+  tallas: [],
+  precio_min: null,
+  precio_max: null,
+}));
 
 const lista = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "").map((x) => x.trim().toUpperCase()) : [];
@@ -137,6 +207,7 @@ export function normalizarFiltros(crudo: unknown): FiltrosCatalogo {
     marcas: o.marcas !== undefined ? lista(o.marcas) : unico(o.marca),
     generos: o.generos !== undefined ? lista(o.generos) : unico(o.genero),
     categorias: lista(o.categorias),
+    tallas: lista(o.tallas),
     precio_min: num(o.precio_min),
     precio_max: num(o.precio_max),
     plantillas:
@@ -262,8 +333,8 @@ export function fechaLima(utc: string): string {
 }
 
 /** Los filtros en frases cortas para mostrarlos. */
-export function textoFiltros(f: FiltrosCatalogo): string[] {
-  const tipo = TIPOS_CATALOGO.find((t) => t.id === f.tipo);
+export function textoFiltros(f: FiltrosCatalogo, tipos: readonly { id: string; nombre: string }[] = TIPOS_CATALOGO): string[] {
+  const tipo = tipos.find((t) => t.id === f.tipo);
   const precio =
     f.precio_min != null && f.precio_max != null
       ? `Precio: S/ ${f.precio_min}–${f.precio_max}`
@@ -278,6 +349,7 @@ export function textoFiltros(f: FiltrosCatalogo): string[] {
     f.marcas.length > 0 && `Marca: ${f.marcas.join(", ")}`,
     f.grupos.length > 0 && `Grupo: ${f.grupos.join(", ")}`,
     f.generos.length > 0 && `Género: ${f.generos.join(", ")}`,
+    f.tallas.length > 0 && `Talla: ${f.tallas.join(", ")}`,
     precio,
     `Almacenes: ${f.almacenes.join(", ")}`,
   ].filter((x): x is string => Boolean(x));
@@ -296,6 +368,8 @@ export type ResumenGeneracion = {
   sin_stock: number;
   /** Filas fuera del rango de precio pedido (solo cuando se filtró por precio). */
   fuera_de_precio?: number;
+  /** Filas sin stock en ninguna de las tallas elegidas (solo cuando se filtró por talla). */
+  fuera_de_talla?: number;
   /** Productos que no entran porque su marca no tiene plantilla: marca → cantidad. */
   sin_plantilla?: Record<string, number>;
   /** Productos que usaron la plantilla genérica por no tener la de su marca: marca → cantidad. */
@@ -330,6 +404,26 @@ export type ItemErp = {
 export const ALMACENES = ["JAL1", "JAL4", "T01", "T02", "T03", "T04", "T05", "T06", "T07", "T08", "T09", "T10", "OUT"] as const;
 export const ALMACENES_POR_DEFECTO = ["JAL1", "T01", "T02", "T03", "T04", "T05", "T06", "T07", "T08", "T09", "T10"];
 
+const ORDEN_TALLAS_ROPA = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL", "2XL", "3XL", "4XL"];
+
+/**
+ * Orden de la lista de tallas para elegir: numéricas de menor a mayor («4», «4.5», «9»…), luego las de ropa en su
+ * orden natural (XS, S, M, L, XL…) y al final las demás por orden alfabético (OSFA, S/T, 9-10Y…).
+ */
+export function ordenarOpcionesTalla(tallas: readonly string[]): string[] {
+  const clave = (t: string): [number, number, string] => {
+    const n = /^\d+(\.\d+)?$/.test(t) ? parseFloat(t) : NaN;
+    if (!Number.isNaN(n)) return [0, n, t];
+    const i = ORDEN_TALLAS_ROPA.indexOf(t);
+    return i >= 0 ? [1, i, t] : [2, 0, t];
+  };
+  return [...new Set(tallas.map((t) => t.trim().toUpperCase()).filter(Boolean))].sort((a, b) => {
+    const [ga, na, ta] = clave(a);
+    const [gb, nb, tb] = clave(b);
+    return ga - gb || na - nb || ta.localeCompare(tb);
+  });
+}
+
 /** Tallas con stock, ordenadas: numéricas de menor a mayor y luego las de texto. */
 export function ordenarTallas(tallas: Record<string, number | string>): string[] {
   const conStock = Object.entries(tallas).filter(([, v]) => typeof v === "number" && v > 0).map(([t]) => t);
@@ -360,13 +454,15 @@ function numero(v: number | string | null | undefined): number | null {
  * @param versiones   cod_universal (MAYÚSCULAS) → versión de su imagen en R2
  * @param plantillaDe id de la plantilla de una marca; null si la marca no tiene (el producto no entra)
  * @param precio_rango los productos con precio lista fuera de este rango se descartan
+ * @param precio_rango.tallas si se indican, solo entran los productos con stock en alguna de ellas
  */
 export function construirBorrador(
   items: ItemErp[],
   versiones: Map<string, number>,
   plantillaDe: (marca: string) => string | null,
-  precio_rango: { min: number | null; max: number | null } = { min: null, max: null }
+  precio_rango: { min: number | null; max: number | null; tallas?: readonly string[] } = { min: null, max: null }
 ): Borrador {
+  const tallasPedidas = new Set((precio_rango.tallas ?? []).map((t) => t.trim().toUpperCase()));
   const vistos = new Set<string>();
   const generosPorCodigo = new Map<string, Set<string>>();
   const sinImagen = new Set<string>();
@@ -374,6 +470,7 @@ export function construirBorrador(
   let duplicados = 0;
   let sinStock = 0;
   let fueraDePrecio = 0;
+  let fueraDeTalla = 0;
   const sinPlantilla: Record<string, number> = {};
 
   for (const it of items) {
@@ -396,6 +493,10 @@ export function construirBorrador(
     }
     if ((precio_rango.min != null && precio < precio_rango.min) || (precio_rango.max != null && precio > precio_rango.max)) {
       fueraDePrecio++;
+      continue;
+    }
+    if (tallasPedidas.size > 0 && !tallas.some((t) => tallasPedidas.has(t.trim().toUpperCase()))) {
+      fueraDeTalla++;
       continue;
     }
     const marca = (it.marca ?? "").trim().toUpperCase();
@@ -445,6 +546,7 @@ export function construirBorrador(
       sin_imagen: [...sinImagen].sort(),
       sin_stock: sinStock,
       ...(precio_rango.min != null || precio_rango.max != null ? { fuera_de_precio: fueraDePrecio } : {}),
+      ...(tallasPedidas.size > 0 ? { fuera_de_talla: fueraDeTalla } : {}),
       ...(Object.keys(sinPlantilla).length > 0 ? { sin_plantilla: sinPlantilla } : {}),
       paginas: paginas.length,
     },

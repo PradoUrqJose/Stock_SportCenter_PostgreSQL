@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { MarcaAfectada } from "@/lib/actions/marketing-disenos";
-import { MARCA_GENERICA, TIPOS_CATALOGO, type FijaBiblioteca } from "@/lib/marketing-catalogo";
+import { MARCA_GENERICA, type FijaBiblioteca } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
 import type { DatosCatalogo, Recursos } from "./asistente-catalogo";
 import type { DocumentoCatalogo } from "./documento-catalogo";
@@ -48,7 +48,7 @@ export function PasoPlantillas({
   };
   const marcas = [...(marcasCatalogo ?? [])].sort((a, b) => a.marca.localeCompare(b.marca));
   const productosSin = documento.sinPlantilla.reduce((a, m) => a + m.productos, 0);
-  const nombreTipo = TIPOS_CATALOGO.find((t) => t.id === documento.tipo)?.nombre;
+  const nombreTipo = recursos.tipos.find((t) => t.id === documento.tipo)?.nombre;
 
   const miniatura = (f: FijaBiblioteca, nota: string) => (
     <li key={f.id} className="w-40 animate-in fade-in zoom-in-95 fill-mode-both duration-500">
