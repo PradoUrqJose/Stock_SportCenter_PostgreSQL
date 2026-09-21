@@ -2,7 +2,7 @@ import { Montserrat } from "next/font/google";
 import { db } from "@/lib/db";
 import { IMAGENES_BASE, ORIGEN_IMAGENES, requireMarketing } from "@/lib/marketing";
 import { fijasGestion, plantillasGestion } from "@/lib/marketing-catalogos-datos";
-import { ordenarOpcionesTalla } from "@/lib/marketing-catalogo";
+import { opcionesDeFiltros } from "@/lib/marketing-opciones";
 import { tiposCatalogo } from "@/lib/marketing-tipos";
 import { AsistenteCatalogo } from "@/components/admin/marketing/asistente-catalogo";
 import { preconnect } from "react-dom";
@@ -10,20 +10,6 @@ import { ProgresoGeneracion } from "@/components/admin/marketing/progreso-genera
 
 // Tipografía del diseño (la misma del catálogo): el editor de posiciones del texto la usa para mostrar el ejemplo real.
 const montserrat = Montserrat({ subsets: ["latin"], weight: "900", display: "swap" });
-
-// Valores que existen hoy en los productos, los más frecuentes primero.
-async function valores(columna: "marca" | "grupo" | "genero" | "categoria"): Promise<string[]> {
-  const r = await db.execute(
-    `SELECT ${columna} AS v FROM productos WHERE ${columna} IS NOT NULL GROUP BY 1 ORDER BY COUNT(*) DESC, 1`
-  );
-  return r.rows.map((f) => f.v as string);
-}
-
-// Tallas que existen en los productos (escala USA del ERP), para el filtro de talla.
-async function valoresTalla(): Promise<string[]> {
-  const r = await db.execute("SELECT DISTINCT UPPER(TRIM(talla)) AS v FROM variantes WHERE talla IS NOT NULL AND TRIM(talla) <> ''");
-  return ordenarOpcionesTalla(r.rows.map((f) => f.v as string));
-}
 
 // La generación corre en segundo plano (`after`) dentro de esta misma función: necesita más que los 10 s por defecto
 // (consulta al ERP en paralelo, hasta ~35 s, más armar el catálogo). 60 s es el máximo del plan Hobby.
@@ -47,12 +33,8 @@ export default async function NuevoCatalogoPage({ searchParams }: { searchParams
     }
   }
 
-  const [marcas, grupos, generos, categorias, tallas, tipos, plantillas, fijas, ejemplo] = await Promise.all([
-    valores("marca"),
-    valores("grupo"),
-    valores("genero"),
-    valores("categoria"),
-    valoresTalla(),
+  const [opciones, tipos, plantillas, fijas, ejemplo] = await Promise.all([
+    opcionesDeFiltros(),
     tiposCatalogo({ soloActivos: true }),
     plantillasGestion(),
     fijasGestion(),
@@ -74,7 +56,7 @@ export default async function NuevoCatalogoPage({ searchParams }: { searchParams
           ejemplo: fila ? { cod: fila.cod_universal as string, v: fila.version as number } : null,
           tipos,
           fuente: montserrat.style.fontFamily,
-          opciones: { marcas, grupos, generos, categorias, tallas },
+          opciones,
         }}
       />
     </div>

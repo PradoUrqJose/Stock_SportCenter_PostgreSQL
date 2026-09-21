@@ -7,7 +7,8 @@ import { db } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
 import { IMAGENES_BASE, enlacesCatalogo, sesionMarketing } from "@/lib/marketing";
 import { borradorDeVersion, enlacesDeContacto, plantillasPorId, sincronizarVersiones, zonasDeBiblioteca } from "@/lib/marketing-catalogos-datos";
-import { cerrarGeneracionesAbandonadas, ejecutarGeneracion } from "@/lib/marketing-generacion";
+import { borradorBase, cerrarGeneracionesAbandonadas, ejecutarGeneracion, ejecutarSincronizacion } from "@/lib/marketing-generacion";
+import { sincronizarBorrador, type InformeSincronizacion } from "@/lib/marketing-sincronizar";
 import { generarImagenCompartir } from "@/lib/marketing-og";
 import { etiquetaCatalogo } from "@/lib/marketing-publico";
 import { idsDeTipos } from "@/lib/marketing-tipos";
@@ -18,10 +19,58 @@ import {
   CLAVE_PRODUCTOS,
   conZonasClicables,
   validarPaginas,
+  normalizarFiltros,
   type Borrador,
   type FiltrosCatalogo,
 } from "@/lib/marketing-catalogo";
 import type { ActionResult } from "@/types";
+
+type EntradaFiltros = {
+  tipo: string;
+  almacenes: string[];
+  grupos: string[];
+  marcas: string[];
+  generos: string[];
+  categorias: string[];
+  /** Tallas (escala USA del ERP); vacío = sin filtro. Entra el producto con stock en alguna. */
+  tallas?: string[];
+  precio_min: number | null;
+  precio_max: number | null;
+  /** Plantilla elegida por marca (marca → id); la clave «*» es la genérica. */
+  plantillas?: Record<string, string>;
+};
+
+/** Valida los filtros que llegan del navegador (nunca se confía en ellos) y los deja en su forma guardada. */
+async function filtrosDeEntrada(input: EntradaFiltros): Promise<{ filtros: FiltrosCatalogo } | { error: string }> {
+  const almacenes = valoresFiltro(input.almacenes)?.filter((a): a is (typeof ALMACENES)[number] => (ALMACENES as readonly string[]).includes(a));
+  const grupos = valoresFiltro(input.grupos);
+  const marcas = valoresFiltro(input.marcas);
+  const generos = valoresFiltro(input.generos);
+  const categorias = valoresFiltro(input.categorias);
+  if (!almacenes || almacenes.length === 0) return { error: "Elige al menos un almacén" };
+  if (!grupos || !marcas || !generos || !categorias) return { error: "Filtro con caracteres no válidos" };
+
+  const tallas = valoresTalla(input.tallas ?? []);
+  if (!tallas) return { error: "Talla con caracteres no válidos" };
+
+  const precio_min = precioFiltro(input.precio_min);
+  const precio_max = precioFiltro(input.precio_max);
+  if (precio_min === undefined || precio_max === undefined) return { error: "El precio debe ser un número válido" };
+  if (precio_min != null && precio_max != null && precio_min > precio_max) return { error: "El precio mínimo no puede ser mayor que el máximo" };
+  const tipo = (await idsDeTipos()).has(input.tipo) ? input.tipo : "";
+
+  // Plantillas elegidas por marca: solo se aceptan pares con formato de marca e id (el resto lo valida la generación).
+  const plantillas: Record<string, string> = {};
+  for (const [marca, pid] of Object.entries(input.plantillas ?? {}).slice(0, 60)) {
+    if (/^[A-Z0-9 &.*-]{1,40}$/.test(marca) && /^[a-z0-9-]{1,80}$/.test(String(pid))) plantillas[marca] = String(pid);
+  }
+
+  // Sin ningún filtro se traería todo el ERP (miles de filas): se evita por error.
+  if (grupos.length + marcas.length + generos.length + categorias.length === 0) {
+    return { error: "Elige un tipo de catálogo o al menos una marca, un grupo, un género o una categoría" };
+  }
+  return { filtros: { tipo, almacenes, grupos, marcas, generos, categorias, tallas, precio_min, precio_max, plantillas } };
+}
 
 /**
  * Pide generar un catálogo y responde al instante: el trabajo (consultar el
@@ -55,30 +104,9 @@ export async function iniciarGeneracion(input: {
   const titulo = String(input.titulo ?? "").trim();
   if (titulo.length < 3 || titulo.length > 100) return { success: false, msg: "El título debe tener entre 3 y 100 caracteres" };
 
-  const almacenes = valoresFiltro(input.almacenes)?.filter((a): a is (typeof ALMACENES)[number] => (ALMACENES as readonly string[]).includes(a));
-  const grupos = valoresFiltro(input.grupos);
-  const marcas = valoresFiltro(input.marcas);
-  const generos = valoresFiltro(input.generos);
-  const categorias = valoresFiltro(input.categorias);
-  if (!almacenes || almacenes.length === 0) return { success: false, msg: "Elige al menos un almacén" };
-  if (!grupos || !marcas || !generos || !categorias) return { success: false, msg: "Filtro con caracteres no válidos" };
-
-  const tallas = valoresTalla(input.tallas ?? []);
-  if (!tallas) return { success: false, msg: "Talla con caracteres no válidos" };
-
-  const precio_min = precioFiltro(input.precio_min);
-  const precio_max = precioFiltro(input.precio_max);
-  if (precio_min === undefined || precio_max === undefined) return { success: false, msg: "El precio debe ser un número válido" };
-  if (precio_min != null && precio_max != null && precio_min > precio_max) {
-    return { success: false, msg: "El precio mínimo no puede ser mayor que el máximo" };
-  }
-  const tipo = (await idsDeTipos()).has(input.tipo) ? input.tipo : "";
-
-  // Plantillas elegidas por marca: solo se aceptan pares con formato de marca e id (el resto lo valida la generación).
-  const plantillas: Record<string, string> = {};
-  for (const [marca, pid] of Object.entries(input.plantillas ?? {}).slice(0, 60)) {
-    if (/^[A-Z0-9 &.*-]{1,40}$/.test(marca) && /^[a-z0-9-]{1,80}$/.test(String(pid))) plantillas[marca] = String(pid);
-  }
+  const base = await filtrosDeEntrada(input);
+  if ("error" in base) return { success: false, msg: base.error };
+  const { tipo, almacenes, grupos, marcas, generos, categorias, tallas, precio_min, precio_max, plantillas } = base.filtros;
 
   // Portada y separadores: ids de páginas fijas (la generación ignora los que no existan o no sean del tipo).
   const ID_FIJA = /^[a-z0-9-]{1,60}$/;
@@ -87,10 +115,6 @@ export async function iniciarGeneracion(input: {
 
   const orden = Array.isArray(input.orden) ? [...new Set(input.orden.map(String))].filter((x) => ID_FIJA.test(x) || x === CLAVE_PRODUCTOS || /^productos:[\p{L}\p{N} &.'*-]{1,40}$/u.test(x)).slice(0, 60) : [];
 
-  // Sin ningún filtro se traería todo el ERP (miles de filas): se evita por error.
-  if (grupos.length + marcas.length + generos.length + categorias.length === 0) {
-    return { success: false, msg: "Elige un tipo de catálogo o al menos una marca, un grupo, un género o una categoría" };
-  }
   if (!(await rateLimit(`mk-generar:${sesion.id}`, 6, 60_000))) {
     return { success: false, msg: "Demasiadas generaciones seguidas; espera un minuto" };
   }
@@ -138,6 +162,9 @@ export type EstadoGeneracion = {
   mensaje: string | null;
   catalogoId: string | null;
   segundos: number;
+  /** «sincronizar» = actualiza un catálogo existente; su avance termina en la pantalla de revisión. */
+  modo: "nuevo" | "sincronizar";
+  baseVersion: number | null;
 };
 
 /** Avance de una generación (la pantalla la consulta cada un par de segundos). */
@@ -147,7 +174,7 @@ export async function estadoGeneracion(id: string): Promise<ActionResult<EstadoG
   try {
     await cerrarGeneracionesAbandonadas();
     const r = await db.execute({
-      sql: `SELECT estado, etapa, mensaje, catalogo_id,
+      sql: `SELECT estado, etapa, mensaje, catalogo_id, modo, base_version,
                    EXTRACT(EPOCH FROM (COALESCE(finished_at, now_text())::timestamp - created_at::timestamp))::int AS segundos
             FROM mk_generaciones WHERE id = ?`,
       args: [id],
@@ -163,6 +190,8 @@ export async function estadoGeneracion(id: string): Promise<ActionResult<EstadoG
         mensaje: (f.mensaje as string | null) ?? null,
         catalogoId: (f.catalogo_id as string | null) ?? null,
         segundos: f.segundos as number,
+        modo: (f.modo as EstadoGeneracion["modo"]) ?? "nuevo",
+        baseVersion: (f.base_version as number | null) ?? null,
       },
     };
   } catch (e) {
@@ -206,7 +235,13 @@ export async function guardarEdicion(
     const todas = validarPaginas([...paginasEnt, ...quitadasEnt], borrador.productos.length, ids);
     if (typeof todas === "string") return { success: false, msg: todas };
 
-    const paginas = todas.slice(0, paginasEnt.length);
+    // El motivo «sync» solo tiene sentido en las quitadas: una página restaurada ya no lo lleva.
+    const paginas = todas.slice(0, paginasEnt.length).map((p) => {
+      if (p.tipo !== "producto" || !p.motivo) return p;
+      const activa = { ...p };
+      delete activa.motivo;
+      return activa;
+    });
     const quitadas = todas.slice(paginasEnt.length);
     const nuevo = JSON.stringify({ ...borrador, paginas, quitadas, resumen: { ...borrador.resumen, paginas: paginas.length } } satisfies Borrador);
 
@@ -236,9 +271,9 @@ export async function publicarCatalogo(
   if (!sesion) return { success: false, msg: "Sin permisos" };
 
   try {
-    const c = await db.execute({ sql: "SELECT slug, titulo, borrador FROM mk_catalogos WHERE id = ?", args: [id] });
+    const c = await db.execute({ sql: "SELECT slug, titulo, borrador, created_at FROM mk_catalogos WHERE id = ?", args: [id] });
     if (c.rows.length === 0) return { success: false, msg: "El catálogo no existe" };
-    const { slug, titulo, borrador: crudo } = c.rows[0] as { slug: string; titulo: string; borrador: string };
+    const { slug, titulo, borrador: crudo, created_at } = c.rows[0] as { slug: string; titulo: string; borrador: string; created_at: string };
 
     let partida: Borrador;
     if (base === null) {
@@ -249,7 +284,11 @@ export async function publicarCatalogo(
       partida = v.borrador;
     }
     // Imágenes reemplazadas desde que se generó el catálogo: se toma la versión vigente.
-    const borrador = await sincronizarVersiones(partida);
+    // Los datos de stock y precio son los del último momento en que se consultó el ERP: al generar o al sincronizar.
+    // Un catálogo generado antes de que se registrara esa fecha la toma de cuando se generó (nunca se ha vuelto a consultar).
+    const creado = new Date(`${created_at.replace(" ", "T").slice(0, 19)}Z`);
+    const stockAl = partida.stock_al ?? (Number.isNaN(creado.getTime()) ? undefined : creado.toISOString());
+    const borrador = { ...(await sincronizarVersiones(partida)), ...(stockAl ? { stock_al: stockAl } : {}) };
     if (borrador.paginas.length === 0) return { success: false, msg: "El catálogo no tiene páginas" };
 
     const ids = [...new Set(borrador.paginas.flatMap((p) => (p.tipo === "producto" ? [p.plantilla] : [])))];
@@ -297,5 +336,100 @@ export async function publicarCatalogo(
   } catch (e) {
     console.error("[marketing] publicarCatalogo falló:", e);
     return { success: false, msg: e instanceof Error ? e.message : "No se pudo publicar" };
+  }
+}
+
+/**
+ * Pide sincronizar un catálogo con el ERP y responde al instante: la consulta corre en segundo plano y la pantalla la
+ * sigue con `estadoGeneracion`. Los filtros pueden ser otros que los del catálogo (se editan como en el asistente).
+ * No cambia nada del catálogo: el resultado se revisa y se aplica con `aplicarSincronizacion`.
+ * @param input.version versión cuyo borrador se actualiza; null = el borrador de un catálogo que aún no se publicó
+ */
+export async function iniciarSincronizacion(input: EntradaFiltros & { catalogoId: string; version: number | null }): Promise<ActionResult<{ id: string }>> {
+  const sesion = await sesionMarketing();
+  if (!sesion) return { success: false, msg: "Sin permisos" };
+
+  const base = await filtrosDeEntrada(input);
+  if ("error" in base) return { success: false, msg: base.error };
+  if (!(await rateLimit(`mk-generar:${sesion.id}`, 6, 60_000))) {
+    return { success: false, msg: "Demasiadas consultas seguidas; espera un minuto" };
+  }
+
+  try {
+    const c = await db.execute({ sql: "SELECT titulo FROM mk_catalogos WHERE id = ?", args: [String(input.catalogoId)] });
+    if (c.rows.length === 0) return { success: false, msg: "El catálogo no existe" };
+    const version = input.version === null || input.version === undefined ? null : Number(input.version);
+    const versiones = await db.execute({ sql: "SELECT version FROM mk_catalogo_versiones WHERE catalogo_id = ?", args: [input.catalogoId] });
+    if (version === null ? versiones.rows.length > 0 : !versiones.rows.some((f) => f.version === version)) {
+      return { success: false, msg: "La versión que se quiere sincronizar no existe" };
+    }
+
+    // Una a la vez: cada una consulta el ERP.
+    await cerrarGeneracionesAbandonadas();
+    const activa = await db.execute("SELECT id, titulo FROM mk_generaciones WHERE estado = 'en_curso' LIMIT 1");
+    if (activa.rows.length > 0) {
+      return { success: false, msg: `Ya hay una consulta al ERP en curso («${activa.rows[0].titulo}»); espera a que termine` };
+    }
+
+    const id = randomUUID();
+    await db.execute({
+      sql: `INSERT INTO mk_generaciones (id, titulo, filtros, created_by, modo, base_catalogo_id, base_version)
+            VALUES (?, ?, ?, ?, 'sincronizar', ?, ?)`,
+      args: [id, c.rows[0].titulo as string, JSON.stringify(base.filtros), sesion.id, input.catalogoId, version],
+    });
+    after(() => ejecutarSincronizacion(id));
+    return { success: true, msg: "Consultando el ERP", data: { id } };
+  } catch (e) {
+    console.error("[marketing] iniciarSincronizacion falló:", e);
+    return { success: false, msg: "No se pudo iniciar la sincronización" };
+  }
+}
+
+/**
+ * Aplica una sincronización revisada al borrador de la versión que se sincroniza: tallas y precios al día, productos
+ * nuevos agregados y los que ya no tienen stock quitados (a «Quitadas»). Se calcula sobre el borrador de AHORA, no
+ * sobre el de cuando se consultó el ERP, así no se pierde lo que Marketing editó mientras tanto. Los filtros del
+ * catálogo pasan a ser los de la sincronización. Las versiones publicadas no se tocan: los clientes ven lo nuevo
+ * cuando se publica una versión nueva.
+ */
+export async function aplicarSincronizacion(generacionId: string): Promise<ActionResult<{ catalogoId: string; version: number | null; informe: InformeSincronizacion }>> {
+  const sesion = await sesionMarketing();
+  if (!sesion) return { success: false, msg: "Sin permisos" };
+
+  try {
+    const g = await db.execute({
+      sql: `SELECT estado, modo, base_catalogo_id, base_version, filtros, resultado, aplicada_at FROM mk_generaciones WHERE id = ?`,
+      args: [generacionId],
+    });
+    if (g.rows.length === 0) return { success: false, msg: "La sincronización no existe" };
+    const f = g.rows[0] as { estado: string; modo: string; base_catalogo_id: string | null; base_version: number | null; filtros: string; resultado: string | null; aplicada_at: string | null };
+    if (f.modo !== "sincronizar" || f.estado !== "listo" || !f.resultado || !f.base_catalogo_id) return { success: false, msg: "Esta sincronización no está lista para aplicarse" };
+    if (f.aplicada_at) return { success: false, msg: "Esta sincronización ya se aplicó" };
+
+    const catalogoId = f.base_catalogo_id;
+    const actual = await borradorBase(catalogoId, f.base_version);
+    if (!actual) return { success: false, msg: "La versión que se sincroniza ya no existe" };
+    const { al, fresco } = JSON.parse(f.resultado) as { al: string; fresco: Borrador };
+    const { borrador, informe } = sincronizarBorrador(actual, fresco, al);
+    if (borrador.paginas.every((p) => p.tipo !== "producto")) return { success: false, msg: "La sincronización dejaría el catálogo sin productos; no se aplicó" };
+
+    // Los filtros del catálogo pasan a ser los de la sincronización (lo demás —portada, separadores, orden— se conserva).
+    const c = await db.execute({ sql: "SELECT filtros FROM mk_catalogos WHERE id = ?", args: [catalogoId] });
+    const nuevosFiltros: FiltrosCatalogo = { ...normalizarFiltros(JSON.parse(c.rows[0].filtros as string)), ...normalizarFiltros(JSON.parse(f.filtros)) };
+
+    const texto = JSON.stringify(borrador);
+    await db.batch([
+      f.base_version === null
+        ? { sql: "UPDATE mk_catalogos SET borrador = ?, filtros = ?, updated_at = now_text() WHERE id = ?", args: [texto, JSON.stringify(nuevosFiltros), catalogoId] }
+        : { sql: "UPDATE mk_catalogo_versiones SET borrador = ? WHERE catalogo_id = ? AND version = ?", args: [texto, catalogoId, f.base_version] },
+      ...(f.base_version === null ? [] : [{ sql: "UPDATE mk_catalogos SET filtros = ?, updated_at = now_text() WHERE id = ?", args: [JSON.stringify(nuevosFiltros), catalogoId] }]),
+      { sql: "UPDATE mk_generaciones SET aplicada_at = now_text() WHERE id = ?", args: [generacionId] },
+    ]);
+    revalidatePath(`/admin/marketing/catalogos/${catalogoId}`);
+    revalidatePath("/admin/marketing/catalogos");
+    return { success: true, msg: "Sincronización aplicada", data: { catalogoId, version: f.base_version, informe } };
+  } catch (e) {
+    console.error("[marketing] aplicarSincronizacion falló:", e);
+    return { success: false, msg: "No se pudo aplicar la sincronización" };
   }
 }

@@ -14,6 +14,12 @@ const ETAPAS: { id: EstadoGeneracion["etapa"]; texto: string; nota: string }[] =
   { id: "guardando", texto: "Guardando el catálogo", nota: "" },
 ];
 
+const ETAPAS_SINCRONIZAR: typeof ETAPAS = [
+  { id: "erp", texto: "Consultando el ERP", nota: "Es lo que más tarda: hasta 40 s con catálogos grandes" },
+  { id: "armando", texto: "Armando los datos frescos", nota: "Tallas y precios de hoy" },
+  { id: "guardando", texto: "Comparando con tu catálogo", nota: "" },
+];
+
 const reloj = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 /** Sigue una generación en segundo plano y, al terminar, abre el catálogo en el editor. */
@@ -36,7 +42,8 @@ export function ProgresoGeneracion({ id, titulo }: { id: string; titulo: string 
       setEstado(r.data);
       if (r.data.estado === "en_curso") temporizador = setTimeout(consultar, 1500);
       else if (r.data.estado === "listo" && r.data.catalogoId) {
-        temporizador = setTimeout(() => router.push(`/admin/marketing/catalogos/${r.data!.catalogoId}/editar`), 900);
+        // Una sincronización termina en su pantalla de revisión (nada se cambia hasta aplicarla); una generación, en el editor.
+        temporizador = setTimeout(() => (r.data!.modo === "sincronizar" ? router.refresh() : router.push(`/admin/marketing/catalogos/${r.data!.catalogoId}/editar`)), 900);
       }
     }
     void consultar();
@@ -46,7 +53,8 @@ export function ProgresoGeneracion({ id, titulo }: { id: string; titulo: string 
     };
   }, [id, router]);
 
-  const actual = estado ? ETAPAS.findIndex((e) => e.id === estado.etapa) : 0;
+  const etapas = estado?.modo === "sincronizar" ? ETAPAS_SINCRONIZAR : ETAPAS;
+  const actual = estado ? etapas.findIndex((e) => e.id === estado.etapa) : 0;
   const terminado = estado?.estado === "listo";
   const conError = estado?.estado === "error";
 
@@ -56,14 +64,14 @@ export function ProgresoGeneracion({ id, titulo }: { id: string; titulo: string 
         <p className="text-sm font-medium text-foreground">{titulo}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {estado ? `Tiempo: ${reloj(estado.segundos)}` : "Consultando el avance…"}
-          {" · "}Puedes salir de esta pantalla: la generación sigue y queda en el historial de Catálogos.
+          {" · "}{estado?.modo === "sincronizar" ? "Si sales de esta pantalla la consulta sigue, pero tendrás que volver a abrir la sincronización para revisarla." : "Puedes salir de esta pantalla: la generación sigue y queda en el historial de Catálogos."}
         </p>
       </div>
 
       {fallo && <p className="text-sm text-destructive">{fallo}</p>}
 
       <ol className="space-y-3">
-        {ETAPAS.map((e, i) => {
+        {etapas.map((e, i) => {
           const hecha = terminado || i < actual;
           const enCurso = !terminado && !conError && i === actual;
           const fallida = conError && i === actual;
@@ -89,11 +97,15 @@ export function ProgresoGeneracion({ id, titulo }: { id: string; titulo: string 
         })}
       </ol>
 
-      {terminado && <p className="text-sm text-green-600 dark:text-green-400">{estado?.mensaje}. Abriendo el editor…</p>}
+      {terminado && (
+        <p className="text-sm text-green-600 dark:text-green-400">
+          {estado?.mensaje}. {estado?.modo === "sincronizar" ? "Preparando la revisión…" : "Abriendo el editor…"}
+        </p>
+      )}
       {conError && (
         <div className="space-y-3">
           <p className="text-sm text-destructive">{estado?.mensaje}</p>
-          <Link href="/admin/marketing/catalogos/nuevo" className={cn(buttonVariants({ variant: "outline" }))}>
+          <Link href={estado?.modo === "sincronizar" && estado.catalogoId ? `/admin/marketing/catalogos/${estado.catalogoId}/sincronizar${estado.baseVersion === null ? "" : `?version=${estado.baseVersion}`}` : "/admin/marketing/catalogos/nuevo"} className={cn(buttonVariants({ variant: "outline" }))}>
             Volver a intentar
           </Link>
         </div>

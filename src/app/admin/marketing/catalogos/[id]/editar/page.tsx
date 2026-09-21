@@ -15,7 +15,14 @@ type Fila = {
   titulo: string;
   borrador: string;
   version_publicada: number | null;
+  created_at: string;
 };
+
+/** Un catálogo generado antes de registrar la fecha del stock: los datos son de cuando se generó. */
+function stockDeCreacion(creado: string): string | null {
+  const d = new Date(`${creado.replace(" ", "T").slice(0, 19)}Z`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
 
 /**
  * Editor de una versión del catálogo (`?version=N`); sin versión, el borrador
@@ -34,7 +41,7 @@ export default async function EditarCatalogoPage({
   const { version, publicado } = await searchParams;
 
   const c = await db.execute({
-    sql: "SELECT slug, titulo, borrador, version_publicada FROM mk_catalogos WHERE id = ?",
+    sql: "SELECT slug, titulo, borrador, version_publicada, created_at FROM mk_catalogos WHERE id = ?",
     args: [id],
   });
   if (c.rows.length === 0) notFound();
@@ -78,6 +85,8 @@ export default async function EditarCatalogoPage({
         paginasIniciales={borrador.paginas}
         quitadasIniciales={quitadas}
         biblioteca={biblioteca}
+        stockAl={borrador.stock_al ?? stockDeCreacion(cat.created_at)}
+        sincronizacion={borrador.sincronizacion ?? null}
         versionBase={versionBase}
         versionVigente={cat.version_publicada}
         sinPublicarInicial={sinPublicar}

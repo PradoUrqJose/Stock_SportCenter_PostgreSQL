@@ -9,8 +9,9 @@
 import { useCallback, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Check, ChevronRight, Plus, Settings2, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
@@ -21,6 +22,7 @@ import { documentoDelCatalogo, ordenConPortada, ordenConSeparador, ordenConSepar
 import { PasoPlantillas } from "./paso-plantillas";
 import { PasoFinal } from "./paso-final";
 import { crearTipo } from "@/lib/actions/marketing-tipos";
+import { iniciarSincronizacion } from "@/lib/actions/marketing-catalogos";
 import { DialogoTipo, aEntradaTipo, tipoDesdeBorrador } from "./dialogo-tipo";
 import { GuardarComoTipo } from "./guardar-tipo";
 
@@ -96,9 +98,24 @@ function Chips({ valores, alQuitar }: { valores: string[]; alQuitar: (v: string)
 const entrada = (i: number) => ({ animationDelay: `${i * 60}ms` });
 const ENTRA = "animate-in fade-in slide-in-from-bottom-3 fill-mode-both duration-500";
 
-export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
+/** Modo «sincronizar con el ERP»: solo el paso de filtros (los del catálogo, para editarlos) y consultar el ERP. */
+export type ModoSincronizar = {
+  catalogoId: string;
+  /** Versión cuyo borrador se actualiza; null = el borrador de un catálogo sin publicar. */
+  version: number | null;
+  titulo: string;
+  /** Filtros del catálogo, con la forma del asistente. */
+  inicial: Partial<DatosCatalogo>;
+  /** A dónde vuelve «Cancelar». */
+  volverA: string;
+};
+
+export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recursos; sincronizar?: ModoSincronizar }) {
   const { opciones } = recursos;
+  const router = useRouter();
   const [paso, setPaso] = useState<Paso>("filtros");
+  const [consultando, setConsultando] = useState(false);
+  const [errorErp, setErrorErp] = useState<string | null>(null);
   const [datos, setDatos] = useState<DatosCatalogo>({
     titulo: "",
     tituloSugerido: "",
@@ -115,6 +132,7 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
     portada: undefined,
     separadores: [],
     orden: undefined,
+    ...(sincronizar?.inicial ?? {}),
   });
   const [marcasCatalogo, setMarcasCatalogo] = useState<MarcaAfectada[] | null>(null);
   // Tipos disponibles: los de la base de datos más los que se guarden desde este asistente.
@@ -168,6 +186,35 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
     setMarcasCatalogo(null);
     const r = await marcasAfectadas({ categorias: datos.categorias, grupos: datos.grupos, generos: datos.generos, marcas: datos.marcas });
     setMarcasCatalogo(r.success && r.data ? r.data : []);
+  }
+
+  // Sincronizar: consulta el ERP con los filtros de ahora y sigue a la pantalla del avance y la revisión.
+  async function consultarErp() {
+    if (!sincronizar) return;
+    setConsultando(true);
+    setErrorErp(null);
+    const min = datos.precioMin.trim() === "" ? null : Number(datos.precioMin);
+    const max = datos.precioMax.trim() === "" ? null : Number(datos.precioMax);
+    const r = await iniciarSincronizacion({
+      catalogoId: sincronizar.catalogoId,
+      version: sincronizar.version,
+      tipo: datos.tipo,
+      almacenes: datos.almacenes,
+      grupos: datos.grupos,
+      marcas: datos.marcas,
+      generos: datos.generos,
+      categorias: datos.categorias,
+      tallas: datos.tallas,
+      precio_min: min !== null && Number.isNaN(min) ? null : min,
+      precio_max: max !== null && Number.isNaN(max) ? null : max,
+      plantillas: datos.plantillas,
+    });
+    if (r.success && r.data) {
+      router.push(`/admin/marketing/catalogos/${sincronizar.catalogoId}/sincronizar?generacion=${r.data.id}${sincronizar.version === null ? "" : `&version=${sincronizar.version}`}`);
+    } else {
+      setConsultando(false);
+      setErrorErp(r.msg);
+    }
   }
 
   // Elegir un tipo llena grupo, género y categoría (las marcas y el precio se conservan); después se puede ajustar todo.
@@ -246,8 +293,8 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
 
   return (
     <div className="mx-auto max-w-5xl">
-      {/* Pasos */}
-      <ol className="mb-8 flex items-center gap-2 sm:gap-3" aria-label="Pasos">
+      {/* Pasos (al sincronizar solo hay filtros: no se muestran) */}
+      <ol className={cn("mb-8 flex items-center gap-2 sm:gap-3", sincronizar && "hidden")} aria-label="Pasos">
         {PASOS.map((p, i) => {
           const hecho = i < indice;
           const actual = i === indice;
@@ -280,14 +327,30 @@ export function AsistenteCatalogo({ recursos }: { recursos: Recursos }) {
           <section>
             <header className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-foreground">Filtros</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Elige un tipo de catálogo o los filtros a mano. El ERP trae una página por producto y género.</p>
+                <h2 className="text-lg font-semibold text-foreground">{sincronizar ? "Sincronizar con el ERP" : "Filtros"}</h2>
+                <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+                  {sincronizar
+                    ? `«${sincronizar.titulo}»${sincronizar.version === null ? "" : ` · versión ${sincronizar.version}`}. Estos son los filtros del catálogo: déjalos como están para actualizar tallas y precios, o cámbialos para agregar o quitar productos. Antes de aplicar nada verás qué cambia.`
+                    : "Elige un tipo de catálogo o los filtros a mano. El ERP trae una página por producto y género."}
+                </p>
               </div>
-              <Button onClick={() => void irAPlantillas()} disabled={!puedeAvanzar}>
-                Avanzar <ChevronRight data-icon="inline-end" />
-              </Button>
+              {sincronizar ? (
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <Link href={sincronizar.volverA} className={cn(buttonVariants({ variant: "ghost" }))}>
+                    Cancelar
+                  </Link>
+                  <Button onClick={() => void consultarErp()} disabled={!puedeAvanzar || consultando}>
+                    {consultando ? "Consultando…" : "Consultar el ERP"} <ChevronRight data-icon="inline-end" />
+                  </Button>
+                </div>
+              ) : (
+                <Button onClick={() => void irAPlantillas()} disabled={!puedeAvanzar}>
+                  Avanzar <ChevronRight data-icon="inline-end" />
+                </Button>
+              )}
             </header>
 
+            {errorErp && <p className="mb-4 text-sm text-destructive">{errorErp}</p>}
             <div className="space-y-7">
               <fieldset className={ENTRA} style={entrada(0)}>
                 <legend className="mb-2 text-sm font-medium">Tipo de catálogo</legend>

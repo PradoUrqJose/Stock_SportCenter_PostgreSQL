@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronRight, ChevronLeft } from "lucide-react";
+import { ChevronRight, ChevronLeft, RefreshCw } from "lucide-react";
 import { db } from "@/lib/db";
 import { enlacesCatalogo, requireMarketing } from "@/lib/marketing";
 import { fechaLima, normalizarFiltros, textoFiltros, type Borrador } from "@/lib/marketing-catalogo";
 import { tiposCatalogo } from "@/lib/marketing-tipos";
 import { EnlaceCatalogo, PublicarCatalogo } from "@/components/admin/marketing/acciones-catalogo";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type Catalogo = {
   id: string;
@@ -64,6 +66,13 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
           <h1 className="text-xl font-semibold text-foreground">{cat.titulo}</h1>
           <p className="mt-1 text-xs text-muted-foreground">{filtrosTexto.join(" · ")}</p>
         </div>
+        <Link
+          href={`/admin/marketing/catalogos/${cat.id}/sincronizar`}
+          className={cn(buttonVariants({ variant: "outline" }))}
+          title="Actualiza las tallas y los precios con el ERP, agrega productos nuevos y quita los que ya no tienen stock"
+        >
+          <RefreshCw data-icon="inline-start" /> Sincronizar con el ERP
+        </Link>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">

@@ -29,6 +29,8 @@ export type PaginaProducto = {
   /** Índice en `productos`. */
   prod: number;
   ajuste?: Ajuste;
+  /** Solo en las páginas quitadas: «sync» = la quitó la sincronización con el ERP (el producto ya no tiene stock o no cumple los filtros). */
+  motivo?: "sync";
 };
 
 /** Zona clicable de una página fija ya resuelta (va en el snapshot): rectángulo en fracciones 0–1 de la imagen. */
@@ -62,6 +64,8 @@ export type Snapshot = {
   /** Imagen JPEG de 1200×630 para la vista previa del enlace (ruta en el bucket); ausente en versiones antiguas. */
   og?: string;
   generado: string;
+  /** Cuándo se consultó el stock al ERP (ISO); ausente en versiones publicadas antes de que se registrara. */
+  stock_al?: string;
   imagenes_base: string;
   plantillas: Record<string, PlantillaSnap>;
   productos: ProductoCat[];
@@ -443,12 +447,26 @@ export type ResumenGeneracion = {
   paginas: number;
 };
 
+/** Lo que dejó la última sincronización con el ERP en un borrador (para avisarlo en el editor). */
+export type ResumenSincronizacion = {
+  /** ISO. */
+  al: string;
+  actualizados: number;
+  nuevos: number;
+  quitados: number;
+  reactivados: number;
+};
+
 export type Borrador = {
   productos: ProductoCat[];
   paginas: PaginaCat[];
-  /** Páginas que se sacaron en el editor; se pueden restaurar. */
+  /** Páginas que se sacaron en el editor o en la sincronización; se pueden restaurar. */
   quitadas?: PaginaCat[];
   resumen: ResumenGeneracion;
+  /** Cuándo se consultó el stock al ERP (ISO): al generar y en cada sincronización. */
+  stock_al?: string;
+  /** Última sincronización con el ERP aplicada a este borrador. */
+  sincronizacion?: ResumenSincronizacion;
 };
 
 /** Fila de producto tal como la entrega api/catalogo.py. */
@@ -645,6 +663,7 @@ export function armarSnapshot(
   return {
     titulo,
     generado: new Date().toISOString(),
+    ...(borrador.stock_al ? { stock_al: borrador.stock_al } : {}),
     imagenes_base: imagenesBase,
     plantillas: Object.fromEntries(Object.entries(plantillas).filter(([id]) => usadas.has(id))),
     productos,
@@ -686,7 +705,7 @@ export function validarPaginas(
         }
         if (!(dx === 0 && dy === 0 && sc === 1)) ajuste = { dx: Math.round(dx), dy: Math.round(dy), s: Math.round(sc * 1000) / 1000 };
       }
-      salida.push({ id: o.id, tipo: "producto", plantilla: o.plantilla, prod, ...(ajuste ? { ajuste } : {}) });
+      salida.push({ id: o.id, tipo: "producto", plantilla: o.plantilla, prod, ...(ajuste ? { ajuste } : {}), ...(o.motivo === "sync" ? { motivo: "sync" as const } : {}) });
     } else if (o.tipo === "fija") {
       if (typeof o.imagen !== "string" || !/^paginas-fijas\/[A-Za-z0-9-]{8,60}$/.test(o.imagen)) return "Imagen de página inválida";
       const ancho = Number(o.ancho), alto = Number(o.alto);

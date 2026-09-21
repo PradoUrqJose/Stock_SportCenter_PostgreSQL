@@ -21,6 +21,7 @@ import {
   Minus,
   Plus,
   Redo2,
+  RefreshCw,
   Replace,
   RotateCcw,
   Trash2,
@@ -35,7 +36,8 @@ import { EnlaceCatalogo } from "@/components/admin/marketing/acciones-catalogo";
 import { ReemplazarImagen } from "@/components/admin/marketing/reemplazar-imagen";
 import { guardarEdicion, publicarCatalogo } from "@/lib/actions/marketing-catalogos";
 import { enviarPaginaFija, prepararPaginaFija } from "@/lib/subir-imagen-cliente";
-import type { Ajuste, FijaBiblioteca, PaginaCat, PaginaFija, PlantillaSnap, ProductoCat } from "@/lib/marketing-catalogo";
+import type { Ajuste, FijaBiblioteca, PaginaCat, PaginaFija, PlantillaSnap, ProductoCat, ResumenSincronizacion } from "@/lib/marketing-catalogo";
+import { fechaStock } from "@/lib/marketing-sincronizar";
 import { cn } from "@/lib/utils";
 import { BotonPdf } from "./boton-pdf";
 import { ANCHO_MAX, PaginaShell, VisorCtx, useContextoVisor } from "./visor-catalogo";
@@ -130,6 +132,10 @@ type Props = {
   mensajeInicial?: string;
   /** Páginas fijas de Marketing (portadas, separadores, términos…) para agregar con un clic. */
   biblioteca: FijaBiblioteca[];
+  /** Cuándo se consultó el ERP por última vez para los datos de este borrador (ISO). */
+  stockAl?: string | null;
+  /** Última sincronización con el ERP que se aplicó a este borrador. */
+  sincronizacion?: ResumenSincronizacion | null;
 };
 
 export function EditorCatalogo({
@@ -147,6 +153,8 @@ export function EditorCatalogo({
   enlacesIniciales,
   mensajeInicial,
   biblioteca,
+  stockAl,
+  sincronizacion,
 }: Props) {
   const router = useRouter();
   // Estado de partida (estable): sirve también para saber si el usuario ya cambió algo.
@@ -335,6 +343,22 @@ export function EditorCatalogo({
     }
   }
 
+  // Sincronizar con el ERP: primero se guarda lo que haya y luego se abre la pantalla de la consulta.
+  const [yendoASincronizar, setYendoASincronizar] = useState(false);
+  async function sincronizar() {
+    setYendoASincronizar(true);
+    setMensaje(null);
+    clearTimeout(temporizador.current);
+    if (!(await guardarUltimo())) {
+      setYendoASincronizar(false);
+      setMensaje({ ok: false, texto: "No se pudo guardar lo que llevas editado; reintenta antes de sincronizar." });
+      return;
+    }
+    router.push(`/admin/marketing/catalogos/${id}/sincronizar${versionBase === null ? "" : `?version=${versionBase}`}`);
+  }
+  // Productos que la sincronización quitó por falta de stock y siguen sin restaurarse.
+  const quitadosPorStock = useMemo(() => quitadas.filter((q) => q.tipo === "producto" && q.motivo === "sync").length, [quitadas]);
+
   const estadoTexto = guardando
     ? "Guardando…"
     : errorGuardado
@@ -405,6 +429,9 @@ export function EditorCatalogo({
             <Button variant="outline" size="sm" disabled={quitadas.length === 0} onClick={() => setDialogo("quitadas")}>
               <Undo data-icon="inline-start" /> Quitadas ({quitadas.length})
             </Button>
+            <Button variant="outline" size="sm" onClick={() => void sincronizar()} disabled={yendoASincronizar || publicando} title="Actualiza las tallas y los precios con el ERP, agrega productos nuevos y quita los que ya no tienen stock">
+              <RefreshCw data-icon="inline-start" className={yendoASincronizar ? "animate-spin" : undefined} /> {yendoASincronizar ? "Guardando…" : "Sincronizar con el ERP"}
+            </Button>
             <BotonPdf entrada={{ titulo, base, paginas, productos, plantillas }} className="h-7" />
             {enlaces && (
               <a href={enlaces.principal} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
@@ -416,6 +443,23 @@ export function EditorCatalogo({
             </Button>
           </div>
         </div>
+
+        {(stockAl || sincronizacion) && (
+          <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[#2a2d35] px-4 py-2 text-xs", quitadosPorStock > 0 ? "bg-amber-500/10 text-amber-300" : "text-[#9aa0ab]")}>
+            {stockAl && fechaStock(stockAl) && <span>Stock al {fechaStock(stockAl)}</span>}
+            {sincronizacion && (
+              <span>
+                · Sincronizado con el ERP: {sincronizacion.actualizados.toLocaleString("en-US")} actualizados, {sincronizacion.nuevos.toLocaleString("en-US")} nuevos
+                {sincronizacion.reactivados > 0 ? `, ${sincronizacion.reactivados.toLocaleString("en-US")} de vuelta` : ""}, {sincronizacion.quitados.toLocaleString("en-US")} quitados por falta de stock.
+              </span>
+            )}
+            {quitadosPorStock > 0 && (
+              <button type="button" className="font-medium underline underline-offset-2" onClick={() => setDialogo("quitadas")}>
+                Ver los {quitadosPorStock.toLocaleString("en-US")} quitados
+              </button>
+            )}
+          </div>
+        )}
 
         {mensaje && (
           <div className="space-y-2 border-t border-[#2a2d35] px-4 py-2.5">
@@ -556,6 +600,9 @@ export function EditorCatalogo({
                     {prod ? (
                       <>
                         <span className="font-mono">{prod.cod}</span> <span className="text-muted-foreground">{prod.genero} · {prod.modelo}</span>
+                        {q.tipo === "producto" && q.motivo === "sync" && (
+                          <span className="ml-2 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-400">sin stock</span>
+                        )}
                       </>
                     ) : (
                       "Página con imagen"

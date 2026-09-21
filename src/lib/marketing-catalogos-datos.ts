@@ -61,7 +61,13 @@ export async function borradorDeVersion(
   const snap = JSON.parse(f.snapshot) as Snapshot;
   const { resumen } = JSON.parse(f.generado) as Borrador;
   return {
-    borrador: { productos: snap.productos, paginas: snap.paginas, quitadas: [], resumen: { ...resumen, paginas: snap.paginas.length } },
+    borrador: {
+      productos: snap.productos,
+      paginas: snap.paginas,
+      quitadas: [],
+      resumen: { ...resumen, paginas: snap.paginas.length },
+      ...(snap.stock_al ? { stock_al: snap.stock_al } : {}),
+    },
     conCambios: false,
   };
 }

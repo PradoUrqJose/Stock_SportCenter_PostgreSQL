@@ -10,6 +10,7 @@
 //  - imagen WebP de 600 o 1200 px según tamaño en pantalla × densidad;
 //  - textos que bajan de tamaño hasta caber en su zona; las tallas se parten en líneas.
 // El modo `editable` (solo el editor) añade selección y arrastre de la zapatilla.
+import { fechaStock } from "@/lib/marketing-sincronizar";
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type {
   Ajuste,
@@ -357,6 +358,11 @@ export function VisorCatalogo({ snapshot, fuente }: { snapshot: Snapshot; fuente
       <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-[#2a2d35] bg-[#0e0f12]/90 px-4 py-2.5 backdrop-blur">
         <h1 className="text-[15px] font-semibold">{snapshot.titulo}</h1>
         <span className="text-xs text-[#9aa0ab]">{snapshot.paginas.length.toLocaleString("en-US")} páginas</span>
+        {snapshot.stock_al && fechaStock(snapshot.stock_al) && (
+          <span className="text-xs text-[#9aa0ab]" title="Cuándo se consultó el stock y los precios">
+            Stock al {fechaStock(snapshot.stock_al)}
+          </span>
+        )}
         <BotonPdf
           className="ml-auto"
           entrada={{ titulo: snapshot.titulo, base: snapshot.imagenes_base, paginas: snapshot.paginas, productos: snapshot.productos, plantillas: snapshot.plantillas }}
