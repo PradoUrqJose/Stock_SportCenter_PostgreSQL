@@ -1,6 +1,7 @@
 "use server";
 
 import { requireRole } from "@/lib/auth";
+import { headers } from "next/headers";
 import type { ActionResult } from "@/types";
 import type { FacturacionInsert, IngresoInsert } from "@/lib/upload/types";
 import {
@@ -16,12 +17,17 @@ type SincronizarResponse = {
 // La función Python vive en el mismo proyecto Vercel, en api/sincronizar.py.
 // OJO: process.env.VERCEL_URL apunta a la URL específica de ESTE deployment
 // (ej. stock-5jrj19d4k-...vercel.app), que Vercel protege por defecto con su
-// propio SSO — un fetch ahí devuelve un 302 a vercel.com/sso-api y termina en
-// HTML, no JSON. VERCEL_PROJECT_PRODUCTION_URL es el dominio estable de
-// producción (stock-sc.vercel.app), que no tiene esa protección.
-// Sólo se usa en Vercel: en local se ejecuta el script (ver scrapearEnLocal).
-function urlSincronizar(): string {
-  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
+// propio SSO. Tampoco se usa VERCEL_PROJECT_PRODUCTION_URL: ahora puede ser el
+// dominio de catálogos públicos, que sólo sirve /<enlace> y no las rutas API.
+// Se llama al mismo host administrativo que recibió la acción, igual que el
+// scraper de Marketing. Sólo se usa en Vercel: en local se ejecuta el script
+// (ver scrapearEnLocal).
+async function urlSincronizar(): Promise<string> {
+  const requestHeaders = await headers();
+  const origen = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+  const host = origen && origen !== process.env.CATALOGOS_HOST
+    ? origen
+    : (process.env.VERCEL_URL ?? origen);
   const base = host ? `https://${host}` : "http://localhost:3000";
   return `${base}/api/sincronizar`;
 }
@@ -52,7 +58,7 @@ async function pedirDatos(): Promise<SincronizarResponse> {
   const secreto = process.env.SYNC_SECRET;
   if (!secreto) throw new Error("Falta SYNC_SECRET en las variables de entorno.");
 
-  const res = await fetch(urlSincronizar(), {
+  const res = await fetch(await urlSincronizar(), {
     method: "POST",
     headers: { "X-Sync-Secret": secreto },
     cache: "no-store",
