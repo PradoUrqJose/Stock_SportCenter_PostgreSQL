@@ -194,6 +194,9 @@ export async function finalizeUpload(totalFilas: number): Promise<ActionResult> 
     });
     revalidatePath("/admin/productos");
     revalidatePath("/admin/actualizacion");
+    revalidatePath("/admin/analisis");
+    revalidatePath("/admin/analisis/unicos");
+    revalidatePath("/admin/analisis/reponer");
     revalidatePath("/client/actualizacion");
     return { success: true, msg: "Upload registrado" };
   } catch (e) {

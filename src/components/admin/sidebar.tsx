@@ -17,6 +17,7 @@ import {
 import { db } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth";
 import { SidebarLink } from "./sidebar-link";
+import { SidebarAnalysisMenu } from "./sidebar-analysis-menu";
 import { SidebarLogout } from "./sidebar-logout";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
@@ -78,9 +79,11 @@ export async function AdminSidebar({ session }: { session: SessionUser }) {
       </div>
 
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
-        {topModules.map((m) => (
-          <SidebarLink key={m.id} href={m.ruta} icon={ICONS[m.id]} label={m.nombre} />
-        ))}
+        {topModules.map((m) =>
+          m.id === "analisis"
+            ? <SidebarAnalysisMenu key={m.id} />
+            : <SidebarLink key={m.id} href={m.ruta} icon={ICONS[m.id]} label={m.nombre} />
+        )}
 
         {gestionModules.length > 0 && (
           <div className="mt-4">

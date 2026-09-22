@@ -1,0 +1,5 @@
+import { requireModule, requireRole } from "@/lib/auth";
+import { promocionesPorUsuario, totalesPorUsuario } from "@/lib/queries/comisiones";
+import { ComisionesPanel } from "@/components/admin/analisis/comisiones-panel";
+function hoy(){ return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Lima"}).format(new Date()); }
+export default async function Page({searchParams}:{searchParams:Promise<{inicio?:string;fin?:string}>}) { const s=await requireRole("admin","administrador_general"); await requireModule(s,"analisis"); const q=await searchParams, inicio=q.inicio??hoy(), fin=q.fin??inicio; const [promociones,totales]=await Promise.all([promocionesPorUsuario(inicio,fin),totalesPorUsuario(inicio,fin)]); return <div className="p-4 md:p-8"><h1 className="text-xl font-semibold">Comisiones</h1><p className="mb-5 mt-1 text-sm text-muted-foreground">Ventas Minorista por usuario. Sincroniza el período que necesitas consultar.</p><ComisionesPanel inicio={inicio} fin={fin} promociones={promociones} totales={totales}/></div>; }

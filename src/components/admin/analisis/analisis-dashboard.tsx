@@ -10,7 +10,6 @@ import { FilterBar, type SelectFilterDef } from "@/components/ui/filter-bar";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { VentasUploadForm } from "@/components/admin/upload/ventas-upload-form";
-import { UnicosTable } from "@/components/admin/unicos/unicos-table";
 import { UniversalCodeLink } from "@/components/ui/universal-code-link";
 import { clasificarSalud, DIAS_MUERTO, DIAS_REZAGO, type SaludInfo } from "@/lib/analisis/clasificacion";
 import type {
@@ -19,15 +18,12 @@ import type {
   MesRow,
   ModeloRankingRow,
 } from "@/lib/queries/analisis";
-import type { UnicoRow } from "@/lib/queries/unicos";
 
 type Props = {
   kpis: AnalisisKpis | null;
   productos: ProductoAnalisisRow[];
   tendencia: MesRow[];
   rankings: ModeloRankingRow[];
-  unicos: UnicoRow[];
-  sinVentas?: boolean;
 };
 
 const soles = (n: number) => `S/ ${n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -61,7 +57,7 @@ const RANKING_FILTERS: SelectFilterDef<ModeloRankingRow>[] = [
   { key: "genero", label: "Género", getValue: (r) => r.genero },
 ];
 
-export function AnalisisDashboard({ kpis, productos, tendencia, rankings, unicos, sinVentas }: Props) {
+export function AnalisisDashboard({ kpis, productos, tendencia, rankings }: Props) {
   const router = useRouter();
   const [ventasOpen, setVentasOpen] = useState(false);
 
@@ -118,21 +114,19 @@ export function AnalisisDashboard({ kpis, productos, tendencia, rankings, unicos
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 dark:border-amber-500/25 bg-amber-50 dark:bg-amber-500/10 p-4">
           <p className="text-sm text-amber-800 dark:text-amber-300">
-            Aún no hay ventas cargadas — los tabs de ventas están vacíos. El tab <b>Únicos</b> funciona igual
-            (es stock).
+            Aún no hay ventas cargadas — los reportes de ventas estarán vacíos hasta importar el histórico.
           </p>
           {importarBtn}
         </div>
       )}
 
-      <Tabs defaultValue={sinVentas ? "unicos" : "rotacion"}>
+      <Tabs defaultValue="rotacion">
         <TabsList>
           <TabsTrigger value="rotacion">Rotación</TabsTrigger>
           <TabsTrigger value="rezagados">Rezagados</TabsTrigger>
           <TabsTrigger value="muerto">Stock muerto</TabsTrigger>
           <TabsTrigger value="tendencia">Tendencia</TabsTrigger>
           <TabsTrigger value="rankings">Rankings</TabsTrigger>
-          <TabsTrigger value="unicos">Únicos</TabsTrigger>
         </TabsList>
 
         {/* ── Rotación ── */}
@@ -273,16 +267,6 @@ export function AnalisisDashboard({ kpis, productos, tendencia, rankings, unicos
           </FilterBar>
         </TabsContent>
 
-        {/* ── Únicos ── */}
-        <TabsContent value="unicos">
-          <TabInfo>
-            <span className="font-medium text-foreground">{unicos.length.toLocaleString("es-PE")} producto(s)</span>{" "}
-            con <b>una sola unidad</b> en stock. <b>Filtra por tienda</b> para ver los únicos de cada local — útil
-            para consolidar últimas unidades, liquidar o reponer. <b>Talla</b> suele ser el último resto de una
-            curva; <b>antigüedad</b> alta = más difícil de vender.
-          </TabInfo>
-          <UnicosTable unicos={unicos} />
-        </TabsContent>
       </Tabs>
 
       <VentasDialog open={ventasOpen} setOpen={setVentasOpen} router={router} />

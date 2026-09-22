@@ -8,6 +8,15 @@
     },
     "api/catalogo.py": {
       "maxDuration": 300
+    },
+    "api/comisiones.py": {
+      "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/comisiones",
+      "schedule": "30 4 * * *"
+    }
+  ]
 }
