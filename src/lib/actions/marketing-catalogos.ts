@@ -416,6 +416,26 @@ export async function eliminarCatalogo(id: string): Promise<ActionResult> {
 }
 
 /**
+ * Vacía el historial de generaciones y sincronizaciones (no toca los catálogos ni sus versiones, que viven en otra
+ * tabla). Cada «Generar» o «Sincronizar» deja una fila aquí, aunque solo se mire y no se aplique nada, así que con el
+ * uso normal se llena rápido; esta pantalla no lo limpia sola, por eso el botón. Las filas de «precarga» (una
+ * consulta técnica en segundo plano mientras se llena el asistente, que ni se muestra aquí) no se tocan: esas ya se
+ * borran solas a la hora.
+ */
+export async function vaciarHistorial(): Promise<ActionResult> {
+  const sesion = await sesionMarketing();
+  if (!sesion) return { success: false, msg: "Sin permisos" };
+  try {
+    const r = await db.execute("DELETE FROM mk_generaciones WHERE modo <> 'precarga'");
+    revalidatePath("/admin/marketing/catalogos/historial");
+    return { success: true, msg: r.rowsAffected > 0 ? `${r.rowsAffected} fila(s) borradas` : "El historial ya estaba vacío" };
+  } catch (e) {
+    console.error("[marketing] vaciarHistorial falló:", e);
+    return { success: false, msg: "No se pudo vaciar el historial" };
+  }
+}
+
+/**
  * Pide sincronizar un catálogo con el ERP y responde al instante: la consulta corre en segundo plano y la pantalla la
  * sigue con `estadoGeneracion`. Los filtros pueden ser otros que los del catálogo (se editan como en el asistente).
  * No cambia nada del catálogo: el resultado se revisa y se aplica con `aplicarSincronizacion`.
