@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Copy, ExternalLink } from "lucide-react";
+import { Check, Copy, ExternalLink, Trash2 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { publicarCatalogo } from "@/lib/actions/marketing-catalogos";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { eliminarCatalogo, publicarCatalogo } from "@/lib/actions/marketing-catalogos";
 import { cn } from "@/lib/utils";
 
 export function PublicarCatalogo({ id, version }: { id: string; version: number | null }) {
@@ -31,6 +32,71 @@ export function PublicarCatalogo({ id, version }: { id: string; version: number 
         <p className={cn("text-sm", mensaje.ok ? "text-green-600 dark:text-green-400" : "text-destructive")}>{mensaje.texto}</p>
       )}
     </div>
+  );
+}
+
+/**
+ * Borra un catálogo entero (sus versiones incluidas). Lo pide Marketing para limpiar los de prueba: es irreversible
+ * y, si estaba publicado, el enlace de los clientes deja de funcionar al instante.
+ * `compacto` = solo el ícono, para las filas de la lista; si no, el botón lleva su texto (detalle del catálogo).
+ */
+export function EliminarCatalogo({
+  id,
+  titulo,
+  slug,
+  publicado,
+  compacto = false,
+  trasBorrar = "refrescar",
+}: {
+  id: string;
+  titulo: string;
+  slug: string;
+  /** Versión vigente publicada; null = nunca se publicó (solo hay un borrador). */
+  publicado: number | null;
+  compacto?: boolean;
+  /**
+   * Qué hacer al borrar con éxito. "refrescar" (una fila de la lista: la fila desaparece sola) o "lista" (se está
+   * viendo el propio catálogo que se borró: vuelve a la lista, porque refrescar esta página daría un 404).
+   */
+  trasBorrar?: "refrescar" | "lista";
+}) {
+  const router = useRouter();
+  const [abierto, setAbierto] = useState(false);
+
+  return (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size={compacto ? "icon-sm" : "sm"}
+        aria-label={`Borrar ${titulo}`}
+        title="Borrar catálogo"
+        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+        onClick={(e) => {
+          // Cuando el botón vive dentro de la fila enlazada de la lista, que no navegue a abrir el catálogo.
+          e.preventDefault();
+          e.stopPropagation();
+          setAbierto(true);
+        }}
+      >
+        <Trash2 data-icon={compacto ? undefined : "inline-start"} />
+        {!compacto && "Borrar"}
+      </Button>
+      <ConfirmDialog
+        open={abierto}
+        onOpenChange={setAbierto}
+        title={`Borrar «${titulo}»`}
+        description={
+          publicado
+            ? `Se borra junto con todas sus versiones publicadas (vigente: v${publicado}). El enlace de los clientes (/${slug}) dejará de funcionar al instante. No se puede deshacer.`
+            : "Es solo un borrador (nunca se publicó); se borra junto con su historial de generación. No se puede deshacer."
+        }
+        confirmLabel="Borrar catálogo"
+        variant="destructive"
+        onConfirm={() => eliminarCatalogo(id)}
+        onSuccess={() => (trasBorrar === "lista" ? router.push("/admin/marketing/catalogos") : router.refresh())}
+      />
+    </>
   );
 }
 

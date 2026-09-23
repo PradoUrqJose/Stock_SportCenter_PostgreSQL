@@ -16,6 +16,7 @@ import { generarImagenCompartir } from "@/lib/marketing-og";
 import { etiquetaCatalogo } from "@/lib/marketing-publico";
 import { idsDeTipos } from "@/lib/marketing-tipos";
 import { precioFiltro, valoresFiltro, valoresTalla } from "@/lib/marketing-validar";
+import { r2Borrar, r2Configurado } from "@/lib/r2";
 import {
   ALMACENES,
   armarSnapshot,
@@ -372,6 +373,45 @@ export async function publicarCatalogo(
   } catch (e) {
     console.error("[marketing] publicarCatalogo falló:", e);
     return { success: false, msg: e instanceof Error ? e.message : "No se pudo publicar" };
+  }
+}
+
+/**
+ * Borra un catálogo entero: sus versiones (JSON inmutables) y su borrador. Es lo único irreversible del módulo, por
+ * eso lo pide Marketing para limpiar catálogos de prueba, no para deshacer un error de un momento (para eso está
+ * volver a publicar una versión anterior). El enlace público del catálogo pasa a responder 404 al instante. El
+ * historial de generaciones conserva su fila (sin catálogo asociado); las imágenes de producto, plantillas y páginas
+ * fijas no se tocan.
+ */
+export async function eliminarCatalogo(id: string): Promise<ActionResult> {
+  const sesion = await sesionMarketing();
+  if (!sesion) return { success: false, msg: "Sin permisos" };
+
+  try {
+    const c = await db.execute({ sql: "SELECT titulo, slug FROM mk_catalogos WHERE id = ?", args: [id] });
+    if (c.rows.length === 0) return { success: false, msg: "El catálogo no existe" };
+    const { titulo, slug } = c.rows[0] as { titulo: string; slug: string };
+
+    // Las versiones caen en cascada; el historial de generaciones conserva su fila con catalogo_id en NULL.
+    const versiones = await db.execute({ sql: "SELECT version FROM mk_catalogo_versiones WHERE catalogo_id = ?", args: [id] });
+    await db.execute({ sql: "DELETE FROM mk_catalogos WHERE id = ?", args: [id] });
+
+    // Imagen de la vista previa del enlace (WhatsApp…) de cada versión: es lo único que este catálogo dejó en R2.
+    // No bloquea el borrado si falla o si R2 no está configurado en este entorno.
+    if (r2Configurado()) {
+      await Promise.all(
+        versiones.rows.map((v) =>
+          r2Borrar(`og/${slug}-v${v.version as number}.jpg`).catch((e) => console.error(`[marketing] no se pudo borrar la vista previa de ${slug} v${v.version}:`, e))
+        )
+      );
+    }
+
+    updateTag(etiquetaCatalogo(slug));
+    revalidatePath("/admin/marketing/catalogos");
+    return { success: true, msg: `«${titulo}» borrado` };
+  } catch (e) {
+    console.error("[marketing] eliminarCatalogo falló:", e);
+    return { success: false, msg: "No se pudo borrar el catálogo" };
   }
 }
 

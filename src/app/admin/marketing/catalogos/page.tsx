@@ -6,11 +6,13 @@ import { SubirDisenosMasivo } from "@/components/admin/marketing/subir-disenos-m
 import { cerrarGeneracionesAbandonadas } from "@/lib/marketing-generacion";
 import { fechaLima, normalizarFiltros, textoFiltros } from "@/lib/marketing-catalogo";
 import { tiposCatalogo } from "@/lib/marketing-tipos";
+import { EliminarCatalogo } from "@/components/admin/marketing/acciones-catalogo";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type Fila = {
   id: string;
+  slug: string;
   titulo: string;
   version_publicada: number | null;
   paginas: number;
@@ -44,7 +46,7 @@ export default async function CatalogosPage() {
   const tipos = await tiposCatalogo();
 
   const r = await db.execute(
-    `SELECT c.id, c.titulo, c.version_publicada, c.updated_at,
+    `SELECT c.id, c.slug, c.titulo, c.version_publicada, c.updated_at,
             COALESCE(v.paginas, (c.borrador::jsonb -> 'resumen' ->> 'paginas')::int) AS paginas
      FROM mk_catalogos c
      LEFT JOIN mk_catalogo_versiones v ON v.catalogo_id = c.id AND v.version = c.version_publicada
@@ -91,8 +93,8 @@ export default async function CatalogosPage() {
       ) : (
         <ul className="divide-y divide-border rounded-lg border border-border">
           {catalogos.map((c) => (
-            <li key={c.id}>
-              <Link href={`/admin/marketing/catalogos/${c.id}`} className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted/50">
+            <li key={c.id} className="flex items-center gap-1 pr-2">
+              <Link href={`/admin/marketing/catalogos/${c.id}`} className="flex min-w-0 flex-1 items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-muted/50">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-foreground">{c.titulo}</p>
                   <p className="text-xs text-muted-foreground">
@@ -110,6 +112,7 @@ export default async function CatalogosPage() {
                   {c.version_publicada ? `Publicado v${c.version_publicada}` : "Borrador"}
                 </span>
               </Link>
+              <EliminarCatalogo id={c.id} titulo={c.titulo} slug={c.slug} publicado={c.version_publicada} compacto />
             </li>
           ))}
         </ul>

@@ -83,3 +83,10 @@ export async function r2Copiar(origen: string, destino: string): Promise<boolean
   await verificar(res, "COPY", `${origen} → ${destino}`);
   return true;
 }
+
+/** Borra un objeto. S3 (y R2) responden 204 tanto si existía como si no, así que no hace falta comprobar antes. */
+export async function r2Borrar(clave: string): Promise<void> {
+  const c = contexto();
+  const res = await c.aws.fetch(urlObjeto(c, clave), { method: "DELETE" });
+  await verificar(res, "DELETE", clave);
+}

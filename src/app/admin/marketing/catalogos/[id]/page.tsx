@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { enlacesCatalogo, requireMarketing } from "@/lib/marketing";
 import { fechaLima, normalizarFiltros, textoFiltros, type Borrador } from "@/lib/marketing-catalogo";
 import { tiposCatalogo } from "@/lib/marketing-tipos";
-import { EnlaceCatalogo, PublicarCatalogo } from "@/components/admin/marketing/acciones-catalogo";
+import { EliminarCatalogo, EnlaceCatalogo, PublicarCatalogo } from "@/components/admin/marketing/acciones-catalogo";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -71,13 +71,16 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
           <h1 className="text-xl font-semibold text-foreground">{cat.titulo}</h1>
           <p className="mt-1 text-xs text-muted-foreground">{filtrosTexto.join(" · ")}</p>
         </div>
-        <Link
-          href={`/admin/marketing/catalogos/${cat.id}/sincronizar`}
-          className={cn(buttonVariants({ variant: "outline" }))}
-          title="Actualiza las tallas y los precios con el ERP, agrega productos nuevos y quita los que ya no tienen stock"
-        >
-          <RefreshCw data-icon="inline-start" /> Sincronizar con el ERP
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/admin/marketing/catalogos/${cat.id}/sincronizar`}
+            className={cn(buttonVariants({ variant: "outline" }))}
+            title="Actualiza las tallas y los precios con el ERP, agrega productos nuevos y quita los que ya no tienen stock"
+          >
+            <RefreshCw data-icon="inline-start" /> Sincronizar con el ERP
+          </Link>
+          <EliminarCatalogo id={cat.id} titulo={cat.titulo} slug={cat.slug} publicado={cat.version_publicada} trasBorrar="lista" />
+        </div>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
