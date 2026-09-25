@@ -21,6 +21,7 @@ import {
   Minus,
   Plus,
   ImageOff,
+  LayoutList,
   Redo2,
   RefreshCw,
   Replace,
@@ -42,6 +43,8 @@ import { fechaStock } from "@/lib/marketing-sincronizar";
 import type { EscalaTalla } from "@/lib/marketing-tallas";
 import { cn } from "@/lib/utils";
 import { BotonPdf } from "./boton-pdf";
+import { OrdenarCatalogo } from "./ordenar-catalogo";
+import { quitarPagina } from "./ordenar-catalogo-logica";
 import { ANCHO_MAX, PaginaShell, VisorCtx, useContextoVisor } from "./visor-catalogo";
 
 type Estado = { paginas: PaginaCat[]; quitadas: PaginaCat[] };
@@ -99,9 +102,8 @@ function moverA(e: Estado, id: string, destino: number): Estado {
 }
 
 function quitar(e: Estado, id: string): Estado {
-  const p = e.paginas.find((x) => x.id === id);
-  if (!p) return e;
-  return { paginas: e.paginas.filter((x) => x.id !== id), quitadas: [...e.quitadas, p] };
+  if (!e.paginas.some((p) => p.id === id)) return e;
+  return quitarPagina(e.paginas, e.quitadas, id);
 }
 
 function restaurar(e: Estado, id: string, posicion: number): Estado {
@@ -182,6 +184,7 @@ export function EditorCatalogo({
     mensajeInicial ? { ok: true, texto: mensajeInicial } : null
   );
   const [dialogo, setDialogo] = useState<"quitadas" | "agregar" | "reemplazar" | "sinimagen" | null>(null);
+  const [ordenando, setOrdenando] = useState(false);
   const [irA, setIrA] = useState("");
 
   const { listaRef, valor } = useContextoVisor(base, fuente, paginas.length);
@@ -459,6 +462,9 @@ export function EditorCatalogo({
             </Button>
             <Button variant="outline" size="sm" onClick={() => setDialogo("agregar")}>
               <ImagePlus data-icon="inline-start" /> Agregar página
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setOrdenando(true)}>
+              <LayoutList data-icon="inline-start" /> Ordenar
             </Button>
             <Button variant="outline" size="sm" disabled={quitadas.length === 0} onClick={() => setDialogo("quitadas")}>
               <Undo data-icon="inline-start" /> Quitadas ({quitadas.length})
@@ -775,6 +781,15 @@ export function EditorCatalogo({
           setDialogo(null);
         }}
       />
+      {ordenando && <OrdenarCatalogo
+        paginas={paginas}
+        productos={productos}
+        biblioteca={biblioteca}
+        base={base}
+        alCambiar={(f) => cambiar((actual) => ({ ...actual, paginas: f(actual.paginas) }))}
+        alQuitar={(paginaId) => cambiar((actual) => quitar(actual, paginaId))}
+        alCerrar={() => setOrdenando(false)}
+      />}
     </div>
   );
 }

@@ -1,0 +1,275 @@
+[
+  {
+    "marca": "ADIDAS",
+    "archivo": "adidas.svg",
+    "estado": "logo",
+    "fuente": "Simple Icons (SVG)",
+    "url_fuente": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/adidas.svg"
+  },
+  {
+    "marca": "APOLO",
+    "archivo": "apolo.svg",
+    "estado": "logo-vectorizado",
+    "fuente": "Logo raster proporcionado por el usuario y vectorizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "ARAGON",
+    "archivo": "aragon.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Wordmark generado; logo oficial no localizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "AV",
+    "archivo": "av.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Logo exacto de la marca AV de champaña no confirmado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "BIMBO",
+    "archivo": "bimbo.svg",
+    "estado": "logo",
+    "fuente": "Wikimedia Commons",
+    "url_fuente": "https://commons.wikimedia.org/wiki/File:Logo_Grupo_BIMBO.svg"
+  },
+  {
+    "marca": "DC",
+    "archivo": "dc.svg",
+    "estado": "logo",
+    "fuente": "SVG Repo / CDNLogo",
+    "url_fuente": "https://cdnlogo.com/logo/dc-shoes_30878.html"
+  },
+  {
+    "marca": "DISCOVERY",
+    "archivo": "discovery.svg",
+    "estado": "logo-vectorizado",
+    "fuente": "Logo raster proporcionado por el usuario y vectorizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "DON DOMINGO",
+    "archivo": "don-domingo.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Wordmark generado; logo oficial no localizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "FILA",
+    "archivo": "fila.svg",
+    "estado": "logo",
+    "fuente": "Simple Icons (SVG)",
+    "url_fuente": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/fila.svg"
+  },
+  {
+    "marca": "GN",
+    "archivo": "gn.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Logo exacto de la marca GN de panetón no confirmado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "GZUCK",
+    "archivo": "gzuck.svg",
+    "estado": "logo-vectorizado",
+    "fuente": "Logo raster proporcionado por el usuario y vectorizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "HK",
+    "archivo": "hk.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Logo exacto de la marca HK de billeteras no confirmado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "JOMA",
+    "archivo": "joma.svg",
+    "estado": "logo",
+    "fuente": "Wikimedia Commons",
+    "url_fuente": "https://commons.wikimedia.org/wiki/File:Joma_Sport.svg"
+  },
+  {
+    "marca": "KAPPA",
+    "archivo": "kappa.svg",
+    "estado": "logo-vectorizado",
+    "fuente": "Logo raster proporcionado por el usuario y vectorizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "KELME",
+    "archivo": "kelme.svg",
+    "estado": "logo-vectorizado",
+    "fuente": "Logo raster proporcionado por el usuario y vectorizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "LOTTO",
+    "archivo": "lotto.svg",
+    "estado": "logo-vectorizado",
+    "fuente": "Logo raster proporcionado por el usuario y vectorizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "MARATHON",
+    "archivo": "marathon.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Logo de Marathon Sports no localizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "MARQUES",
+    "archivo": "marques.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Wordmark generado; logo oficial no localizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "MOLTEN",
+    "archivo": "molten.svg",
+    "estado": "logo",
+    "fuente": "Wikimedia Commons",
+    "url_fuente": "https://commons.wikimedia.org/wiki/File:Molten_company_logo.svg"
+  },
+  {
+    "marca": "NEW BALANCE",
+    "archivo": "new-balance.svg",
+    "estado": "logo",
+    "fuente": "Simple Icons (SVG)",
+    "url_fuente": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/newbalance.svg"
+  },
+  {
+    "marca": "NIKE",
+    "archivo": "nike.svg",
+    "estado": "logo",
+    "fuente": "Simple Icons (SVG)",
+    "url_fuente": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/nike.svg"
+  },
+  {
+    "marca": "OLD TIMES",
+    "archivo": "old-times.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Wordmark generado; logo oficial no localizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "PATRICK",
+    "archivo": "patrick.svg",
+    "estado": "logo",
+    "fuente": "Wikimedia Commons",
+    "url_fuente": "https://commons.wikimedia.org/wiki/File:Patrick_Logotipo.svg"
+  },
+  {
+    "marca": "PENALTY",
+    "archivo": "penalty.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Wordmark generado; logo oficial no localizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "PUMA",
+    "archivo": "puma.svg",
+    "estado": "logo",
+    "fuente": "Simple Icons (SVG)",
+    "url_fuente": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/puma.svg"
+  },
+  {
+    "marca": "PURO",
+    "archivo": "puro.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Wordmark generado; logo oficial no localizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "QUIKSILVER",
+    "archivo": "quiksilver.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Wordmark generado; logo oficial no localizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "REEBOK",
+    "archivo": "reebok.svg",
+    "estado": "logo",
+    "fuente": "Simple Icons (SVG)",
+    "url_fuente": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/reebok.svg"
+  },
+  {
+    "marca": "REEF",
+    "archivo": "reef.svg",
+    "estado": "logo-vectorizado",
+    "fuente": "Logo raster proporcionado por el usuario y vectorizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "REYES",
+    "archivo": "reyes.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Wordmark generado; logo oficial no localizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "RUNIC",
+    "archivo": "runic.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Wordmark generado; logo oficial no localizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "SALOMON",
+    "archivo": "salomon.svg",
+    "estado": "logo-vectorizado",
+    "fuente": "Logo raster proporcionado por el usuario y vectorizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "SANTIAGO",
+    "archivo": "santiago.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Logo de la marca de vino Santiago no confirmado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "SKECHERS",
+    "archivo": "skechers.svg",
+    "estado": "logo",
+    "fuente": "Wikimedia Commons",
+    "url_fuente": "https://commons.wikimedia.org/wiki/File:Skechers.svg"
+  },
+  {
+    "marca": "SPCENTER",
+    "archivo": "spcenter.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Wordmark generado; logo oficial no localizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "TABERNERO",
+    "archivo": "tabernero.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Wordmark generado; logo oficial no localizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "UNDER ARMOUR",
+    "archivo": "under-armour.svg",
+    "estado": "logo",
+    "fuente": "Simple Icons (SVG)",
+    "url_fuente": "https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/underarmour.svg"
+  },
+  {
+    "marca": "VINA VIEJA",
+    "archivo": "vina-vieja.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Wordmark generado; logo oficial no localizado",
+    "url_fuente": ""
+  },
+  {
+    "marca": "WILD",
+    "archivo": "wild.svg",
+    "estado": "wordmark-fallback",
+    "fuente": "Logo exacto de la marca Wild de cócteles no confirmado",
+    "url_fuente": ""
+  }
+]
