@@ -36,8 +36,9 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EnlaceCatalogo } from "@/components/admin/marketing/acciones-catalogo";
 import { ReemplazarImagen } from "@/components/admin/marketing/reemplazar-imagen";
+import { SelectorPaginaFija } from "@/components/admin/marketing/selector-pagina-fija";
+import { posicionEnEditor } from "@/components/admin/marketing/selector-pagina-fija-logica";
 import { cambiarEscalaTalla, guardarEdicion, publicarCatalogo } from "@/lib/actions/marketing-catalogos";
-import { enviarPaginaFija, prepararPaginaFija } from "@/lib/subir-imagen-cliente";
 import type { Ajuste, FijaBiblioteca, PaginaCat, PaginaFija, PlantillaSnap, ProductoCat, ResumenSincronizacion } from "@/lib/marketing-catalogo";
 import { fechaStock } from "@/lib/marketing-sincronizar";
 import type { EscalaTalla } from "@/lib/marketing-tallas";
@@ -184,6 +185,7 @@ export function EditorCatalogo({
     mensajeInicial ? { ok: true, texto: mensajeInicial } : null
   );
   const [dialogo, setDialogo] = useState<"quitadas" | "agregar" | "reemplazar" | "sinimagen" | null>(null);
+  const [bibliotecaActual, setBibliotecaActual] = useState(biblioteca);
   const [ordenando, setOrdenando] = useState(false);
   const [irA, setIrA] = useState("");
 
@@ -763,14 +765,18 @@ export function EditorCatalogo({
       </Dialog>
 
       {/* Agregar una página con imagen */}
-      <DialogoAgregar
+      {dialogo === "agregar" && <SelectorPaginaFija
         base={base}
-        biblioteca={biblioteca}
-        abierto={dialogo === "agregar"}
+        biblioteca={bibliotecaActual}
+        marcas={[...new Set(paginas.flatMap((p) => p.tipo === "producto" ? [productos[p.prod]?.marca ?? ""] : []))].filter(Boolean)}
+        modoSubida="ambos"
+        posiciones={[{ id: "inicio", titulo: "Al inicio" }, { id: "despues", titulo: "Después de la página seleccionada", deshabilitada: indice < 0 }, { id: "final", titulo: "Al final" }]}
+        posicionInicial="inicio"
         alCerrar={() => setDialogo(null)}
-        haySeleccion={indice >= 0}
-        alAgregar={(pagina, donde) => {
-          const pos = donde === "inicio" ? 0 : donde === "despues" && indice >= 0 ? indice + 1 : paginas.length;
+        alAgregar={(fija, donde, nueva) => {
+          if (nueva && !fija.id.startsWith("paginas-fijas/")) setBibliotecaActual((actual) => [...actual.filter((f) => f.id !== fija.id), fija]);
+          const pagina: PaginaFija = { id: nuevoId("f"), tipo: "fija", imagen: fija.imagen, ancho: fija.ancho, alto: fija.alto };
+          const pos = posicionEnEditor(donde, indice, paginas.length);
           cambiar((x) => {
             const ps = [...x.paginas];
             ps.splice(pos, 0, pagina);
@@ -780,139 +786,17 @@ export function EditorCatalogo({
           irAPagina(pagina.id);
           setDialogo(null);
         }}
-      />
+      />}
       {ordenando && <OrdenarCatalogo
         paginas={paginas}
         productos={productos}
-        biblioteca={biblioteca}
+        biblioteca={bibliotecaActual}
         base={base}
+        alNuevaFija={(fija) => setBibliotecaActual((actual) => [...actual.filter((f) => f.id !== fija.id), fija])}
         alCambiar={(f) => cambiar((actual) => ({ ...actual, paginas: f(actual.paginas) }))}
         alQuitar={(paginaId) => cambiar((actual) => quitar(actual, paginaId))}
         alCerrar={() => setOrdenando(false)}
       />}
     </div>
-  );
-}
-
-// ---------- diálogo: agregar página con imagen ----------
-const TIPOS_FIJA: { tipo: FijaBiblioteca["tipo"]; titulo: string }[] = [
-  { tipo: "portada", titulo: "Portadas" },
-  { tipo: "separador", titulo: "Separadores" },
-  { tipo: "separador_marca", titulo: "Separadores de marca" },
-  { tipo: "cierre", titulo: "Cierres" },
-  { tipo: "otra", titulo: "Otras" },
-];
-
-function DialogoAgregar({
-  base,
-  biblioteca,
-  abierto,
-  alCerrar,
-  haySeleccion,
-  alAgregar,
-}: {
-  base: string;
-  biblioteca: FijaBiblioteca[];
-  abierto: boolean;
-  alCerrar: () => void;
-  haySeleccion: boolean;
-  alAgregar: (pagina: PaginaFija, donde: "inicio" | "despues" | "final") => void;
-}) {
-  const [donde, setDonde] = useState<"inicio" | "despues" | "final">("inicio");
-  const [estado, setEstado] = useState<"reposo" | "subiendo">("reposo");
-  const [error, setError] = useState<string | null>(null);
-
-  async function subir(archivo: File) {
-    setError(null);
-    setEstado("subiendo");
-    try {
-      const blob = await prepararPaginaFija(archivo);
-      const r = await enviarPaginaFija(blob);
-      if (!r.ok) {
-        setError(r.error);
-        return;
-      }
-      alAgregar({ id: nuevoId("f"), tipo: "fija", imagen: r.imagen, ancho: r.ancho, alto: r.alto }, donde);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo procesar la imagen");
-    } finally {
-      setEstado("reposo");
-    }
-  }
-
-  const opciones: [typeof donde, string, boolean][] = [
-    ["inicio", "Al inicio", true],
-    ["despues", "Después de la página seleccionada", haySeleccion],
-    ["final", "Al final", true],
-  ];
-
-  return (
-    <Dialog open={abierto} onOpenChange={(o) => !o && estado === "reposo" && alCerrar()}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>Agregar página</DialogTitle>
-          <DialogDescription>Elige una página de la biblioteca de Marketing o sube una imagen nueva.</DialogDescription>
-        </DialogHeader>
-        <fieldset className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm" disabled={estado === "subiendo"}>
-          <legend className="mb-1 text-xs font-medium text-muted-foreground">Dónde agregarla</legend>
-          {opciones.map(([valor, texto, activa]) => (
-            <label key={valor} className={cn("flex items-center gap-2", !activa && "opacity-50")}>
-              <input type="radio" name="donde" checked={donde === valor} disabled={!activa} onChange={() => setDonde(valor)} />
-              {texto}
-            </label>
-          ))}
-        </fieldset>
-
-        {TIPOS_FIJA.map(({ tipo, titulo }) => {
-          const lista = biblioteca.filter((f) => f.tipo === tipo);
-          if (lista.length === 0) return null;
-          return (
-            <section key={tipo} className="space-y-1.5">
-              <h3 className="text-xs font-medium text-muted-foreground">{titulo}</h3>
-              <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                {lista.map((f) => (
-                  <li key={f.id}>
-                    <button
-                      type="button"
-                      disabled={estado === "subiendo"}
-                      onClick={() => alAgregar({ id: nuevoId("f"), tipo: "fija", imagen: f.imagen, ancho: f.ancho, alto: f.alto }, donde)}
-                      className="group block w-full overflow-hidden rounded-lg border border-[#2a2d35] text-left transition-colors hover:border-white/50 focus-visible:border-white/70 focus-visible:outline-none"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={`${base}/${f.imagen}-min.webp`} alt="" loading="lazy" decoding="async" className="aspect-video w-full object-cover" />
-                      <span className="block truncate px-2 py-1.5 text-xs">{f.nombre}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          );
-        })}
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <div className="space-y-1.5 border-t border-[#2a2d35] pt-3">
-          <p className="text-xs text-muted-foreground">O sube una imagen nueva, solo para este catálogo (16:9, JPG, PNG o WebP de hasta 4 MB).</p>
-          <label
-            className={cn(
-              buttonVariants({ variant: "outline" }),
-              "cursor-pointer justify-center",
-              estado === "subiendo" && "pointer-events-none opacity-60"
-            )}
-          >
-            {estado === "subiendo" ? "Subiendo…" : "Subir imagen nueva"}
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="hidden"
-              onChange={(ev) => {
-                const f = ev.target.files?.[0];
-                ev.target.value = "";
-                if (f) void subir(f);
-              }}
-            />
-          </label>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }

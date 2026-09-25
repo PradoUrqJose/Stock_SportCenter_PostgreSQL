@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
 
       // Mismo diseño = mismo nombre sin contar tildes, mayúsculas ni símbolos.
       // El separador de marca es único por marca (con cualquier nombre).
-      const delTipo = await db.execute({ sql: "SELECT id, nombre, marca FROM mk_paginas_fijas WHERE tipo = ?", args: [tipoFija] });
+      const delTipo = await db.execute({ sql: "SELECT id, nombre, marca, auto_tipo, auto_posicion FROM mk_paginas_fijas WHERE tipo = ?", args: [tipoFija] });
       const previa = delTipo.rows.find((r) => (deMarca ? (r.marca as string | null) === marcaFija : claveNombre(r.nombre as string) === claveNombre(nombre)));
       const existente = { rows: previa ? [previa] : [] };
       const id = (previa?.id as string | undefined) ?? (deMarca ? `separador-${slug(marcaFija)}-${hash}` : `${slug(nombre)}-${hash}`).slice(0, 60);
@@ -127,18 +127,19 @@ export async function POST(req: NextRequest) {
         .toBuffer({ resolveWithObject: true });
       await r2Subir(`${clave}.webp`, data, "image/webp", CACHE);
       await r2Subir(`${clave}-min.webp`, await sharp(cuerpo).resize({ width: 480 }).webp({ quality: 72, effort: 5 }).toBuffer(), "image/webp", CACHE);
+      const fija = { id, nombre: (previa?.nombre as string | undefined) ?? nombre, tipo: tipoFija, imagen: clave, ancho: info.width, alto: info.height, auto_tipo: (previa?.auto_tipo as string | null | undefined) ?? (aplica.length > 0 ? aplica.join(",") : null), auto_posicion: (previa?.auto_posicion as string | null | undefined) ?? (posicion || null), marca: deMarca ? marcaFija : null };
 
       if (existente.rows.length > 0) {
         // Reemplazo: solo cambia la imagen; dónde se usa y su posición se conservan.
         await db.execute({ sql: "UPDATE mk_paginas_fijas SET imagen = ?, ancho = ?, alto = ?, activa = 1 WHERE id = ?", args: [clave, info.width, info.height, id] });
-        return NextResponse.json({ id, reemplazo: true });
+        return NextResponse.json({ id, reemplazo: true, fija });
       }
       await db.execute({
         sql: `INSERT INTO mk_paginas_fijas (id, nombre, tipo, imagen, ancho, alto, auto_tipo, auto_posicion, marca, orden)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(orden), 0) + 1 FROM mk_paginas_fijas))`,
         args: [id, nombre, tipoFija, clave, info.width, info.height, aplica.length > 0 ? aplica.join(",") : null, posicion || null, deMarca ? marcaFija : null],
       });
-      return NextResponse.json({ id, reemplazo: false });
+      return NextResponse.json({ id, reemplazo: false, fija });
     }
 
     return error("Clase de diseño no válida", 400);

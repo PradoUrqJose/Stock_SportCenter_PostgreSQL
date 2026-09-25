@@ -39,7 +39,7 @@ export function PasoPlantillas({
   alMarcarSeparador,
   alOrdenar,
   alRestablecerOrden,
-  alSubirSeparadorDeMarca,
+  alNuevaFija,
   alVolver,
   alAvanzar,
 }: {
@@ -60,8 +60,7 @@ export function PasoPlantillas({
   /** Orden del documento fijado en el Preview. */
   alOrdenar: (orden: string[]) => void;
   alRestablecerOrden: () => void;
-  /** Se subió el separador de esa marca: el asistente lo pone antes de su bloque en el orden. */
-  alSubirSeparadorDeMarca: (marca: string, id: string) => void;
+  alNuevaFija: (fija: FijaBiblioteca, orden: string[]) => void;
   alVolver: () => void;
   alAvanzar: () => void;
 }) {
@@ -345,7 +344,7 @@ export function PasoPlantillas({
         <SubirDisenoAqui
           key={subir.clase === "portada" ? "portada" : `${subir.clase}-${subir.marca}`}
           destino={subir}
-          existentes={subir.clase === "portada" ? recursos.fijas.filter((f) => f.tipo === "portada").map((f) => f.nombre) : subir.clase === "separador_marca" ? [] : plantillas.filter((p) => p.marca === subir.marca).map((p) => p.nombre)}
+          existentes={subir.clase === "portada" ? recursos.fijas.filter((f) => f.tipo === "portada").map((f) => f.nombre) : plantillas.filter((p) => p.marca === subir.marca).map((p) => p.nombre)}
           tipo={(() => {
             const t = recursos.tipos.find((x) => x.id === datos.tipo);
             return t ? { id: t.id, nombre: t.nombre } : null;
@@ -353,8 +352,7 @@ export function PasoPlantillas({
           slotTipo={<GuardarComoTipo filtros={datos} nombreSugerido={nombreSugerido} alGuardar={alGuardarTipo} />}
           alSubir={({ id, reemplazo }) => {
             if (subir.clase === "portada") alElegirPortada(id);
-            else if (subir.clase === "separador_marca") alSubirSeparadorDeMarca(subir.marca, id);
-            else cambiar({ plantillas: { ...datos.plantillas, [subir.marca]: id } });
+            else if (subir.clase === "plantilla") cambiar({ plantillas: { ...datos.plantillas, [subir.marca]: id } });
             if (subir.clase === "plantilla" && !reemplazo) setTextosDe(id);
           }}
           alCerrar={() => setSubir(null)}
@@ -382,8 +380,7 @@ export function PasoPlantillas({
           documento={documento}
           alCambiarOrden={alOrdenar}
           alRestablecer={alRestablecerOrden}
-          alSubirSeparador={(marca) => setSubir({ clase: "separador_marca", marca })}
-          bloqueado={subir !== null}
+          alNuevaFija={alNuevaFija}
           alCerrar={() => setPreview(false)}
           alSiguiente={documento.portadaPendiente ? undefined : () => {
             setPreview(false);

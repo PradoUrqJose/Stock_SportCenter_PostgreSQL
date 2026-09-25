@@ -1,4 +1,5 @@
 // Envío de UNA imagen ya estandarizada a la API del módulo (navegador).
+import type { FijaBiblioteca } from "@/lib/marketing-catalogo";
 export type ResultadoEnvio =
   | { ok: true; version: number }
   | { ok: false; error: string };
@@ -57,7 +58,7 @@ export async function enviarPaginaFija(imagen: Blob): Promise<ResultadoPaginaFij
   }
 }
 
-export type ResultadoDiseno = { ok: true; id: string; reemplazo: boolean } | { ok: false; error: string };
+export type ResultadoDiseno = { ok: true; id: string; reemplazo: boolean; fija?: FijaBiblioteca } | { ok: false; error: string };
 
 /** Sube un diseño (plantilla de una marca o página fija) ya reducido con `prepararPaginaFija`. */
 export async function enviarDiseno(
@@ -71,9 +72,9 @@ export async function enviarDiseno(
       headers: { "Content-Type": imagen.type || "image/webp" },
       body: imagen,
     });
-    const json = (await res.json().catch(() => null)) as { error?: string; id?: string; reemplazo?: boolean } | null;
+    const json = (await res.json().catch(() => null)) as { error?: string; id?: string; reemplazo?: boolean; fija?: FijaBiblioteca } | null;
     if (!res.ok || !json?.id) return { ok: false, error: json?.error ?? `Error ${res.status}` };
-    return { ok: true, id: json.id, reemplazo: json.reemplazo === true };
+    return { ok: true, id: json.id, reemplazo: json.reemplazo === true, ...(json.fija ? { fija: json.fija } : {}) };
   } catch {
     return { ok: false, error: "Sin conexión con el servidor" };
   }

@@ -18,7 +18,7 @@ import { MultiSelectFilter } from "@/components/ui/multi-select-filter";
 import { marcasAfectadas, type MarcaAfectada } from "@/lib/actions/marketing-disenos";
 import { ALMACENES, ALMACENES_POR_DEFECTO, type FijaBiblioteca, type PlantillaLista, type TipoCatalogo } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
-import { documentoDelCatalogo, ordenConPortada, ordenConSeparador, ordenConSeparadorDeMarca } from "./documento-catalogo";
+import { documentoDelCatalogo, ordenConPortada, ordenConSeparador } from "./documento-catalogo";
 import { PasoPlantillas } from "./paso-plantillas";
 import { PasoFinal } from "./paso-final";
 import { crearTipo } from "@/lib/actions/marketing-tipos";
@@ -144,6 +144,9 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
   const [sinEquivalencia, setSinEquivalencia] = useState<AvisoTallas[] | null>(null);
   // Tipos disponibles: los de la base de datos más los que se guarden desde este asistente.
   const [tipos, setTipos] = useState<TipoCatalogo[]>(recursos.tipos);
+  const [fijasNuevas, setFijasNuevas] = useState<(FijaBiblioteca & { activa: boolean })[]>([]);
+  const fijas = useMemo(() => [...recursos.fijas.filter((f) => !fijasNuevas.some((n) => n.id === f.id)), ...fijasNuevas], [recursos.fijas, fijasNuevas]);
+  const recursosActuales = useMemo(() => ({ ...recursos, fijas }), [recursos, fijas]);
   // «＋ Nuevo tipo»: formulario completo para crear un tipo sin salir del asistente.
   const [creandoTipo, setCreandoTipo] = useState(false);
 
@@ -278,13 +281,13 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
   const indice = PASOS.findIndex((p) => p.id === paso);
   // Lo que lleva el documento según los filtros: plantilla de cada marca, portada, separadores y cierres.
   const documento = useMemo(
-    () => documentoDelCatalogo(datos, recursos.plantillas, recursos.fijas, marcasCatalogo),
-    [datos, recursos.plantillas, recursos.fijas, marcasCatalogo]
+    () => documentoDelCatalogo(datos, recursos.plantillas, fijas, marcasCatalogo),
+    [datos, recursos.plantillas, fijas, marcasCatalogo]
   );
 
   // Portada y separadores se eligen en el paso Plantillas; si Marketing ya ordenó el documento en el Preview, ese
   // orden se ajusta (la portada nueva sustituye a la anterior; el separador entra justo antes de los productos).
-  const idsPortadas = useMemo(() => new Set(recursos.fijas.filter((f) => f.tipo === "portada").map((f) => f.id)), [recursos.fijas]);
+  const idsPortadas = useMemo(() => new Set(fijas.filter((f) => f.tipo === "portada").map((f) => f.id)), [fijas]);
   const elegirPortada = useCallback(
     (id: string | null) => setDatos((d) => ({ ...d, portada: id, ...(d.orden ? { orden: ordenConPortada(d.orden, idsPortadas, id) } : {}) })),
     [idsPortadas]
@@ -301,7 +304,7 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
   // Un orden fijado en el Preview manda: la portada y los separadores pasan a ser los que hay en él.
   const ordenarDocumento = useCallback(
     (orden: string[]) => {
-      const fija = (id: string) => recursos.fijas.find((f) => f.id === id);
+      const fija = (id: string) => fijas.find((f) => f.id === id);
       const enOrden = orden.map(fija).filter((f): f is NonNullable<ReturnType<typeof fija>> => Boolean(f));
       cambiar({
         orden,
@@ -309,8 +312,14 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
         separadores: enOrden.filter((f) => f.tipo === "separador").map((f) => f.id),
       });
     },
-    [cambiar, recursos.fijas]
+    [cambiar, fijas]
   );
+
+  const agregarFijaDesdePreview = useCallback((fija: FijaBiblioteca, orden: string[]) => {
+    setFijasNuevas((actual) => [...actual.filter((f) => f.id !== fija.id), { ...fija, activa: true }]);
+    const enOrden = orden.map((id) => id === fija.id ? fija : fijas.find((f) => f.id === id)).filter((f): f is FijaBiblioteca => Boolean(f));
+    setDatos((d) => ({ ...d, orden, portada: enOrden.find((f) => f.tipo === "portada")?.id ?? null, separadores: enOrden.filter((f) => f.tipo === "separador").map((f) => f.id) }));
+  }, [fijas]);
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -508,7 +517,7 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
 
         {paso === "plantillas" && (
           <PasoPlantillas
-            recursos={recursos}
+            recursos={recursosActuales}
             datos={datos}
             cambiar={cambiar}
             marcasCatalogo={marcasCatalogo}
@@ -520,7 +529,7 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
             alMarcarSeparador={marcarSeparador}
             alOrdenar={ordenarDocumento}
             alRestablecerOrden={() => cambiar({ orden: undefined })}
-            alSubirSeparadorDeMarca={(marca, id) => setDatos((d) => (d.orden ? { ...d, orden: ordenConSeparadorDeMarca(d.orden, marca, id) } : d))}
+            alNuevaFija={agregarFijaDesdePreview}
             alVolver={() => ir("filtros")}
             alAvanzar={() => ir("final")}
           />
@@ -546,7 +555,7 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
           />
         )}
 
-        {paso === "final" && <PasoFinal recursos={recursos} datos={datos} cambiar={cambiar} documento={documento} alVolver={() => ir("plantillas")} />}
+        {paso === "final" && <PasoFinal recursos={recursosActuales} datos={datos} cambiar={cambiar} documento={documento} alVolver={() => ir("plantillas")} />}
       </div>
     </div>
   );

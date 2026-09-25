@@ -10,18 +10,13 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, Combine, GripVertical, LayoutList, Maximize2, Plus, RotateCcw, Rows3, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { claveDeMarca, type FijaBiblioteca } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
-import { ordenPorMarcas, ordenSinMarcas, type DocumentoCatalogo, type FijaGestion, type Hoja, type ItemDocumento } from "./documento-catalogo";
+import { SelectorPaginaFija } from "./selector-pagina-fija";
+import { insertarEnOrden, posicionAntesDeMarca } from "./selector-pagina-fija-logica";
+import { ordenPorMarcas, ordenSinMarcas, type DocumentoCatalogo, type Hoja, type ItemDocumento } from "./documento-catalogo";
 
 type Modo = "ordenar" | "grande";
-
-const TIPOS_BIBLIOTECA: { tipo: FijaGestion["tipo"]; titulo: string }[] = [
-  { tipo: "cierre", titulo: "Términos, redes y cierres" },
-  { tipo: "otra", titulo: "Otras páginas informativas" },
-  { tipo: "separador", titulo: "Separadores" },
-  { tipo: "separador_marca", titulo: "Separadores de marca" },
-  { tipo: "portada", titulo: "Portadas" },
-];
 
 const src = (base: string, h: Hoja) => `${base}/${h.imagen}${h.miniatura ? "-min" : ""}.webp`;
 
@@ -30,8 +25,7 @@ export function PreviewPlantillas({
   documento,
   alCambiarOrden,
   alRestablecer,
-  alSubirSeparador,
-  bloqueado,
+  alNuevaFija,
   alCerrar,
   alSiguiente,
 }: {
@@ -41,10 +35,7 @@ export function PreviewPlantillas({
   alCambiarOrden: (orden: string[]) => void;
   /** Vuelve al orden automático. */
   alRestablecer: () => void;
-  /** Abre la subida del separador de esa marca (el diálogo lo maneja quien abrió el Preview). */
-  alSubirSeparador: (marca: string) => void;
-  /** Hay un diálogo encima (subir un separador): Escape lo cierra a él, no al Preview. */
-  bloqueado: boolean;
+  alNuevaFija: (fija: FijaBiblioteca, orden: string[]) => void;
   alCerrar: () => void;
   alSiguiente?: () => void;
 }) {
@@ -52,24 +43,26 @@ export function PreviewPlantillas({
   const [modo, setModo] = useState<Modo>("grande");
   // Lugar del documento (0 = al principio) donde se agrega una página; null = el selector está cerrado.
   const [agregarEn, setAgregarEn] = useState<number | null>(null);
+  const [subirMarca, setSubirMarca] = useState<string | null>(null);
   const [arrastrando, setArrastrando] = useState<string | null>(null);
   const [sobre, setSobre] = useState<number | null>(null);
 
   useEffect(() => {
+    const previo = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previo; };
+  }, []);
+
+  useEffect(() => {
     // Escape cierra primero el selector de páginas y, si no hay, el Preview.
     const h = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || bloqueado) return;
-      if (agregarEn !== null) setAgregarEn(null);
+      if (e.key !== "Escape") return;
+      if (agregarEn !== null) { setAgregarEn(null); setSubirMarca(null); }
       else alCerrar();
     };
     document.addEventListener("keydown", h);
-    const previo = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", h);
-      document.body.style.overflow = previo;
-    };
-  }, [alCerrar, agregarEn, bloqueado]);
+    return () => { document.removeEventListener("keydown", h); };
+  }, [alCerrar, agregarEn]);
 
   /** Mueve `clave` para que quede en el hueco `destino` (0 = antes del primero, n = después del último). */
   function mover(clave: string, destino: number) {
@@ -81,9 +74,11 @@ export function PreviewPlantillas({
     alCambiarOrden(resto);
   }
   const quitar = (clave: string) => alCambiarOrden(orden.filter((c) => c !== clave));
-  function agregar(id: string) {
+  function agregar(id: string, nueva?: FijaBiblioteca) {
     const en = agregarEn ?? orden.length;
-    alCambiarOrden([...orden.slice(0, en), id, ...orden.slice(en)]);
+    const nuevoOrden = insertarEnOrden(orden, id, en);
+    if (nueva) alNuevaFija(nueva, nuevoOrden);
+    else alCambiarOrden(nuevoOrden);
     setAgregarEn(null);
   }
 
@@ -105,7 +100,10 @@ export function PreviewPlantillas({
   const idsSeparadoresMarca = new Set(documento.biblioteca.filter((f) => f.tipo === "separador_marca").map((f) => f.id));
   const separarPorMarcas = () => alCambiarOrden(ordenPorMarcas(orden, documento.marcasBloque));
   const unirMarcas = () => alCambiarOrden(ordenSinMarcas(orden, idsSeparadoresMarca));
-  const avisos = documento.porMarcas ? <AvisosSeparadores documento={documento} alSubir={alSubirSeparador} /> : null;
+  const avisos = documento.porMarcas ? <AvisosSeparadores documento={documento} alSubir={(marca) => {
+    setSubirMarca(marca);
+    setAgregarEn(posicionAntesDeMarca(orden, claveDeMarca(marca)));
+  }} /> : null;
 
   return createPortal(
     <div className="dark fixed inset-0 z-50 overflow-y-auto bg-[#0e0f12] text-[#e8e8e8] animate-in fade-in duration-300" role="dialog" aria-label="Preview del documento">
@@ -241,49 +239,18 @@ export function PreviewPlantillas({
         </div>
       )}
 
-      {agregarEn !== null && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 animate-in fade-in duration-200" onClick={() => setAgregarEn(null)}>
-          <div className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-[#2a2d35] bg-[#14161a] shadow-2xl animate-in zoom-in-95 duration-200" role="dialog" aria-label="Agregar una página" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between gap-3 border-b border-[#2a2d35] px-4 py-3">
-              <div>
-                <h3 className="text-[15px] font-semibold">Agregar una página</h3>
-                <p className="text-xs text-[#9aa0ab]">
-                  {agregarEn === 0 ? "Entrará al principio del catálogo." : agregarEn >= secuencia.length ? "Entrará al final del catálogo." : `Entrará en la posición ${agregarEn + 1}.`} Luego puedes moverla.
-                </p>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => setAgregarEn(null)} aria-label="Cerrar">
-                <X />
-              </Button>
-            </div>
-            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
-              {disponibles.length === 0 && <p className="py-8 text-center text-sm text-[#9aa0ab]">Ya están todas las páginas de la biblioteca en el documento. Sube más en Catálogos → Subir diseños.</p>}
-              {TIPOS_BIBLIOTECA.map(({ tipo, titulo }) => {
-                const lista = disponibles.filter((f) => f.tipo === tipo);
-                if (lista.length === 0) return null;
-                return (
-                  <section key={tipo}>
-                    <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-[#9aa0ab]">{titulo}</h4>
-                    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      {lista.map((f) => (
-                        <li key={f.id}>
-                          <button type="button" onClick={() => agregar(f.id)} className="group block w-full overflow-hidden rounded-lg border border-[#2a2d35] text-left transition-all hover:-translate-y-0.5 hover:border-[#5b6270] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={`${base}/${f.imagen}-min.webp`} alt="" loading="lazy" className="aspect-video w-full object-cover" />
-                            <span className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium">
-                              <Plus className="h-3.5 w-3.5 shrink-0 text-[#9aa0ab] group-hover:text-white" />
-                              <span className="truncate">{f.nombre}</span>
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+      {agregarEn !== null && <SelectorPaginaFija
+        base={base}
+        biblioteca={disponibles}
+        existentes={documento.biblioteca}
+        marcas={documento.marcasBloque.map((m) => m.marca)}
+        modoSubida="biblioteca"
+        tipoInicial={subirMarca ? "separador_marca" : undefined}
+        marcaInicial={subirMarca ?? undefined}
+        tituloPosicion={agregarEn === 0 ? "Se agregará al principio del catálogo." : agregarEn >= secuencia.length ? "Se agregará al final del catálogo." : `Se agregará en la posición ${agregarEn + 1}.`}
+        alAgregar={(fija, _posicion, nueva) => agregar(fija.id, nueva ? fija : undefined)}
+        alCerrar={() => { setAgregarEn(null); setSubirMarca(null); }}
+      />}
     </div>,
     document.body
   );
