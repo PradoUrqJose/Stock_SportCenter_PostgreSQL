@@ -513,6 +513,8 @@ export const ALMACENES = ["JAL1", "JAL4", "T01", "T02", "T03", "T04", "T05", "T0
 export const ALMACENES_POR_DEFECTO = ["JAL1", "T01", "T02", "T03", "T04", "T05", "T06", "T07", "T08", "T09", "T10"];
 
 const ORDEN_TALLAS_ROPA = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL", "2XL", "3XL", "4XL"];
+/** Etiquetas defectuosas que el ERP puede devolver como tallas; no deben salir en catálogos de Marketing. */
+const TALLAS_INVALIDAS_CATALOGO = new Set(["OSF", "OSFM", "S/T"]);
 
 /**
  * Orden de la lista de tallas para elegir: numéricas de menor a mayor («4», «4.5», «9»…), luego las de ropa en su
@@ -534,7 +536,9 @@ export function ordenarOpcionesTalla(tallas: readonly string[]): string[] {
 
 /** Tallas con stock, ordenadas: numéricas de menor a mayor y luego las de texto. */
 export function ordenarTallas(tallas: Record<string, number | string>): string[] {
-  const conStock = Object.entries(tallas).filter(([, v]) => typeof v === "number" && v > 0).map(([t]) => t);
+  const conStock = Object.entries(tallas)
+    .filter(([t, v]) => typeof v === "number" && v > 0 && !TALLAS_INVALIDAS_CATALOGO.has(t.trim().toUpperCase()))
+    .map(([t]) => t);
   const clave = (t: string): [number, number | string] => {
     const n = parseFloat(t);
     return Number.isNaN(n) ? [1, t] : [0, n];
