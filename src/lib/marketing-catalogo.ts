@@ -555,8 +555,9 @@ function numero(v: number | string | null | undefined): number | null {
 
 /**
  * Arma el borrador desde lo que devolvió el ERP: descarta lo que no se puede
- * mostrar (sin imagen, sin stock/precio), quita duplicados, ordena SIEMPRE por
- * marca (luego modelo, código y género) y crea una página por producto y género:
+ * mostrar (sin imagen, sin stock/precio), quita duplicados, ordena por marca
+ * (luego modelo, código y género), o por el orden de género indicado seguido
+ * de marca/modelo/código, y crea una página por producto y género:
  * el mismo código en dos géneros da dos páginas (cada una con sus tallas).
  *
  * @param versiones   cod_universal (MAYÚSCULAS) → versión de su imagen en R2
@@ -568,7 +569,8 @@ export function construirBorrador(
   items: ItemErp[],
   versiones: Map<string, number>,
   plantillaDe: (marca: string) => string | null,
-  precio_rango: { min: number | null; max: number | null; tallas?: readonly string[] } = { min: null, max: null }
+  precio_rango: { min: number | null; max: number | null; tallas?: readonly string[] } = { min: null, max: null },
+  ordenGeneros?: readonly string[]
 ): Borrador {
   const tallasPedidas = new Set((precio_rango.tallas ?? []).map((t) => t.trim().toUpperCase()));
   const vistos = new Set<string>();
@@ -631,8 +633,11 @@ export function construirBorrador(
     });
   }
 
+  const prioridadGenero = new Map((ordenGeneros ?? []).map((genero, i) => [genero.toUpperCase(), i]));
+  const prioridad = (genero: string | null) => prioridadGenero.get(genero ?? "") ?? prioridadGenero.size;
   productos.sort(
     (a, b) =>
+      (prioridadGenero.size > 0 ? prioridad(a.genero) - prioridad(b.genero) : 0) ||
       a.marca.localeCompare(b.marca) ||
       a.modelo.localeCompare(b.modelo) ||
       a.cod.localeCompare(b.cod) ||

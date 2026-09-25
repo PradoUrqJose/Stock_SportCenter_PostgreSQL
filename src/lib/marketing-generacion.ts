@@ -121,7 +121,7 @@ async function borradorDeErp(id: string, filtros: FiltrosCatalogo, origen?: stri
     min: filtros.precio_min,
     max: filtros.precio_max,
     tallas: filtros.tallas,
-  });
+  }, filtros.tipo === "ninos" ? ["JUNIOR", "PRESCO", "INFANTE"] : undefined);
   const conPropia = new Set(plantillas.filter((p) => p.activa && p.marca !== MARCA_GENERICA).map((p) => p.marca));
   const genericas: Record<string, number> = {};
   for (const pg of sinFijas.paginas) {
