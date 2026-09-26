@@ -238,6 +238,7 @@ def scrapear_catalogo(
     modelo: str = "",
     codigo_universal: str = "",
     stock_mayor_a: str = "1",
+    fecha_minima_ingreso: str = "",
 ) -> list[dict]:
     html = cargar_excel(
         s,
@@ -259,7 +260,7 @@ def scrapear_catalogo(
         p_porcentaje_1_caja="",
         p_porcentaje_1_2_caja="",
         p_porcentaje_1_4_caja="",
-        p_fecha_minima_ingreso="",
+        p_fecha_minima_ingreso=fecha_minima_ingreso,
     )
     return parse_tabla_catalogo(html) if html else []
 

@@ -23,9 +23,12 @@ export type BorradorTipo = {
   tallas: string[];
   precioMin: string;
   precioMax: string;
+  fechaMinIngreso: string;
+  stockMinimo: string;
+  soloUnicos: boolean;
 };
 
-export const BORRADOR_TIPO_VACIO: BorradorTipo = { nombre: "", descripcion: "", categorias: [], grupos: [], generos: [], marcas: [], tallas: [], precioMin: "", precioMax: "" };
+export const BORRADOR_TIPO_VACIO: BorradorTipo = { nombre: "", descripcion: "", categorias: [], grupos: [], generos: [], marcas: [], tallas: [], precioMin: "", precioMax: "", fechaMinIngreso: "", stockMinimo: "1", soloUnicos: false };
 
 export const borradorDeTipo = (t: TipoCatalogo): BorradorTipo => ({
   nombre: t.nombre,
@@ -37,6 +40,9 @@ export const borradorDeTipo = (t: TipoCatalogo): BorradorTipo => ({
   tallas: t.tallas,
   precioMin: t.precio_min == null ? "" : String(t.precio_min),
   precioMax: t.precio_max == null ? "" : String(t.precio_max),
+  fechaMinIngreso: t.fecha_minima_ingreso ?? "",
+  stockMinimo: String(t.stock_minimo ?? 1),
+  soloUnicos: t.solo_unicos ?? false,
 });
 
 const numero = (v: string) => {
@@ -55,6 +61,9 @@ export const aEntradaTipo = (b: BorradorTipo): EntradaTipo => ({
   tallas: b.tallas,
   precio_min: numero(b.precioMin),
   precio_max: numero(b.precioMax),
+  fecha_minima_ingreso: b.fechaMinIngreso || null,
+  stock_minimo: Number(b.stockMinimo) || 1,
+  solo_unicos: b.soloUnicos,
 });
 
 /** El tipo tal como quedó al guardarlo (con el id que le dio el servidor). */
@@ -71,6 +80,9 @@ export const tipoDesdeBorrador = (id: string, b: BorradorTipo): TipoCatalogo => 
   tallas: b.tallas,
   precio_min: numero(b.precioMin),
   precio_max: numero(b.precioMax),
+  fecha_minima_ingreso: b.fechaMinIngreso || null,
+  stock_minimo: Number(b.stockMinimo) || 1,
+  solo_unicos: b.soloUnicos,
 });
 
 function Chips({ valores, alQuitar }: { valores: string[]; alQuitar: (v: string) => void }) {
@@ -165,6 +177,11 @@ export function DialogoTipo({
               <Input type="number" inputMode="decimal" min={0} value={d.precioMax} onChange={(e) => cambiar({ precioMax: e.target.value })} placeholder="Hasta" className="w-32" aria-label="Precio hasta" />
             </div>
           </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5"><Label htmlFor="t-fecha-min">Fecha mínima de ingreso</Label><Input id="t-fecha-min" type="date" value={d.fechaMinIngreso} onChange={(e) => cambiar({ fechaMinIngreso: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label htmlFor="t-stock-min">Stock mínimo ERP</Label><Input id="t-stock-min" type="number" min={1} step={1} value={d.stockMinimo} disabled={d.soloUnicos} onChange={(e) => cambiar({ stockMinimo: e.target.value })} /></div>
+          </div>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={d.soloUnicos} onChange={(e) => cambiar({ soloUnicos: e.target.checked, ...(e.target.checked ? { stockMinimo: "1" } : {}) })} /> Solo productos únicos (stock total = 1)</label>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={alCerrar} disabled={guardando}>

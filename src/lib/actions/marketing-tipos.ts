@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { sesionMarketing } from "@/lib/marketing";
 import { TIPOS_DE_FABRICA, type FiltrosDeTipo } from "@/lib/marketing-catalogo";
 import { tiposCatalogo } from "@/lib/marketing-tipos";
-import { precioFiltro, valoresFiltro, valoresTalla } from "@/lib/marketing-validar";
+import { fechaIngresoFiltro, precioFiltro, stockMinimoFiltro, valoresFiltro, valoresTalla } from "@/lib/marketing-validar";
 import type { ActionResult } from "@/types";
 
 /** Lo que se guarda de un tipo: nombre, descripción y los filtros que llena. */
@@ -32,11 +32,15 @@ function validar(e: EntradaTipo): Validado | string {
   const precio_max = precioFiltro(e.precio_max);
   if (precio_min === undefined || precio_max === undefined) return "El precio debe ser un número válido";
   if (precio_min != null && precio_max != null && precio_min > precio_max) return "El precio mínimo no puede ser mayor que el máximo";
+  const fecha_minima_ingreso = fechaIngresoFiltro(e.fecha_minima_ingreso);
+  const stock_minimo = stockMinimoFiltro(e.stock_minimo);
+  if (fecha_minima_ingreso === undefined) return "La fecha mínima de ingreso no es válida";
+  if (stock_minimo === undefined) return "El stock mínimo debe ser un entero mayor o igual a 1";
   // Solo talla o precio traerían todo el ERP: el tipo tiene que acotar por algo más.
   if (categorias.length + grupos.length + generos.length + marcas.length === 0) {
     return "El tipo necesita al menos una categoría, grupo, género o marca (solo la talla o el precio traerían todo el ERP)";
   }
-  return { nombre, descripcion, filtros: { categorias, grupos, generos, marcas, tallas, precio_min, precio_max } };
+  return { nombre, descripcion, filtros: { categorias, grupos, generos, marcas, tallas, precio_min, precio_max, fecha_minima_ingreso, stock_minimo, solo_unicos: e.solo_unicos === true } };
 }
 
 const ID_TIPO = /^[a-z0-9-]{1,40}$/;
@@ -148,7 +152,7 @@ export async function restaurarTipo(id: string): Promise<ActionResult> {
   const f = TIPOS_DE_FABRICA.find((t) => t.id === id);
   if (!f) return { success: false, msg: "Solo los tipos de fábrica se pueden restaurar" };
   try {
-    const filtros: FiltrosDeTipo = { categorias: f.categorias, grupos: f.grupos, generos: f.generos, marcas: f.marcas, tallas: f.tallas, precio_min: f.precio_min, precio_max: f.precio_max };
+    const filtros: FiltrosDeTipo = { categorias: f.categorias, grupos: f.grupos, generos: f.generos, marcas: f.marcas, tallas: f.tallas, precio_min: f.precio_min, precio_max: f.precio_max, fecha_minima_ingreso: f.fecha_minima_ingreso, stock_minimo: f.stock_minimo, solo_unicos: f.solo_unicos };
     await db.execute({
       sql: "UPDATE mk_tipos SET nombre = ?, descripcion = ?, filtros = ?, activo = 1, updated_at = now_text() WHERE id = ?",
       args: [f.nombre, f.descripcion, JSON.stringify(filtros), id],

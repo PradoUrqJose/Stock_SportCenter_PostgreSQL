@@ -54,6 +54,9 @@ export type DatosCatalogo = {
   tallas: string[];
   precioMin: string;
   precioMax: string;
+  fechaMinIngreso: string;
+  stockMinimo: string;
+  soloUnicos: boolean;
   almacenes: string[];
   /** Plantilla elegida por marca (marca → id). */
   plantillas: Record<string, string>;
@@ -131,6 +134,9 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
     tallas: [],
     precioMin: "",
     precioMax: "",
+    fechaMinIngreso: "",
+    stockMinimo: "1",
+    soloUnicos: false,
     almacenes: ALMACENES_POR_DEFECTO,
     plantillas: {},
     portada: undefined,
@@ -155,7 +161,7 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
   // Al abrir la sincronización de un catálogo, el ERP ya se consulta con sus filtros: si se dejan como están, «Consultar el ERP» no espera.
   useEffect(() => {
     if (!sincronizar) return;
-    void precargarErp({ categorias: datos.categorias, grupos: datos.grupos, generos: datos.generos, marcas: datos.marcas, almacenes: datos.almacenes });
+    void precargarErp({ categorias: datos.categorias, grupos: datos.grupos, generos: datos.generos, marcas: datos.marcas, almacenes: datos.almacenes, fecha_minima_ingreso: datos.fechaMinIngreso || null, stock_minimo: Number(datos.stockMinimo) || 1, solo_unicos: datos.soloUnicos });
     // Solo al abrir: los filtros iniciales son los del catálogo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -175,7 +181,10 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
     mismo(datos.marcas, tipoElegido.marcas) &&
     mismo(datos.tallas, tipoElegido.tallas) &&
     numDe(datos.precioMin) === tipoElegido.precio_min &&
-    numDe(datos.precioMax) === tipoElegido.precio_max;
+    numDe(datos.precioMax) === tipoElegido.precio_max &&
+    datos.fechaMinIngreso === (tipoElegido.fecha_minima_ingreso ?? "") &&
+    (Number(datos.stockMinimo) || 1) === (tipoElegido.stock_minimo ?? 1) &&
+    datos.soloUnicos === (tipoElegido.solo_unicos ?? false);
   // Nombre que se sugiere para un tipo nuevo: marca, género, grupo y talla de los filtros; nunca igual a uno que ya existe.
   const partes = [datos.marcas[0], datos.generos.length === 1 ? datos.generos[0] : "", datos.grupos.length === 1 ? datos.grupos[0] : ""]
     .filter(Boolean)
@@ -205,7 +214,7 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
     setSinEquivalencia(null);
     const filtros = { categorias: datos.categorias, grupos: datos.grupos, generos: datos.generos, marcas: datos.marcas };
     // Mientras se eligen plantillas y se acomoda la zapatilla, el servidor ya consulta el ERP: «Generar» no tendrá que esperarlo.
-    void precargarErp({ ...filtros, almacenes: datos.almacenes });
+    void precargarErp({ ...filtros, almacenes: datos.almacenes, fecha_minima_ingreso: datos.fechaMinIngreso || null, stock_minimo: Number(datos.stockMinimo) || 1, solo_unicos: datos.soloUnicos });
     const [r, t] = await Promise.all([marcasAfectadas(filtros), tallasSinEquivalencia(filtros)]);
     setMarcasCatalogo(r.success && r.data ? r.data : []);
     setSinEquivalencia(t.success && t.data ? t.data : []);
@@ -230,6 +239,9 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
       tallas: datos.tallas,
       precio_min: min !== null && Number.isNaN(min) ? null : min,
       precio_max: max !== null && Number.isNaN(max) ? null : max,
+      fecha_minima_ingreso: datos.fechaMinIngreso || null,
+      stock_minimo: Number(datos.stockMinimo) || 1,
+      solo_unicos: datos.soloUnicos,
       plantillas: datos.plantillas,
       escala_talla: datos.escalaTalla,
     });
@@ -259,6 +271,9 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
       ...(t.tallas.length > 0 ? { tallas: [...t.tallas] } : {}),
       ...(t.precio_min != null ? { precioMin: String(t.precio_min) } : {}),
       ...(t.precio_max != null ? { precioMax: String(t.precio_max) } : {}),
+      fechaMinIngreso: t.fecha_minima_ingreso ?? "",
+      stockMinimo: String(t.stock_minimo ?? 1),
+      soloUnicos: t.solo_unicos ?? false,
       // El título se sugiere mientras no se haya escrito uno propio.
       ...(datos.titulo.trim() === "" || datos.titulo === datos.tituloSugerido ? { titulo: sugerido, tituloSugerido: sugerido } : {}),
     });
@@ -270,6 +285,7 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
     const sugerido = `${t.nombre} — ${mesYAnio()}`;
     cambiar({
       tipo: t.id,
+      ...(conservar ? {} : { categorias: [...t.categorias], grupos: [...t.grupos], generos: [...t.generos], marcas: [...t.marcas], tallas: [...t.tallas], precioMin: t.precio_min == null ? "" : String(t.precio_min), precioMax: t.precio_max == null ? "" : String(t.precio_max), fechaMinIngreso: t.fecha_minima_ingreso ?? "", stockMinimo: String(t.stock_minimo ?? 1), soloUnicos: t.solo_unicos ?? false }),
       ...(conservar ? {} : { portada: undefined, separadores: [], orden: undefined }),
       ...(datos.titulo.trim() === "" || datos.titulo === datos.tituloSugerido ? { titulo: sugerido, tituloSugerido: sugerido } : {}),
     });
@@ -466,7 +482,26 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
                 </div>
               </fieldset>
 
-              <fieldset className={cn("space-y-2", ENTRA)} style={entrada(3)}>
+              <fieldset className={cn("space-y-3", ENTRA)} style={entrada(3)}>
+                <legend className="mb-1 text-sm font-medium">Filtros del ERP</legend>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label htmlFor="fecha-min-ingreso" className="text-sm">Fecha mínima de ingreso</label>
+                    <Input id="fecha-min-ingreso" type="date" value={datos.fechaMinIngreso} onChange={(e) => cambiar({ fechaMinIngreso: e.target.value })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="stock-minimo" className="text-sm">Stock mínimo (ERP ≥)</label>
+                    <Input id="stock-minimo" type="number" min={1} step={1} value={datos.stockMinimo} disabled={datos.soloUnicos} onChange={(e) => cambiar({ stockMinimo: e.target.value })} />
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={datos.soloUnicos} onCheckedChange={(v) => cambiar({ soloUnicos: v === true, ...(v === true ? { stockMinimo: "1" } : {}) })} />
+                  Solo productos únicos (stock total = 1)
+                </label>
+                <p className="text-xs text-muted-foreground">La fecha y el stock mínimo se envían al ERP. «Únicos» conserva solo productos con stock total exactamente igual a 1.</p>
+              </fieldset>
+
+              <fieldset className={cn("space-y-2", ENTRA)} style={entrada(4)}>
                 <legend className="mb-1 text-sm font-medium">Almacenes</legend>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
                   {ALMACENES.map((a) => (
@@ -478,7 +513,7 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
                 </div>
               </fieldset>
 
-              <fieldset className={cn("space-y-2", ENTRA)} style={entrada(4)}>
+              <fieldset className={cn("space-y-2", ENTRA)} style={entrada(5)}>
                 <legend className="mb-1 text-sm font-medium">Tallas a mostrar</legend>
                 <div className="flex flex-wrap gap-2.5">
                   {([
@@ -539,7 +574,7 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
           <DialogoTipo
             titulo="Nuevo tipo de catálogo"
             // Parte de los filtros que ya elegiste; se pueden cambiar en el formulario.
-            inicial={{ nombre: nombreSugerido, descripcion: "", categorias: datos.categorias, grupos: datos.grupos, generos: datos.generos, marcas: datos.marcas, tallas: datos.tallas, precioMin: datos.precioMin, precioMax: datos.precioMax }}
+            inicial={{ nombre: nombreSugerido, descripcion: "", categorias: datos.categorias, grupos: datos.grupos, generos: datos.generos, marcas: datos.marcas, tallas: datos.tallas, precioMin: datos.precioMin, precioMax: datos.precioMax, fechaMinIngreso: datos.fechaMinIngreso, stockMinimo: datos.stockMinimo, soloUnicos: datos.soloUnicos }}
             opciones={opciones}
             alGuardar={async (b) => {
               const r = await crearTipo(aEntradaTipo(b));
@@ -547,7 +582,7 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
                 const t = tipoDesdeBorrador(r.data.id, b);
                 usarTipoGuardado(t);
                 // El tipo nuevo manda: los filtros del asistente quedan como él los definió.
-                cambiar({ categorias: t.categorias, grupos: t.grupos, generos: t.generos, marcas: t.marcas, tallas: t.tallas, precioMin: b.precioMin, precioMax: b.precioMax });
+                cambiar({ categorias: t.categorias, grupos: t.grupos, generos: t.generos, marcas: t.marcas, tallas: t.tallas, precioMin: b.precioMin, precioMax: b.precioMax, fechaMinIngreso: b.fechaMinIngreso, stockMinimo: b.stockMinimo, soloUnicos: b.soloUnicos });
               }
               return r;
             }}

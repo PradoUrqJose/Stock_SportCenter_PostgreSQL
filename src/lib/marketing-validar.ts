@@ -29,3 +29,19 @@ export function precioFiltro(v: unknown): number | null | undefined {
   if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 100_000) return undefined;
   return v;
 }
+
+/** Fecha ISO (YYYY-MM-DD) del filtro «Fecha Min. de Ingreso»; null si está vacía, undefined si no es una fecha real. */
+export function fechaIngresoFiltro(v: unknown): string | null | undefined {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return undefined;
+  const [anio, mes, dia] = v.split("-").map(Number);
+  const f = new Date(Date.UTC(anio, mes - 1, dia));
+  return f.toISOString().slice(0, 10) === v ? v : undefined;
+}
+
+/** Stock mínimo ERP (Stock >=): entero positivo. Vacío conserva el mínimo actual del ERP: 1. */
+export function stockMinimoFiltro(v: unknown): number | undefined {
+  if (v === null || v === undefined || v === "") return 1;
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+  return Number.isInteger(n) && n >= 1 && n <= 100_000 ? n : undefined;
+}

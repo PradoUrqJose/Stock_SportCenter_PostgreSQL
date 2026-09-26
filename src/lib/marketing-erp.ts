@@ -57,6 +57,8 @@ async function pedirAlErp(f: FiltrosCatalogo, c: ConsultaErp, origen?: string): 
     marca: c.marcas.map(valorMarcaErp).join(","),
     genero: c.generos.join(","),
     categoria: f.categorias.join(","),
+    fecha_minima_ingreso: f.fecha_minima_ingreso ? f.fecha_minima_ingreso.split("-").reverse().join("/") : "",
+    stock_mayor_a: String(f.stock_minimo ?? 1),
   };
 
   const url = urlCatalogoErp(origen);

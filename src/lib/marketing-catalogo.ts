@@ -94,6 +94,12 @@ export type FiltrosCatalogo = {
   /** Precio lista en soles; null = sin límite. */
   precio_min: number | null;
   precio_max: number | null;
+  /** Fecha mínima de ingreso ISO, convertida a DD/MM/YYYY al pedirla al ERP. */
+  fecha_minima_ingreso?: string | null;
+  /** Mínimo inclusivo del filtro ERP «Stock >=»; por defecto 1. */
+  stock_minimo?: number;
+  /** Conserva solo los productos cuyo stock total devuelto por el ERP es exactamente 1. */
+  solo_unicos?: boolean;
   /**
    * Escala de las tallas que se muestran: «peru» (la peruana, según la equivalencia de cada marca y género) o «usa» (la del ERP).
    * Los catálogos nuevos salen con «peru»; sin definir (catálogos anteriores) es «usa», para no cambiar lo que ya se publicó.
@@ -170,6 +176,9 @@ export type FiltrosDeTipo = {
   tallas: string[];
   precio_min: number | null;
   precio_max: number | null;
+  fecha_minima_ingreso?: string | null;
+  stock_minimo?: number;
+  solo_unicos?: boolean;
 };
 
 /**
@@ -206,6 +215,9 @@ export function normalizarFiltrosTipo(crudo: unknown): FiltrosDeTipo {
     tallas: listaTipo(o.tallas),
     precio_min: precioTipo(o.precio_min),
     precio_max: precioTipo(o.precio_max),
+    fecha_minima_ingreso: typeof o.fecha_minima_ingreso === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.fecha_minima_ingreso) ? o.fecha_minima_ingreso : null,
+    stock_minimo: typeof o.stock_minimo === "number" && Number.isInteger(o.stock_minimo) && o.stock_minimo >= 1 ? o.stock_minimo : 1,
+    solo_unicos: o.solo_unicos === true,
   };
 }
 
@@ -223,6 +235,9 @@ export const TIPOS_DE_FABRICA: readonly TipoCatalogo[] = TIPOS_CATALOGO.map((t) 
   tallas: [],
   precio_min: null,
   precio_max: null,
+  fecha_minima_ingreso: null,
+  stock_minimo: 1,
+  solo_unicos: false,
 }));
 
 const lista = (v: unknown): string[] =>
@@ -243,6 +258,9 @@ export function normalizarFiltros(crudo: unknown): FiltrosCatalogo {
     tallas: lista(o.tallas),
     precio_min: num(o.precio_min),
     precio_max: num(o.precio_max),
+    fecha_minima_ingreso: typeof o.fecha_minima_ingreso === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.fecha_minima_ingreso) ? o.fecha_minima_ingreso : null,
+    stock_minimo: typeof o.stock_minimo === "number" && Number.isInteger(o.stock_minimo) && o.stock_minimo >= 1 ? o.stock_minimo : 1,
+    solo_unicos: o.solo_unicos === true,
     ...(o.escala_talla === "peru" || o.escala_talla === "usa" ? { escala_talla: o.escala_talla } : {}),
     plantillas:
       typeof o.plantillas === "object" && o.plantillas !== null
@@ -432,6 +450,9 @@ export function textoFiltros(f: FiltrosCatalogo, tipos: readonly { id: string; n
     f.generos.length > 0 && `Género: ${f.generos.join(", ")}`,
     f.tallas.length > 0 && `Talla: ${f.tallas.join(", ")}`,
     precio,
+    f.solo_unicos && "Solo únicos (stock total = 1)",
+    !f.solo_unicos && f.stock_minimo != null && f.stock_minimo > 1 && `Stock mínimo: ${f.stock_minimo}`,
+    f.fecha_minima_ingreso && `Ingreso desde: ${f.fecha_minima_ingreso.split("-").reverse().join("/")}`,
     f.escala_talla === "peru" && "Tallas peruanas",
     `Almacenes: ${f.almacenes.join(", ")}`,
   ].filter((x): x is string => Boolean(x));
@@ -867,9 +888,9 @@ const MARGEN_CONTEO = 1.3;
  * Identifica una consulta al ERP: solo cuentan los filtros que le llegan (almacenes, grupos, marcas, géneros y categorías);
  * la talla y el precio se aplican después, sobre lo que devuelve. Dos catálogos con la misma clave piden lo mismo al ERP.
  */
-export function claveConsultaErp(f: { almacenes: readonly string[]; grupos: readonly string[]; marcas: readonly string[]; generos: readonly string[]; categorias: readonly string[] }): string {
+export function claveConsultaErp(f: { almacenes: readonly string[]; grupos: readonly string[]; marcas: readonly string[]; generos: readonly string[]; categorias: readonly string[]; fecha_minima_ingreso?: string | null; stock_minimo?: number }): string {
   const orden = (l: readonly string[]) => [...l].map((x) => x.trim().toUpperCase()).sort();
-  return JSON.stringify({ a: orden(f.almacenes), g: orden(f.grupos), m: orden(f.marcas), ge: orden(f.generos), c: orden(f.categorias) });
+  return JSON.stringify({ a: orden(f.almacenes), g: orden(f.grupos), m: orden(f.marcas), ge: orden(f.generos), c: orden(f.categorias), d: f.fecha_minima_ingreso ?? "", s: f.stock_minimo ?? 1 });
 }
 
 /** El valor que espera el filtro de marca del ERP: el nombre SIN espacios («NEW BALANCE» se pide como «NEWBALANCE»). */

@@ -15,7 +15,7 @@ import { convertirProductos } from "@/lib/marketing-tallas";
 import { generarImagenCompartir } from "@/lib/marketing-og";
 import { etiquetaCatalogo } from "@/lib/marketing-publico";
 import { idsDeTipos } from "@/lib/marketing-tipos";
-import { precioFiltro, valoresFiltro, valoresTalla } from "@/lib/marketing-validar";
+import { fechaIngresoFiltro, precioFiltro, stockMinimoFiltro, valoresFiltro, valoresTalla } from "@/lib/marketing-validar";
 import { r2Borrar, r2Configurado } from "@/lib/r2";
 import {
   ALMACENES,
@@ -51,6 +51,9 @@ type EntradaFiltros = {
   tallas?: string[];
   precio_min: number | null;
   precio_max: number | null;
+  fecha_minima_ingreso?: unknown;
+  stock_minimo?: unknown;
+  solo_unicos?: unknown;
   /** Plantilla elegida por marca (marca → id); la clave «*» es la genérica. */
   plantillas?: Record<string, string>;
   /** Escala de las tallas que se muestran: «peru» o «usa». */
@@ -75,6 +78,10 @@ async function filtrosDeEntrada(input: EntradaFiltros): Promise<{ filtros: Filtr
   if (precio_min === undefined || precio_max === undefined) return { error: "El precio debe ser un número válido" };
   if (precio_min != null && precio_max != null && precio_min > precio_max) return { error: "El precio mínimo no puede ser mayor que el máximo" };
   const tipo = (await idsDeTipos()).has(input.tipo) ? input.tipo : "";
+  const fecha_minima_ingreso = fechaIngresoFiltro(input.fecha_minima_ingreso);
+  const stock_minimo = stockMinimoFiltro(input.stock_minimo);
+  if (fecha_minima_ingreso === undefined) return { error: "La fecha mínima de ingreso no es válida" };
+  if (stock_minimo === undefined) return { error: "El stock mínimo debe ser un entero mayor o igual a 1" };
 
   // Plantillas elegidas por marca: solo se aceptan pares con formato de marca e id (el resto lo valida la generación).
   const plantillas: Record<string, string> = {};
@@ -87,7 +94,7 @@ async function filtrosDeEntrada(input: EntradaFiltros): Promise<{ filtros: Filtr
     return { error: "Elige un tipo de catálogo o al menos una marca, un grupo, un género o una categoría" };
   }
   const escala_talla = input.escala_talla === "peru" || input.escala_talla === "usa" ? input.escala_talla : undefined;
-  return { filtros: { tipo, almacenes, grupos, marcas, generos, categorias, tallas, precio_min, precio_max, plantillas, ...(escala_talla ? { escala_talla } : {}) } };
+  return { filtros: { tipo, almacenes, grupos, marcas, generos, categorias, tallas, precio_min, precio_max, fecha_minima_ingreso, stock_minimo, solo_unicos: input.solo_unicos === true, plantillas, ...(escala_talla ? { escala_talla } : {}) } };
 }
 
 /**
@@ -107,6 +114,9 @@ export async function iniciarGeneracion(input: {
   tallas?: string[];
   precio_min: number | null;
   precio_max: number | null;
+  fecha_minima_ingreso?: string | null;
+  stock_minimo?: number;
+  solo_unicos?: boolean;
   /** Plantilla elegida por marca (marca → id); la clave «*» es la genérica. */
   plantillas?: Record<string, string>;
   /** Escala de las tallas que se muestran: «peru» (por defecto) o «usa». */
@@ -159,6 +169,9 @@ export async function iniciarGeneracion(input: {
       tallas,
       precio_min,
       precio_max,
+      fecha_minima_ingreso: base.filtros.fecha_minima_ingreso,
+      stock_minimo: base.filtros.stock_minimo,
+      solo_unicos: base.filtros.solo_unicos,
       escala_talla,
       plantillas,
       ...(input.portada === undefined ? {} : { portada: input.portada }),
@@ -553,7 +566,7 @@ export async function cambiarEscalaTalla(id: string, escala: "peru" | "usa"): Pr
  * se termina de llenar «Generar» ya encuentra el resultado (vale unos minutos; el catálogo dirá la fecha en que se consultó). Si ya
  * hay una consulta igual en curso o reciente no se repite. No cuenta como generación: no bloquea ni aparece en el historial.
  */
-export async function precargarErp(input: { almacenes: string[]; grupos: string[]; marcas: string[]; generos: string[]; categorias: string[] }): Promise<ActionResult> {
+export async function precargarErp(input: { almacenes: string[]; grupos: string[]; marcas: string[]; generos: string[]; categorias: string[]; fecha_minima_ingreso?: string | null; stock_minimo?: number; solo_unicos?: boolean }): Promise<ActionResult> {
   if (!(await sesionMarketing())) return { success: false, msg: "Sin permisos" };
   const base = await filtrosDeEntrada({ ...input, tipo: "", precio_min: null, precio_max: null });
   if ("error" in base) return { success: false, msg: base.error };

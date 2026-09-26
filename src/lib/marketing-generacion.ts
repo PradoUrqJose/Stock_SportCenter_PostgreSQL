@@ -75,8 +75,8 @@ export async function ejecutarPrecarga(id: string, origen?: string): Promise<voi
   try {
     const g = await db.execute({ sql: "SELECT filtros FROM mk_generaciones WHERE id = ? AND modo = 'precarga'", args: [id] });
     if (g.rows.length === 0) return;
-    const c = JSON.parse(g.rows[0].filtros as string) as { a: string[]; g: string[]; m: string[]; ge: string[]; c: string[] };
-    const filtros = normalizarFiltros({ almacenes: c.a, grupos: c.g, marcas: c.m, generos: c.ge, categorias: c.c });
+    const c = JSON.parse(g.rows[0].filtros as string) as { a: string[]; g: string[]; m: string[]; ge: string[]; c: string[]; d?: string; s?: number };
+    const filtros = normalizarFiltros({ almacenes: c.a, grupos: c.g, marcas: c.m, generos: c.ge, categorias: c.c, fecha_minima_ingreso: c.d || null, stock_minimo: c.s ?? 1 });
     const { items, parcial } = await consultarCatalogoErp(filtros, origen);
     const resultado: ConsultaEnMemoria = { items, parcial, al: new Date().toISOString() };
     await db.execute({ sql: "UPDATE mk_generaciones SET resultado = ?, estado = 'listo', finished_at = now_text() WHERE id = ?", args: [JSON.stringify(resultado), id] });
@@ -102,7 +102,8 @@ async function borradorDeErp(id: string, filtros: FiltrosCatalogo, origen?: stri
   await etapa(id, "erp");
   const previa = await consultaPrecargada(filtros);
   const consulta = previa ?? { ...(await consultarCatalogoErp(filtros, origen)), al: new Date().toISOString() };
-  const { items, parcial } = consulta;
+  const items = filtros.solo_unicos ? consulta.items.filter((i) => Number(String(i.stock_total ?? "").replace(/,/g, "")) === 1) : consulta.items;
+  const { parcial } = consulta;
 
   await etapa(id, "armando");
   const codigos = [...new Set(items.map((i) => i.cod_universal?.trim().toUpperCase()).filter((c): c is string => Boolean(c)))];

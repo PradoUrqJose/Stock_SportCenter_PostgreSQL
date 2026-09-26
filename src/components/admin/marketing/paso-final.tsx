@@ -108,6 +108,9 @@ export function PasoFinal({
         tallas: datos.tallas,
         precio_min: min !== null && Number.isNaN(min) ? null : min,
         precio_max: max !== null && Number.isNaN(max) ? null : max,
+        fecha_minima_ingreso: datos.fechaMinIngreso || null,
+        stock_minimo: Number(datos.stockMinimo) || 1,
+        solo_unicos: datos.soloUnicos,
         plantillas: datos.plantillas,
         escala_talla: datos.escalaTalla,
         // Lo que se ve en el Preview es lo que se genera.

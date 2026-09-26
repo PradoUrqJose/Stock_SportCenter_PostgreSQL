@@ -19,6 +19,9 @@ export type FiltrosParaTipo = {
   tallas: string[];
   precioMin: string;
   precioMax: string;
+  fechaMinIngreso: string;
+  stockMinimo: string;
+  soloUnicos: boolean;
 };
 
 const numero = (v: string) => {
@@ -65,6 +68,9 @@ export function GuardarComoTipo({
         tallas: filtros.tallas,
         precio_min,
         precio_max,
+        fecha_minima_ingreso: filtros.fechaMinIngreso || null,
+        stock_minimo: Number(filtros.stockMinimo) || 1,
+        solo_unicos: filtros.soloUnicos,
       });
       if (!r.success || !r.data) {
         setError(r.msg);
@@ -83,6 +89,9 @@ export function GuardarComoTipo({
         tallas: filtros.tallas,
         precio_min,
         precio_max,
+        fecha_minima_ingreso: filtros.fechaMinIngreso || null,
+        stock_minimo: Number(filtros.stockMinimo) || 1,
+        solo_unicos: filtros.soloUnicos,
       });
       setAbierto(false);
     });
