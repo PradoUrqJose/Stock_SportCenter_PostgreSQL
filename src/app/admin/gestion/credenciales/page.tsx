@@ -23,9 +23,9 @@ export default async function CredencialesPage() {
 
   return (
     <div className="p-4 md:p-8">
-      <h1 className="text-xl font-semibold text-foreground">Credenciales de Vendedores</h1>
+      <h1 className="text-xl font-semibold text-foreground">Credenciales de sede</h1>
       <p className="mt-1 mb-6 text-sm text-muted-foreground">
-        Códigos que los vendedores usan para confirmar o rechazar actualizaciones de precios.
+        Para traslados se aceptan credenciales activas de la sede o globales. La sede queda registrada según el usuario Cliente conectado.
       </p>
       <CredencialesTable vendedores={vendedores} tiendas={tiendas} />
     </div>

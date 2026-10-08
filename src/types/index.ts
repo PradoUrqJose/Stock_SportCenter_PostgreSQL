@@ -7,6 +7,7 @@ export type ActionResult<T = void> = {
 export type Tienda = {
   id: string;
   nombre: string;
+  tipo?: "tienda" | "almacen";
   excluida_actualizacion: number;
   created_at: string;
 };

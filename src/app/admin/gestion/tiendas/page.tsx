@@ -10,7 +10,7 @@ export default async function TiendasPage() {
   await requireModule(session, "tiendas");
 
   const [tiendasResult, loteResult] = await Promise.all([
-    db.execute("SELECT id, nombre, excluida_actualizacion, created_at FROM tiendas ORDER BY nombre"),
+    db.execute("SELECT id, nombre, tipo, excluida_actualizacion, created_at FROM tiendas ORDER BY nombre"),
     db.execute(
       `SELECT id FROM lotes WHERE estado = 'borrador' ORDER BY id DESC LIMIT 1`
     ),
@@ -33,9 +33,9 @@ export default async function TiendasPage() {
 
   return (
     <div className="p-4 md:p-8">
-      <h1 className="text-xl font-semibold text-foreground">Tiendas</h1>
+      <h1 className="text-xl font-semibold text-foreground">Sedes: tiendas y almacenes</h1>
       <p className="mt-1 mb-6 text-sm text-muted-foreground">
-        Gestión de tiendas. El nombre debe coincidir exactamente con el código de almacén del ERP.
+        El nombre debe coincidir con el código de ubicación del ERP. Para atender traslados, asigna a la sede un usuario Cliente; puede usar una credencial propia o global activa.
       </p>
       <TiendasTable
         tiendas={tiendas}

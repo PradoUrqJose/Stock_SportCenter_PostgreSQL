@@ -659,7 +659,7 @@ export function construirBorrador(
   }
 
   const prioridadGenero = new Map((ordenGeneros ?? []).map((genero, i) => [genero.toUpperCase(), i]));
-  const prioridad = (genero: string | null) => prioridadGenero.get(genero ?? "") ?? prioridadGenero.size;
+  const prioridad = (genero: string | null | undefined) => prioridadGenero.get(genero?.toUpperCase() ?? "") ?? prioridadGenero.size;
   productos.sort(
     (a, b) =>
       (prioridadGenero.size > 0 ? prioridad(a.genero) - prioridad(b.genero) : 0) ||

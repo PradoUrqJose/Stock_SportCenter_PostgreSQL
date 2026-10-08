@@ -105,6 +105,27 @@ async function batch(
 
 export const db = { execute, batch };
 
+// Transacciones que necesitan leer y decidir con las mismas filas bloqueadas.
+export async function transaction<T>(fn: (query: (stmt: InStatement) => Promise<ExecResult>) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const query = async (stmt: InStatement): Promise<ExecResult> => {
+      const { sql, args } = stmtParts(stmt);
+      const res = await client.query(toPg(sql), args);
+      return { rows: res.rows as Row[], rowsAffected: res.rowCount ?? 0 };
+    };
+    const result = await fn(query);
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 // Compat: los rows de pg ya son objetos planos serializables por React Flight;
 // esta copia es inofensiva y evita tocar los ~40 call-sites que la usan.
 export function toPlain<T>(rows: unknown[]): T[] {

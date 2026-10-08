@@ -13,6 +13,7 @@ import {
   TruckIcon,
   Receipt,
   Images,
+  ArrowLeftRight,
 } from "lucide-react";
 import { db } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth";
@@ -66,7 +67,11 @@ async function fetchModules(session: SessionUser): Promise<Module[]> {
 }
 
 export async function AdminSidebar({ session }: { session: SessionUser }) {
-  const modules = await fetchModules(session);
+  const [modules, pendingResult] = await Promise.all([
+    fetchModules(session),
+    db.execute("SELECT COUNT(*) AS n FROM traslados WHERE atendido=false"),
+  ]);
+  const pending = Number(pendingResult.rows[0]?.n ?? 0);
 
   const topModules = modules.filter((m) => !m.ruta.startsWith("/admin/gestion/"));
   const gestionModules = modules.filter((m) => m.ruta.startsWith("/admin/gestion/"));
@@ -79,6 +84,7 @@ export async function AdminSidebar({ session }: { session: SessionUser }) {
       </div>
 
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
+        <SidebarLink href="/admin/traslados" icon={<ArrowLeftRight className="h-4 w-4" />} label={`Traslados de stock${pending ? ` (${pending})` : ""}`} />
         {topModules.map((m) =>
           m.id === "analisis"
             ? <SidebarAnalysisMenu key={m.id} />

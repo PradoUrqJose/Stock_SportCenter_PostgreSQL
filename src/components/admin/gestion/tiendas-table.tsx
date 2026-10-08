@@ -30,7 +30,7 @@ function TiendaCreateForm({ onDone }: { onDone: () => void }) {
     setLoading(true);
     setError("");
     const fd = new FormData(e.currentTarget);
-    const r = await crearTienda(fd.get("nombre") as string);
+    const r = await crearTienda(fd.get("nombre") as string, fd.get("tipo") as "tienda" | "almacen");
     setLoading(false);
     if (!r.success) { setError(r.msg); return; }
     onDone();
@@ -42,6 +42,7 @@ function TiendaCreateForm({ onDone }: { onDone: () => void }) {
         <Label htmlFor="c-nombre">Nombre (ERP: mayúsculas, sin espacios)</Label>
         <Input id="c-nombre" name="nombre" placeholder="Ej: MIRAFLORES" required autoFocus />
       </div>
+      <label className="text-sm">Tipo de sede <select name="tipo" className="ml-2 rounded border bg-background p-2"><option value="tienda">Tienda</option><option value="almacen">Almacén</option></select></label>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onDone}>Cancelar</Button>
@@ -64,7 +65,7 @@ function TiendaEditForm({ tienda, onDone }: { tienda: Tienda; onDone: () => void
     setLoading(true);
     setError("");
     const fd = new FormData(e.currentTarget);
-    const r = await editarTienda(tienda.id, fd.get("nombre") as string, excluida);
+    const r = await editarTienda(tienda.id, fd.get("nombre") as string, excluida, fd.get("tipo") as "tienda" | "almacen");
     setLoading(false);
     if (!r.success) { setError(r.msg); return; }
     onDone();
@@ -76,6 +77,7 @@ function TiendaEditForm({ tienda, onDone }: { tienda: Tienda; onDone: () => void
         <Label htmlFor="e-nombre">Nombre</Label>
         <Input id="e-nombre" name="nombre" defaultValue={tienda.nombre} required />
       </div>
+      <label className="text-sm">Tipo de sede <select name="tipo" defaultValue={tienda.tipo ?? "tienda"} className="ml-2 rounded border bg-background p-2"><option value="tienda">Tienda</option><option value="almacen">Almacén</option></select></label>
       <div className="flex items-center gap-2">
         <Checkbox
           id="e-excluida"
@@ -156,7 +158,7 @@ export function TiendasTable({ tiendas, loteBorrador, exclusionesLote }: Props) 
       <div className="mb-4 flex justify-end">
         <Button size="sm" onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />
-          Nueva Tienda
+          Nueva sede
         </Button>
       </div>
 
@@ -172,6 +174,7 @@ export function TiendasTable({ tiendas, loteBorrador, exclusionesLote }: Props) 
           <TableHeader>
             <TableRow>
               <TableHead>Nombre</TableHead>
+              <TableHead>Tipo</TableHead>
               <TableHead>Exclusión permanente</TableHead>
               {showLoteCol && <TableHead>Lote en borrador</TableHead>}
               <TableHead>Creada</TableHead>
@@ -181,7 +184,7 @@ export function TiendasTable({ tiendas, loteBorrador, exclusionesLote }: Props) 
           <TableBody>
             {tiendas.length === 0 && (
               <TableRow>
-                <TableCell colSpan={showLoteCol ? 5 : 4} className="py-8 text-center text-muted-foreground">
+                <TableCell colSpan={showLoteCol ? 6 : 5} className="py-8 text-center text-muted-foreground">
                   Sin tiendas registradas
                 </TableCell>
               </TableRow>
@@ -189,6 +192,7 @@ export function TiendasTable({ tiendas, loteBorrador, exclusionesLote }: Props) 
             {tiendas.map((t) => (
               <TableRow key={t.id}>
                 <TableCell className="font-medium text-foreground">{t.nombre}</TableCell>
+                <TableCell>{t.tipo === "almacen" ? "Almacén" : "Tienda"}</TableCell>
                 <TableCell>
                   {t.excluida_actualizacion ? (
                     <Badge variant="secondary">Excluida siempre</Badge>

@@ -148,7 +148,7 @@ function UserForm({
           </Select>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label>Tienda {form.rol === "client" && <span className="text-red-500">*</span>}</Label>
+          <Label>Sede {form.rol === "client" && <span className="text-red-500">*</span>}</Label>
           <Select
             value={form.tienda_id}
             onValueChange={(v) => set("tienda_id", v ?? "")}
@@ -219,7 +219,7 @@ export function UsuariosTable({
               <TableHead>Usuario</TableHead>
               <TableHead>Nombre</TableHead>
               <TableHead>Rol</TableHead>
-              <TableHead>Tienda</TableHead>
+              <TableHead>Sede</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="w-20" />
             </TableRow>

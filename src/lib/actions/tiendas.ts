@@ -24,7 +24,7 @@ function normalize(nombre: string) {
   return nombre.trim().toUpperCase();
 }
 
-export async function crearTienda(nombre: string): Promise<ActionResult> {
+export async function crearTienda(nombre: string, tipo: "tienda" | "almacen" = "tienda"): Promise<ActionResult> {
   if (!(await guard())) return { success: false, msg: "Sin permisos" };
   if (!(await rateLimit(await getIP(), 30, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
 
@@ -34,8 +34,8 @@ export async function crearTienda(nombre: string): Promise<ActionResult> {
 
   try {
     await db.execute({
-      sql: "INSERT INTO tiendas (id, nombre) VALUES (?,?)",
-      args: [crypto.randomUUID(), n],
+      sql: "INSERT INTO tiendas (id, nombre, tipo, excluida_actualizacion) VALUES (?,?,?,?)",
+      args: [crypto.randomUUID(), n, tipo, tipo === "almacen" ? 1 : 0],
     });
   } catch {
     return { success: false, msg: "Ya existe una tienda con ese nombre" };
@@ -48,7 +48,8 @@ export async function crearTienda(nombre: string): Promise<ActionResult> {
 export async function editarTienda(
   id: string,
   nombre: string,
-  excluida: boolean
+  excluida: boolean,
+  tipo: "tienda" | "almacen" = "tienda"
 ): Promise<ActionResult> {
   if (!(await guard())) return { success: false, msg: "Sin permisos" };
   if (!(await rateLimit(await getIP(), 30, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
@@ -58,9 +59,15 @@ export async function editarTienda(
   if (/\s/.test(n)) return { success: false, msg: "El nombre no puede contener espacios" };
 
   try {
+    const old = await db.execute({ sql: "SELECT nombre FROM tiendas WHERE id=?", args: [id] });
+    const previous = old.rows[0]?.nombre as string | undefined;
+    if (previous && previous !== n) {
+      const active = await db.execute({ sql: "SELECT 1 FROM traslados WHERE estado<>'recibido' AND (origen=? OR destino=?) LIMIT 1", args: [previous, previous] });
+      if (active.rows.length) return { success: false, msg: "No se puede renombrar una sede con traslados activos" };
+    }
     await db.execute({
-      sql: "UPDATE tiendas SET nombre=?, excluida_actualizacion=? WHERE id=?",
-      args: [n, excluida ? 1 : 0, id],
+      sql: "UPDATE tiendas SET nombre=?, excluida_actualizacion=?, tipo=? WHERE id=?",
+      args: [n, excluida ? 1 : 0, tipo, id],
     });
   } catch {
     return { success: false, msg: "Ya existe una tienda con ese nombre" };
@@ -104,6 +111,12 @@ export async function eliminarTienda(id: string): Promise<ActionResult> {
   if (!(await rateLimit(await getIP(), 30, 60_000))) return { success: false, msg: "Demasiadas solicitudes" };
 
   try {
+    const current = await db.execute({ sql: "SELECT nombre FROM tiendas WHERE id=?", args: [id] });
+    const nombre = current.rows[0]?.nombre as string | undefined;
+    if (nombre) {
+      const active = await db.execute({ sql: "SELECT 1 FROM traslados WHERE estado<>'recibido' AND (origen=? OR destino=?) LIMIT 1", args: [nombre, nombre] });
+      if (active.rows.length) return { success: false, msg: "No se puede eliminar una sede con traslados activos" };
+    }
     await db.execute({ sql: "DELETE FROM tiendas WHERE id=?", args: [id] });
   } catch {
     return {
