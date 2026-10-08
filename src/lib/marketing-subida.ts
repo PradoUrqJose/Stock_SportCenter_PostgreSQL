@@ -3,16 +3,17 @@
 // Orden deliberado (pedido del usuario): el enlace solo llega a la base de
 // datos cuando el archivo ya está en R2. Si algo falla antes del paso 5, Neon
 // queda intacto. Si fallara el paso 5, el archivo queda en R2 sin registro y
-// reintentar es seguro (mismo código, versiones nuevas en el nombre).
+// reintentar vuelve a guardar las rutas vigentes del mismo código.
 //
 //   1. validar el PNG (1600×1600, transparente)
-//   2. si reemplaza: copiar el original actual a historial/<COD>/<fecha>.png
+//   2. mantener solo los archivos vigentes, sin historial remoto
 //   3. subir el PNG original  <COD>.png
-//   4. generar y subir los WebP derivados w600 y w1200 (<COD>.v<N>.webp)
+//   4. generar y subir los WebP derivados w600 y w1200 (<COD>.webp)
 //   5. registrar versión y enlace en mk_imagenes (Neon)
 import sharp from "sharp";
 import { db } from "@/lib/db";
-import { r2Copiar, r2Subir } from "@/lib/r2";
+import { r2Subir } from "@/lib/r2";
+import { claveDerivado, codigoImagen } from "@/lib/marketing-rutas-imagen";
 import { urlPublicaOriginal } from "@/lib/marketing";
 import { LADO_IMAGEN } from "@/lib/marketing-codigos";
 
@@ -23,7 +24,7 @@ export class ErrorSubida extends Error {
 }
 
 const CACHE_ORIGINAL = "public, max-age=300, must-revalidate";
-const CACHE_DERIVADO = "public, max-age=31536000, immutable";
+const CACHE_DERIVADO = "public, max-age=300, must-revalidate";
 const ANCHOS_DERIVADOS = [600, 1200] as const;
 
 export type ResultadoSubida = {
@@ -66,14 +67,10 @@ export async function guardarImagen(
   if (modo === "reemplazo" && !existe) throw new ErrorSubida(`${cod} no existe todavía`, 404);
   const version = existe ? (actual.rows[0].version as number) + 1 : 1;
 
-  // 2. Historial: el original vigente no se pierde al reemplazar.
-  if (existe) {
-    const sello = new Date().toISOString().replace(/[:.]/g, "-");
-    await r2Copiar(`${cod}.png`, `historial/${cod}/${sello}.png`);
-  }
+  // Sin historial remoto: se conserva solo la imagen vigente por código.
 
   // 3–4. Original y derivados, en R2.
-  await r2Subir(`${cod}.png`, png, "image/png", CACHE_ORIGINAL);
+  await r2Subir(`${codigoImagen(cod)}.png`, png, "image/png", CACHE_ORIGINAL);
   const derivados = await Promise.all(
     ANCHOS_DERIVADOS.map(async (w) => ({
       w,
@@ -85,7 +82,7 @@ export async function guardarImagen(
   );
   await Promise.all(
     derivados.map((d) =>
-      r2Subir(`derivados/w${d.w}/${cod}.v${version}.webp`, d.buf, "image/webp", CACHE_DERIVADO)
+      r2Subir(claveDerivado(d.w, cod), d.buf, "image/webp", CACHE_DERIVADO)
     )
   );
 

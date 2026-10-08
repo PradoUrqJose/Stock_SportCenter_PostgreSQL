@@ -15,6 +15,7 @@ import { iniciarGeneracion } from "@/lib/actions/marketing-catalogos";
 import { guardarPosicionZapatilla } from "@/lib/actions/marketing-disenos";
 import { MARCA_GENERICA } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
+import { urlDerivado } from "@/lib/marketing-rutas-imagen";
 import type { DatosCatalogo, Recursos } from "./asistente-catalogo";
 import type { DocumentoCatalogo } from "./documento-catalogo";
 import { EditorTextoPlantilla } from "./editor-texto-plantilla";
@@ -163,7 +164,7 @@ export function PasoFinal({
                   <img src={`${base}/${plantilla.fondo}.webp`} alt="" draggable={false} className="absolute inset-0 h-full w-full" />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={`${base}/derivados/w1200/${encodeURIComponent(ejemplo.cod)}.v${ejemplo.v}.webp`}
+                    src={urlDerivado(base, 1200, ejemplo.cod, ejemplo.v)}
                     alt="Zapatilla de ejemplo"
                     draggable={false}
                     className="absolute cursor-grab touch-none active:cursor-grabbing"

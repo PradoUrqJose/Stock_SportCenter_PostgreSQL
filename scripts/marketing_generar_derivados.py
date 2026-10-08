@@ -1,13 +1,13 @@
 """Genera los derivados WebP livianos de las imágenes de producto y los sube a R2.
 
-    derivados/w600/<COD>.v<N>.webp    (grilla del módulo y páginas de catálogo)
-    derivados/w1200/<COD>.v<N>.webp   (visor de catálogo en pantallas grandes)
+    derivados/w600/<COD>.webp    (grilla del módulo y páginas de catálogo)
+    derivados/w1200/<COD>.webp   (visor de catálogo en pantallas grandes)
 
 Motivo: el PNG original (1600x1600, ~900 KB) obliga a bajar decenas de MB al
 abrir la grilla de IMAGENES. Un WebP de 600 px pesa ~25 KB.
 
 Lee cada original del bucket, lo redimensiona y sube el derivado con caché
-inmutable (el nombre lleva la versión, así que nunca cambia de contenido).
+de cinco minutos (la ruta fija contiene la imagen vigente).
 Es re-ejecutable: se salta lo que ya existe. Por defecto NO escribe nada.
 
 Uso (desde la raíz de STOCK_SC):
@@ -24,7 +24,7 @@ Credenciales: variables R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY y
 R2_BUCKET, tomadas del entorno o del archivo indicado con --env (por defecto el
 .env.local de EstandarizacionImagenes). Nunca se imprimen.
 
-Reversión: borrar el prefijo `derivados/` del bucket (los originales no se tocan).
+No borrar el prefijo derivados: los catálogos lo usan. Respaldar antes de reemplazar.
 Requiere: pip install boto3 pillow
 """
 import argparse
@@ -42,7 +42,7 @@ from PIL import Image
 ANCHOS = (600, 1200)
 CALIDAD = 80
 METODO = 4  # 0 (rápido) … 6 (lento); ver nota de CPU arriba
-CACHE = "public, max-age=31536000, immutable"
+CACHE = "public, max-age=300, must-revalidate"
 
 
 def cargar_env(ruta: str) -> dict:
@@ -57,7 +57,7 @@ def cargar_env(ruta: str) -> dict:
 
 
 def clave_derivado(ancho: int, cod: str, version: int) -> str:
-    return f"derivados/w{ancho}/{cod}.v{version}.webp"
+    return f"derivados/w{ancho}/{cod}.webp"
 
 
 def main() -> int:
@@ -75,7 +75,7 @@ def main() -> int:
 
     codigos = sorted(
         {
-            k[:-4].upper()
+            ('400497-07' if k[:-4].upper() == '400497_07' else k[:-4].upper())
             for k in json.load(open(a.keys))
             if isinstance(k, str) and "/" not in k and k.lower().endswith(".png")
         }

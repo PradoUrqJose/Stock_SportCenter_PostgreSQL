@@ -25,6 +25,7 @@ import type {
 import { ajustar, type Medir, type TextoAjustado } from "@/lib/marketing-texto";
 import { BotonPdf } from "./boton-pdf";
 import { cn } from "@/lib/utils";
+import { urlDerivado } from "@/lib/marketing-rutas-imagen";
 
 const ANCHO_MAX = 1400;
 
@@ -82,7 +83,7 @@ export function transformacion(a: Ajuste): string {
 
 function urlZapatilla(base: string, p: ProductoCat, necesario: number): string {
   const ancho = necesario > 700 ? 1200 : 600;
-  return `${base}/derivados/w${ancho}/${encodeURIComponent(p.cod)}.v${p.v}.webp`;
+  return urlDerivado(base, ancho, p.cod, p.v);
 }
 
 type Edicion = {

@@ -18,6 +18,7 @@ import type {
   ProductoCat,
 } from "./marketing-catalogo";
 import { ajustar, ALTO_LINEA } from "./marketing-texto";
+import { urlDerivado } from "./marketing-rutas-imagen";
 
 /** Ancho de página en el PDF (pt). El alto sale de la proporción de cada diseño. */
 const ANCHO_PT = 1500;
@@ -293,7 +294,7 @@ export async function generarPdf(
     // Versión 0 = el producto aún no tiene imagen: la página sale sin zapatilla (no hay nada que pedir).
     const promesa = (prod.v === 0
       ? Promise.resolve(null)
-      : bytesDe(`${e.base}/derivados/w1200/${encodeURIComponent(prod.cod)}.v${prod.v}.webp`, senal)
+      : bytesDe(urlDerivado(e.base, 1200, prod.cod, prod.v), senal)
     ).catch((err) => {
       // Si la imagen de un producto no existe (404) no se cae todo el PDF: la página sale sin zapatilla y se avisa al final.
       if (err instanceof ErrorLectura && err.estado === 404) return null;

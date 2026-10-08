@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { getSession, requireRole, requireModule, type SessionUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { urlDerivado, codigoImagen } from "@/lib/marketing-rutas-imagen";
 
 // Base pública del bucket R2 `stock-sc-catalogo`: dominio propio con la caché de
 // Cloudflare (img.sportcenterpe.com). `r2.dev` queda solo como respaldo manual:
@@ -39,7 +40,7 @@ export async function sesionMarketing(): Promise<SessionUser | null> {
 
 /** Enlace público del PNG original, sin parámetros: es lo que se guarda en Neon. */
 export function urlPublicaOriginal(codUniversal: string): string {
-  return `${R2_PUBLIC_URL}/${encodeURIComponent(codUniversal)}.png`;
+  return `${R2_PUBLIC_URL}/${encodeURIComponent(codigoImagen(codUniversal))}.png`;
 }
 
 /**
@@ -52,16 +53,17 @@ export function urlImagenOriginal(
   version: number,
   imagenUrl?: string | null
 ): string {
-  return `${imagenUrl || urlPublicaOriginal(codUniversal)}?v=${version}`;
+  const url = imagenUrl?.replace(/\/400497_07\.png(?=\?|$)/, '/400497-07.png');
+  return `${url || urlPublicaOriginal(codUniversal)}?v=${version}`;
 }
 
 /**
- * URL del derivado WebP de 600 px (~20 KB, caché inmutable). Lo genera
- * scripts/marketing_generar_derivados.py; la versión va en el nombre.
+ * URL del derivado WebP de 600 px (~20 KB, caché de cinco minutos). Lo genera
+ * scripts/marketing_generar_derivados.py; la revisión va en la consulta.
  * Si un derivado aún no existe, quien lo muestra debe caer al original.
  */
 export function urlImagenMiniatura(codUniversal: string, version: number): string {
-  return `${R2_PUBLIC_URL}/derivados/w600/${encodeURIComponent(codUniversal)}.v${version}.webp`;
+  return urlDerivado(R2_PUBLIC_URL, 600, codUniversal, version);
 }
 
 /**
