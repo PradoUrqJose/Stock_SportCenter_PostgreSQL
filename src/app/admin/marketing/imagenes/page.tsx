@@ -90,6 +90,11 @@ export default async function ImagenesPage({
         <SubirImagenes />
       </div>
 
+      <nav className="mb-6 flex gap-1 border-b border-border" aria-label="Vistas de imágenes">
+        <span aria-current="page" className="border-b-2 border-primary px-3 py-2 text-sm font-medium">Imágenes guardadas</span>
+        <Link href="/admin/marketing/imagenes/sin-imagen" className="border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground hover:text-foreground">Sin imagen</Link>
+      </nav>
+
       <form action="/admin/marketing/imagenes" className="mb-6 flex max-w-md gap-2">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" />

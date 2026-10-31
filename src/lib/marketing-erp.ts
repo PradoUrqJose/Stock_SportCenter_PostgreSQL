@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { randomUUID } from "node:crypto";
 import type { FiltrosCatalogo, ItemErp } from "./marketing-catalogo";
 import { opcionesErp, ordenEjecucionErp, planificarConsultas, prepararConteosErp, type ConteoErp } from "./marketing-erp-plan";
-import { ejecutarLotesErp, PLAZO_ERP_MS, respuestaErp, validarIntegridadErp } from "./marketing-erp-control";
+import { ejecutarLotesErp, PLAZO_ERP_MS, respuestaErp, validarIntegridadErp, validarStockErp } from "./marketing-erp-control";
 
 function urlCatalogoErp(origen?: string): string | null {
   if (process.env.ERP_CATALOGO_URL) return process.env.ERP_CATALOGO_URL;
@@ -56,7 +56,7 @@ async function llamarErp(filtros: object, signal: AbortSignal, origen?: string):
   return cuerpo;
 }
 
-export async function consultarCatalogoErp(f: FiltrosCatalogo, origen?: string): Promise<{ items: ItemErp[]; parcial: boolean }> {
+async function consultarErp(f: FiltrosCatalogo, origen: string | undefined, validar: (items: ItemErp[]) => void): Promise<{ items: ItemErp[]; parcial: boolean }> {
   const consultaId = randomUUID();
   const inicio = performance.now();
   const [conteos, datosOpciones] = await Promise.all([conocerLocal(), llamarErp({ operacion: "opciones" }, AbortSignal.timeout(35_000), origen)]);
@@ -80,11 +80,20 @@ export async function consultarCatalogoErp(f: FiltrosCatalogo, origen?: string):
     }
   }, { plazoMs: Math.max(1, PLAZO_ERP_MS - (performance.now() - inicio)) });
   const items = resultados.flat();
-  try { validarIntegridadErp(items); }
+  try { validar(items); }
   catch (error) {
     console.error("[marketing:erp]", JSON.stringify({ consultaId, evento: "integridad_invalida", filas: items.length, total_ms: Math.round(performance.now() - inicio) }));
     throw error;
   }
   console.info("[marketing:erp]", JSON.stringify({ consultaId, evento: "fin", filas: items.length, total_ms: Math.round(performance.now() - inicio) }));
   return { items, parcial: false };
+}
+
+export function consultarCatalogoErp(f: FiltrosCatalogo, origen?: string) {
+  return consultarErp(f, origen, validarIntegridadErp);
+}
+
+/** Mismo transporte y planificador. Las imágenes se comparten por código; no se suman fichas ambiguas. */
+export function consultarProductosParaImagenesErp(f: FiltrosCatalogo, origen?: string) {
+  return consultarErp(f, origen, validarStockErp);
 }

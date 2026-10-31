@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Images, LayoutTemplate, Ruler } from "lucide-react";
+import { ImageOff, Images, LayoutTemplate, Ruler } from "lucide-react";
 import { requireMarketing } from "@/lib/marketing";
 
 export default async function MarketingPage() {
@@ -22,6 +22,12 @@ export default async function MarketingPage() {
           <Images className="h-5 w-5 text-muted-foreground" />
           <p className="mt-3 text-sm font-medium text-foreground">Imágenes</p>
           <p className="mt-1 text-xs text-muted-foreground">Ver y buscar las imágenes de producto guardadas en R2.</p>
+        </Link>
+
+        <Link href="/admin/marketing/imagenes/sin-imagen" className="rounded-lg border border-border bg-card p-4 transition-shadow hover:shadow-md">
+          <ImageOff className="h-5 w-5 text-muted-foreground" />
+          <p className="mt-3 text-sm font-medium text-foreground">Productos sin imagen</p>
+          <p className="mt-1 text-xs text-muted-foreground">Revisar todos los productos con stock del ERP y subir las imágenes pendientes.</p>
         </Link>
 
         <Link

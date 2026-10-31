@@ -19,19 +19,27 @@ export function respuestaErp(val: unknown): RespuestaErp {
 
 /** El exportador no aporta una identidad interna que permita sumar o descartar fichas repetidas con certeza. */
 export function validarIntegridadErp(items: readonly ItemErp[]): void {
+  validarStockErp(items);
   const vistos = new Set<string>();
   const repetidos = new Set<string>();
   for (const item of items) {
     const clave = `${item.cod_universal?.trim().toUpperCase()} · ${item.genero?.trim().toUpperCase() ?? "SIN GÉNERO"}`;
     if (vistos.has(clave)) repetidos.add(clave);
     vistos.add(clave);
+  }
+  if (repetidos.size) throw new Error(`El ERP tiene fichas repetidas para ${repetidos.size} códigos y géneros: ${[...repetidos].slice(0, 10).join(", ")}${repetidos.size > 10 ? ", y otros más" : ""}. Revisa esas fichas en el ERP; no se modificó el catálogo`);
+}
+
+/** Común a catálogos e inventario de imágenes; las fichas repetidas se tratan según el destino. */
+export function validarStockErp(items: readonly ItemErp[]): void {
+  for (const item of items) {
+    const clave = `${item.cod_universal?.trim().toUpperCase()} · ${item.genero?.trim().toUpperCase() ?? "SIN GÉNERO"}`;
     const cantidades = Object.values(item.tallas).map((n) => typeof n === "number" ? n : Number.NaN);
     const stock = item.stock_total == null || item.stock_total === "" ? Number.NaN : Number(item.stock_total);
     if (!Number.isFinite(stock) || cantidades.some((n) => !Number.isFinite(n)) || Math.abs(cantidades.reduce((a, n) => a + n, 0) - stock) > 0.000001) {
       throw new Error(`El stock por talla no coincide con el total del ERP para ${clave}; se canceló la operación`);
     }
   }
-  if (repetidos.size) throw new Error(`El ERP tiene fichas repetidas para ${repetidos.size} códigos y géneros: ${[...repetidos].slice(0, 10).join(", ")}${repetidos.size > 10 ? ", y otros más" : ""}. Revisa esas fichas en el ERP; no se modificó el catálogo`);
 }
 
 /** Al fallar un lote se cancelan los demás y no se inicia ningún trabajo pendiente. */

@@ -8,16 +8,15 @@ export const MARGEN_IMAGEN = 0.08;
 /** Tope de un PNG estandarizado. Vercel corta las peticiones en ~4,5 MB. */
 export const MAX_BYTES_IMAGEN = 4 * 1024 * 1024;
 
-// Mayúsculas, dígitos y . _ - (los códigos del ERP: "022356-01", "JS2322").
-// Nada de "/" ni espacios: el código es la clave del objeto en R2.
-const CODIGO_RE = /^[A-Z0-9][A-Z0-9._-]{0,39}$/;
+// Incluye los códigos con espacios del ERP ("FPF 02092"). Nunca carpetas ni segmentos de ruta.
+const CODIGO_RE = /^[A-Z0-9][A-Z0-9 ._-]{0,79}$/;
 
 export function normalizarCodigo(valor: string): string {
   return valor.trim().toUpperCase();
 }
 
 export function codigoValido(cod: string): boolean {
-  return CODIGO_RE.test(cod);
+  return CODIGO_RE.test(cod) && !cod.includes("..");
 }
 
 /** "js2322.png" → "JS2322". Devuelve "" si el resultado no es un código válido. */

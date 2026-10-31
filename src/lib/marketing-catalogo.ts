@@ -539,6 +539,8 @@ export type ItemErp = {
   cod_universal: string | null;
   modelo: string | null;
   genero: string | null;
+  categoria?: string | null;
+  color?: string | null;
   tallas: Record<string, number | string>;
   stock_total: number | string | null;
   precio_venta: number | string | null;
