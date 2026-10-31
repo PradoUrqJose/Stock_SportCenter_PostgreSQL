@@ -7,12 +7,14 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  Download,
+  FileSpreadsheet,
+  Info,
+  LayoutGrid,
+  List,
   ImageOff,
   Loader2,
   RefreshCw,
   Search,
-  Upload,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,19 +26,21 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ReemplazarImagen } from "./reemplazar-imagen";
-import { SubirImagenes } from "./subir-imagenes";
+import { useVistaPendientes } from "./marco-imagenes";
+import {
+  GaleriaProductosSinImagen,
+  TablaProductosSinImagen,
+} from "./vistas-productos-sin-imagen";
 import {
   iniciarRevisionImagenes,
   consultarEstadoRevisionImagenes,
 } from "@/lib/actions/marketing-revision-imagenes";
 import {
-  csvRevisionImagen,
   filtrarRevisionImagen,
   type FiltrosRevisionImagen,
   type ProductoRevisionImagen,
 } from "@/lib/marketing-imagenes-pendientes";
 import type { EstadoRevisionImagen } from "@/lib/marketing-revision-imagenes";
-import { codigoValido } from "@/lib/marketing-codigos";
 import { fechaStock } from "@/lib/marketing-sincronizar";
 import { cn } from "@/lib/utils";
 
@@ -96,6 +100,8 @@ export function ProductosSinImagen({
 }) {
   const router = useRouter();
   const [filtros, setFiltros] = useState(INICIALES);
+  const { vista, setVista } = useVistaPendientes();
+  const [infoAbierta, setInfoAbierta] = useState(false);
   const [pagina, setPagina] = useState(1);
   const [seleccionado, setSeleccionado] =
     useState<ProductoRevisionImagen | null>(null);
@@ -182,409 +188,353 @@ export function ProductosSinImagen({
   const conImagen = total - pendientes.length;
   const porcentaje = total ? Math.round((conImagen * 100) / total) : 0;
 
-  function exportar() {
-    const url = URL.createObjectURL(
-      new Blob([csvRevisionImagen(filtrados)], {
-        type: "text/csv;charset=utf-8",
-      }),
-    );
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "productos-sin-imagen.csv";
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
+  const exportacion = new URLSearchParams();
+  for (const [clave, valor] of Object.entries(filtros))
+    if (valor) exportacion.set(clave, valor);
+  const urlExcel = `/api/marketing/imagenes/pendientes/exportar?${exportacion}`;
+  const seleccionar = (producto: ProductoRevisionImagen) => {
+    setSubida(null);
+    setSeleccionado(producto);
+  };
 
   return (
-    <div className="space-y-6 p-4 md:p-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Productos sin imagen</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Todos los productos con stock del ERP, incluidos los que todavía no
-            aparecen en un catálogo.
+          <h2 className="text-base font-semibold">Pendientes de imagen</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Encuentra los productos con stock que todavía necesitan una imagen.
           </p>
         </div>
-        <Button onClick={actualizar} disabled={trabajando} variant="outline">
-          {trabajando ? <Loader2 className="animate-spin" /> : <RefreshCw />}{" "}
-          {trabajando ? "Consultando ERP…" : "Actualizar desde ERP"}
-        </Button>
-      </div>
-
-      <nav
-        className="flex gap-1 border-b border-border"
-        aria-label="Vistas de imágenes"
-      >
-        <Link
-          href="/admin/marketing/imagenes"
-          className="border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
-        >
-          Imágenes guardadas
-        </Link>
-        <span
-          aria-current="page"
-          className="border-b-2 border-primary px-3 py-2 text-sm font-medium text-foreground"
-        >
-          Sin imagen
-        </span>
-      </nav>
-
-      <div className="rounded-xl border border-border bg-card p-4 text-sm">
-        {consultadoAl ? (
-          <>
-            <p>
-              Stock consultado el <strong>{fechaStock(consultadoAl)}</strong>{" "}
-              (Lima).
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Almacenes: {almacenes.join(", ")}. Buscar y filtrar usa esta
-              consulta guardada. Las imágenes registradas se comprueban al abrir
-              o actualizar la pantalla.
-            </p>
-          </>
-        ) : (
-          <p className="text-muted-foreground">
-            Todavía no hay una consulta del ERP. Pulsa «Actualizar desde ERP»
-            para encontrar los productos pendientes.
-          </p>
-        )}
-        {trabajando && (
-          <p
-            role="status"
-            className="mt-2 flex items-center gap-2 text-primary"
+        <div className="flex items-center gap-1.5">
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label="Información de la consulta"
+            onClick={() => setInfoAbierta(true)}
           >
-            <Loader2 className="size-4 shrink-0 animate-spin" /> Consultando
-            todos los productos con stock. Puedes salir y volver; la consulta
-            continúa.
-          </p>
-        )}
-        {estado?.estado === "error" && (
-          <p role="alert" className="mt-2 text-destructive">
-            {estado.mensaje}
-            {consultadoAl ? " Se mantiene la última consulta completada." : ""}
-          </p>
-        )}
-        {aviso && (
-          <p role="alert" className="mt-2 text-destructive">
-            {aviso}
-          </p>
-        )}
-        {subida && (
-          <p
-            role="status"
-            className="mt-2 flex items-center gap-2 text-green-700 dark:text-green-400"
+            <Info className="size-4" />
+            <span className="hidden sm:inline">Información</span>
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={actualizar}
+            disabled={trabajando}
+            aria-label="Actualizar desde ERP"
           >
-            <Check className="size-4" /> Imagen de {subida} guardada.
-          </p>
-        )}
+            {trabajando ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="size-3.5" />
+            )}
+            {trabajando ? "Consultando…" : "Actualizar ERP"}
+          </Button>
+        </div>
       </div>
 
       {consultadoAl && (
-        <>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs text-muted-foreground">
-                Productos con stock en ERP
-              </p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums">
-                {numero(total)}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Códigos únicos
-              </p>
-            </div>
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
-              <p className="text-xs text-muted-foreground">
-                Sin imagen registrada
-              </p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums text-amber-700 dark:text-amber-400">
-                {numero(pendientes.length)}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Una imagen resuelve todas sus edades y tallas
-              </p>
-            </div>
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="text-xs text-muted-foreground">
-                Con imagen registrada
-              </p>
-              <div className="mt-2 flex items-baseline justify-between gap-2">
-                <p className="text-2xl font-semibold tabular-nums">
-                  {numero(conImagen)}
-                </p>
-                <span className="text-sm text-muted-foreground">
-                  {porcentaje}%
-                </span>
-              </div>
-              <div className="mt-2 h-1.5 rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-primary"
-                  style={{ width: `${porcentaje}%` }}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-border bg-card">
-            <div className="space-y-4 border-b border-border p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-sm font-semibold">
-                    Pendientes de imagen
-                  </h2>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Sube una imagen transparente; se recorta, centra y escala
-                    automáticamente.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={exportar}
-                    disabled={!filtrados.length}
-                  >
-                    <Download /> Exportar CSV
-                  </Button>
-                  <SubirImagenes />
-                </div>
-              </div>
-              <div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.5fr)_1fr_1fr_1fr]">
-                <label className="flex flex-col gap-1.5 text-xs font-medium text-muted-foreground">
-                  Buscar
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 size-4" />
-                    <Input
-                      aria-label="Buscar productos sin imagen"
-                      value={filtros.q}
-                      onChange={(e) => cambiar("q", e.target.value)}
-                      placeholder="Código, marca, modelo o color…"
-                      className="h-9 pl-8"
-                    />
-                  </div>
-                </label>
-                <Filtro
-                  etiqueta="Marca"
-                  valor={filtros.marca}
-                  opciones={opciones.marcas}
-                  cambiar={(v) => cambiar("marca", v)}
-                />
-                <Filtro
-                  etiqueta="Género / edad"
-                  valor={filtros.genero}
-                  opciones={opciones.generos}
-                  cambiar={(v) => cambiar("genero", v)}
-                />
-                <Filtro
-                  etiqueta="Categoría"
-                  valor={filtros.categoria}
-                  opciones={opciones.categorias}
-                  cambiar={(v) => cambiar("categoria", v)}
-                />
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-                <div className="flex items-center gap-3">
-                  <span aria-live="polite">
-                    {numero(filtrados.length)} producto(s)
-                    {hayFiltros
-                      ? ` de ${numero(pendientes.length)} pendientes`
-                      : " pendientes"}
-                  </span>
-                  {hayFiltros && (
-                    <button
-                      className="font-medium underline underline-offset-4 hover:text-foreground"
-                      onClick={() => {
-                        setFiltros(INICIALES);
-                        setPagina(1);
-                      }}
-                    >
-                      Limpiar filtros
-                    </button>
-                  )}
-                </div>
-                <label className="flex items-center gap-2">
-                  Ordenar
-                  <select
-                    aria-label="Ordenar pendientes"
-                    value={filtros.orden}
-                    onChange={(e) =>
-                      cambiar(
-                        "orden",
-                        e.target.value as FiltrosRevisionImagen["orden"],
-                      )
-                    }
-                    className="rounded-md border border-input bg-background px-2 py-1 text-foreground"
-                  >
-                    <option value="stock">Mayor stock primero</option>
-                    <option value="marca">Marca</option>
-                    <option value="codigo">Código</option>
-                  </select>
-                </label>
-              </div>
-            </div>
-
-            {!visibles.length ? (
-              <div className="flex flex-col items-center gap-2 px-4 py-14 text-center">
-                <ImageOff className="size-7 text-muted-foreground" />
-                <p className="text-sm font-medium">
-                  {pendientes.length
-                    ? "Ningún producto coincide con esos filtros"
-                    : "Todos los productos de esta consulta tienen imagen registrada"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {pendientes.length
-                    ? "Prueba otra búsqueda o limpia los filtros."
-                    : "Puedes actualizar desde el ERP para comprobar productos nuevos."}
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-left text-sm">
-                    <thead className="bg-muted/40 text-xs text-muted-foreground">
-                      <tr>
-                        <th scope="col" className="px-4 py-3 font-medium">
-                          Producto
-                        </th>
-                        <th scope="col" className="px-4 py-3 font-medium">
-                          Marca
-                        </th>
-                        <th scope="col" className="px-4 py-3 font-medium">
-                          Género / edad
-                        </th>
-                        <th scope="col" className="px-4 py-3 font-medium">
-                          Categoría
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-right font-medium"
-                        >
-                          Stock ERP
-                        </th>
-                        <th scope="col" className="px-4 py-3">
-                          <span className="sr-only">Acción</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {visibles.map((p) => (
-                        <tr key={p.codigo} className="hover:bg-muted/20">
-                          <td className="px-4 py-3">
-                            <p className="font-mono text-xs font-semibold">
-                              {p.codigo}
-                            </p>
-                            <p className="mt-1 max-w-72 text-xs text-muted-foreground">
-                              {p.modelos.join(" / ") || "Sin modelo"}
-                            </p>
-                            {p.colores.length > 0 && (
-                              <p className="mt-0.5 max-w-72 text-[11px] text-muted-foreground">
-                                {p.colores.join(" / ")}
-                              </p>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-xs">
-                            {p.marcas.join(" / ") || "Sin marca"}
-                          </td>
-                          <td className="px-4 py-3 text-xs">
-                            {p.generos.join(" / ") || "Sin género"}
-                          </td>
-                          <td className="px-4 py-3 text-xs text-muted-foreground">
-                            {p.categorias.join(" / ") || "Sin categoría"}
-                          </td>
-                          <td className="px-4 py-3 text-right text-xs tabular-nums">
-                            {p.stock === null ? (
-                              <span
-                                title="El ERP repite una ficha de este código y edad; revisa sus cantidades"
-                                className="text-amber-700 dark:text-amber-400"
-                              >
-                                Por revisar
-                              </span>
-                            ) : (
-                              numero(p.stock)
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              aria-label={`Subir imagen de ${p.codigo}`}
-                              onClick={() => {
-                                setSubida(null);
-                                setSeleccionado(p);
-                              }}
-                              disabled={!codigoValido(p.codigo)}
-                            >
-                              <Upload /> Subir imagen
-                            </Button>
-                            {!codigoValido(p.codigo) && (
-                              <p className="mt-1 text-xs text-destructive">
-                                Revisar código en ERP
-                              </p>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <nav
-                  aria-label="Paginación de productos sin imagen"
-                  className="flex flex-wrap items-center justify-between gap-3 border-t border-border p-4 text-xs text-muted-foreground"
-                >
-                  <span>
-                    {numero((actual - 1) * POR_PAGINA + 1)}–
-                    {numero(Math.min(actual * POR_PAGINA, filtrados.length))} de{" "}
-                    {numero(filtrados.length)} · Página {actual} de {paginas}
-                  </span>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={actual === 1}
-                      onClick={() => setPagina(actual - 1)}
-                    >
-                      <ChevronLeft /> Anterior
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={actual === paginas}
-                      onClick={() => setPagina(actual + 1)}
-                    >
-                      Siguiente <ChevronRight />
-                    </Button>
-                  </div>
-                </nav>
-              </>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            La revisión cruza los códigos del ERP con el registro de imágenes de
-            Marketing. Las URL externas de fotos del ERP no cuentan como
-            imágenes preparadas para el catálogo. Para reflejar una imagen nueva
-            en un catálogo publicado, vuelve a publicarlo.
-          </p>
-        </>
-      )}
-
-      {!consultadoAl && !trabajando && (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-6 py-16 text-center">
-          <ImageOff className="size-9 text-muted-foreground" />
-          <h2 className="text-base font-medium">
-            Encuentra las imágenes que faltan
-          </h2>
-          <p className="max-w-md text-sm text-muted-foreground">
-            Consulta el stock del ERP para revisar todas las marcas, edades y
-            categorías en una sola lista.
-          </p>
-          <Link
-            href="/admin/marketing/imagenes"
-            className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
-          >
-            Ver imágenes guardadas
-          </Link>
+        <div
+          className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-xs"
+          aria-label="Resumen de imágenes"
+        >
+          <span className="text-muted-foreground">
+            <strong className="mr-1 text-sm font-semibold tabular-nums text-foreground">
+              {numero(total)}
+            </strong>{" "}
+            con stock
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="size-1.5 rounded-full bg-amber-500" />
+            <strong className="text-sm font-semibold tabular-nums">
+              {numero(pendientes.length)}
+            </strong>
+            <span className="text-muted-foreground">sin imagen</span>
+          </span>
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <span className="size-1.5 rounded-full bg-emerald-500" />
+            <strong className="text-sm font-semibold tabular-nums text-foreground">
+              {numero(conImagen)}
+            </strong>{" "}
+            con imagen<span className="ml-1 text-[10px]">({porcentaje}%)</span>
+          </span>
         </div>
       )}
+      {trabajando && (
+        <p
+          role="status"
+          className="flex items-center gap-2 text-xs text-muted-foreground"
+        >
+          <Loader2 className="size-3.5 animate-spin" /> Consultando el ERP.
+          Puedes salir y volver; la consulta continúa.
+        </p>
+      )}
+      {estado?.estado === "error" && (
+        <p role="alert" className="text-xs text-destructive">
+          {estado.mensaje}
+          {consultadoAl ? " Se mantiene la última consulta completada." : ""}
+        </p>
+      )}
+      {aviso && (
+        <p role="alert" className="text-xs text-destructive">
+          {aviso}
+        </p>
+      )}
+      {subida && (
+        <p
+          role="status"
+          className="flex items-center gap-2 text-xs text-green-700 dark:text-green-400"
+        >
+          <Check className="size-3.5" /> Imagen de {subida} guardada.
+        </p>
+      )}
 
+      {consultadoAl ? (
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="space-y-3 border-b border-border p-3 sm:p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div
+                className="flex rounded-lg bg-muted p-0.5"
+                role="group"
+                aria-label="Vista de productos pendientes"
+              >
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label="Vista tabla"
+                  aria-pressed={vista === "tabla"}
+                  className={cn(
+                    "h-7 gap-1.5 px-2.5 text-xs",
+                    vista === "tabla" && "bg-background shadow-xs",
+                  )}
+                  onClick={() => setVista("tabla")}
+                >
+                  <List className="size-3.5" /> Tabla
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  aria-label="Vista galería"
+                  aria-pressed={vista === "galeria"}
+                  className={cn(
+                    "h-7 gap-1.5 px-2.5 text-xs",
+                    vista === "galeria" && "bg-background shadow-xs",
+                  )}
+                  onClick={() => setVista("galeria")}
+                >
+                  <LayoutGrid className="size-3.5" /> Galería
+                </Button>
+              </div>
+              {filtrados.length > 0 ? (
+                <a
+                  href={urlExcel}
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "sm" }),
+                    "gap-1.5 text-xs",
+                  )}
+                >
+                  <FileSpreadsheet className="size-3.5" /> Exportar Excel
+                </a>
+              ) : (
+                <Button size="sm" variant="outline" disabled>
+                  <FileSpreadsheet /> Exportar Excel
+                </Button>
+              )}
+            </div>
+            <div className="grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.5fr)_1fr_1fr_1fr]">
+              <label className="flex flex-col gap-1.5 text-xs font-medium text-muted-foreground">
+                Buscar
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 size-4" />
+                  <Input
+                    aria-label="Buscar productos sin imagen"
+                    value={filtros.q}
+                    maxLength={120}
+                    onChange={(e) => cambiar("q", e.target.value)}
+                    placeholder="Código, marca, modelo o color…"
+                    className="h-9 pl-8"
+                  />
+                </div>
+              </label>
+              <Filtro
+                etiqueta="Marca"
+                valor={filtros.marca}
+                opciones={opciones.marcas}
+                cambiar={(v) => cambiar("marca", v)}
+              />
+              <Filtro
+                etiqueta="Género / edad"
+                valor={filtros.genero}
+                opciones={opciones.generos}
+                cambiar={(v) => cambiar("genero", v)}
+              />
+              <Filtro
+                etiqueta="Categoría"
+                valor={filtros.categoria}
+                opciones={opciones.categorias}
+                cambiar={(v) => cambiar("categoria", v)}
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-3">
+                <span aria-live="polite">
+                  {numero(filtrados.length)} producto(s)
+                  {hayFiltros
+                    ? ` de ${numero(pendientes.length)} pendientes`
+                    : " pendientes"}
+                </span>
+                {hayFiltros && (
+                  <button
+                    className="underline underline-offset-4 hover:text-foreground"
+                    onClick={() => {
+                      setFiltros(INICIALES);
+                      setPagina(1);
+                    }}
+                  >
+                    Limpiar filtros
+                  </button>
+                )}
+              </div>
+              <label className="flex items-center gap-2">
+                Ordenar
+                <select
+                  aria-label="Ordenar pendientes"
+                  value={filtros.orden}
+                  onChange={(e) =>
+                    cambiar(
+                      "orden",
+                      e.target.value as FiltrosRevisionImagen["orden"],
+                    )
+                  }
+                  className="rounded-md border border-input bg-background px-2 py-1 text-foreground"
+                >
+                  <option value="stock">Mayor stock primero</option>
+                  <option value="marca">Marca</option>
+                  <option value="codigo">Código</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          {!visibles.length ? (
+            <div className="flex flex-col items-center gap-2 px-4 py-14 text-center">
+              <ImageOff className="size-7 text-muted-foreground" />
+              <p className="text-sm font-medium">
+                {pendientes.length
+                  ? "Ningún producto coincide con esos filtros"
+                  : "Todos los productos de esta consulta tienen imagen registrada"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {pendientes.length
+                  ? "Prueba otra búsqueda o limpia los filtros."
+                  : "Puedes actualizar desde el ERP para comprobar productos nuevos."}
+              </p>
+            </div>
+          ) : vista === "tabla" ? (
+            <TablaProductosSinImagen
+              productos={visibles}
+              seleccionar={seleccionar}
+            />
+          ) : (
+            <GaleriaProductosSinImagen
+              productos={visibles}
+              seleccionar={seleccionar}
+            />
+          )}
+          {visibles.length > 0 && (
+            <nav
+              aria-label="Paginación de productos sin imagen"
+              className="flex flex-wrap items-center justify-between gap-3 border-t border-border p-3 text-xs text-muted-foreground"
+            >
+              <span>
+                {numero((actual - 1) * POR_PAGINA + 1)}–
+                {numero(Math.min(actual * POR_PAGINA, filtrados.length))} de{" "}
+                {numero(filtrados.length)} · Página {actual} de {paginas}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={actual === 1}
+                  onClick={() => setPagina(actual - 1)}
+                >
+                  <ChevronLeft /> Anterior
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={actual === paginas}
+                  onClick={() => setPagina(actual + 1)}
+                >
+                  Siguiente <ChevronRight />
+                </Button>
+              </div>
+            </nav>
+          )}
+        </div>
+      ) : (
+        !trabajando && (
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-6 py-14 text-center">
+            <ImageOff className="size-8 text-muted-foreground" />
+            <h3 className="text-sm font-medium">
+              Encuentra las imágenes que faltan
+            </h3>
+            <p className="max-w-md text-xs text-muted-foreground">
+              Pulsa «Actualizar ERP» para revisar todos los productos con stock.
+            </p>
+            <Link
+              href="/admin/marketing/imagenes"
+              className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+            >
+              Ver imágenes guardadas
+            </Link>
+          </div>
+        )
+      )}
+
+      <Dialog open={infoAbierta} onOpenChange={setInfoAbierta}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Información de la consulta</DialogTitle>
+            <DialogDescription>
+              Origen y actualización de los productos pendientes.
+            </DialogDescription>
+          </DialogHeader>
+          <dl className="space-y-4 text-sm">
+            <div>
+              <dt className="text-xs text-muted-foreground">
+                Stock consultado
+              </dt>
+              <dd className="mt-1 font-medium">
+                {consultadoAl
+                  ? `${fechaStock(consultadoAl)} (Lima)`
+                  : "Todavía no se ha consultado el ERP"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">Almacenes</dt>
+              <dd className="mt-1 text-xs leading-relaxed">
+                {almacenes.join(", ")}
+              </dd>
+            </div>
+          </dl>
+          <div className="space-y-2 border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground">
+            <p>
+              Buscar, filtrar y exportar utiliza la última consulta guardada.
+              Las imágenes registradas se comprueban al abrir o actualizar esta
+              pantalla.
+            </p>
+            <p>
+              Una imagen resuelve todas las edades y tallas de un código. Se
+              recorta, centra y escala automáticamente al subirla.
+            </p>
+            <p>
+              Las fotos externas del ERP no cuentan como imágenes preparadas.
+              Para reflejar una imagen nueva en un catálogo publicado, vuelve a
+              publicarlo.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={!!seleccionado}
         onOpenChange={(open) => {

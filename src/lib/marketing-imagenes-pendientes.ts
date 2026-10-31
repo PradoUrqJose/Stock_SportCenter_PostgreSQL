@@ -111,24 +111,3 @@ export function filtrarRevisionImagen(
             : 0) || a.codigo.localeCompare(b.codigo),
     );
 }
-
-/** Todas las filas filtradas, no solo la página visible. Evita fórmulas al abrir el CSV. */
-export function csvRevisionImagen(
-  productos: readonly ProductoRevisionImagen[],
-): string {
-  const celda = (v: string) =>
-    `"${(/^[=+@\-\t\r]/.test(v) ? "'" + v : v).replaceAll('"', '""')}"`;
-  const filas = [
-    ["Código", "Marca", "Modelo", "Género", "Categoría", "Color", "Stock"],
-    ...productos.map((p) => [
-      p.codigo,
-      p.marcas.join(" / "),
-      p.modelos.join(" / "),
-      p.generos.join(" / "),
-      p.categorias.join(" / "),
-      p.colores.join(" / "),
-      p.stock === null ? "Por revisar en ERP" : String(p.stock),
-    ]),
-  ];
-  return "\uFEFF" + filas.map((fila) => fila.map(celda).join(";")).join("\r\n");
-}

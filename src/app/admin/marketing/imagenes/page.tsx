@@ -9,7 +9,6 @@ import {
   urlImagenOriginal,
 } from "@/lib/marketing";
 import { ImagenCard } from "@/components/admin/marketing/imagen-card";
-import { SubirImagenes } from "@/components/admin/marketing/subir-imagenes";
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -77,25 +76,17 @@ export default async function ImagenesPage({
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
 
   return (
-    <div className="p-4 md:p-8">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Imágenes</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {q
-              ? `${total.toLocaleString("en-US")} resultados para “${q}”.`
-              : "Imágenes de producto guardadas en R2 (PNG transparente, 1600×1600). Haz clic en una para reemplazarla."}
-          </p>
-        </div>
-        <SubirImagenes />
-      </div>
+    <div className="space-y-5">
+      <p className="text-sm text-muted-foreground">
+        {q
+          ? `${total.toLocaleString("en-US")} resultados para “${q}”.`
+          : `${total.toLocaleString("en-US")} imágenes guardadas · Abre una imagen para reemplazarla.`}
+      </p>
 
-      <nav className="mb-6 flex gap-1 border-b border-border" aria-label="Vistas de imágenes">
-        <span aria-current="page" className="border-b-2 border-primary px-3 py-2 text-sm font-medium">Imágenes guardadas</span>
-        <Link href="/admin/marketing/imagenes/sin-imagen" className="border-b-2 border-transparent px-3 py-2 text-sm text-muted-foreground hover:text-foreground">Sin imagen</Link>
-      </nav>
-
-      <form action="/admin/marketing/imagenes" className="mb-6 flex max-w-md gap-2">
+      <form
+        action="/admin/marketing/imagenes"
+        className="mb-6 flex max-w-md gap-2"
+      >
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -108,7 +99,10 @@ export default async function ImagenesPage({
         </div>
         <Button type="submit">Buscar</Button>
         {q && (
-          <Link href="/admin/marketing/imagenes" className={cn(buttonVariants({ variant: "outline" }))}>
+          <Link
+            href="/admin/marketing/imagenes"
+            className={cn(buttonVariants({ variant: "outline" }))}
+          >
             Limpiar
           </Link>
         )}
@@ -131,25 +125,45 @@ export default async function ImagenesPage({
                 codigo={f.cod_universal}
                 version={f.version}
                 urlMiniatura={urlImagenMiniatura(f.cod_universal, f.version)}
-                urlOriginal={urlImagenOriginal(f.cod_universal, f.version, f.imagen_url)}
+                urlOriginal={urlImagenOriginal(
+                  f.cod_universal,
+                  f.version,
+                  f.imagen_url,
+                )}
                 prioridad={i < 12}
-                detalle={[f.marca, f.modelo].filter(Boolean).join(" · ") || null}
+                detalle={
+                  [f.marca, f.modelo].filter(Boolean).join(" · ") || null
+                }
               />
             ))}
           </div>
 
-          <nav className="mt-6 flex items-center justify-between text-sm text-muted-foreground" aria-label="Paginación">
+          <nav
+            className="mt-6 flex items-center justify-between text-sm text-muted-foreground"
+            aria-label="Paginación"
+          >
             <span>
-              Página {pagina.toLocaleString("en-US")} de {paginas.toLocaleString("en-US")}
+              Página {pagina.toLocaleString("en-US")} de{" "}
+              {paginas.toLocaleString("en-US")}
             </span>
             <div className="flex gap-2">
               {pagina > 1 ? (
-                <Link href={href(q, pagina - 1)} className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+                <Link
+                  href={href(q, pagina - 1)}
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "sm" }),
+                  )}
+                >
                   <ChevronLeft /> Anterior
                 </Link>
               ) : null}
               {pagina < paginas ? (
-                <Link href={href(q, pagina + 1)} className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+                <Link
+                  href={href(q, pagina + 1)}
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "sm" }),
+                  )}
+                >
                   Siguiente <ChevronRight />
                 </Link>
               ) : null}

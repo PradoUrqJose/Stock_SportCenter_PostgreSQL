@@ -4,7 +4,6 @@ import {
   productosRevisionImagen,
   sinImagenRegistrada,
   filtrarRevisionImagen,
-  csvRevisionImagen,
 } from "../src/lib/marketing-imagenes-pendientes.ts";
 import {
   codigoValido,
@@ -129,17 +128,4 @@ test("los filtros se combinan y ordenar no modifica el inventario guardado", () 
     productos.map((p) => p.codigo),
     ["A", "B", "C"],
   );
-});
-
-test("el CSV exporta toda la selección, conserva códigos y neutraliza fórmulas", () => {
-  const productos = productosRevisionImagen(
-    Array.from({ length: 120 }, (_, i) =>
-      item(`COD-${i}`, "JUNIOR", { modelo: '=HIPERVINCULO("peligro")' }),
-    ),
-  );
-  const csv = csvRevisionImagen(productos);
-  assert(csv.startsWith("\uFEFF"));
-  assert.equal(csv.split("\r\n").length, 121);
-  assert(csv.includes('"\'=HIPERVINCULO(""PELIGRO"")"'));
-  assert(csv.includes('"COD-119"'));
 });

@@ -1,14 +1,12 @@
-import { PageHeaderSkeleton, Skeleton } from "@/components/ui/skeleton";
+import { Loader2 } from "lucide-react";
 
 export default function Loading() {
   return (
-    <div className="p-4 md:p-8">
-      <PageHeaderSkeleton />
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <Skeleton key={i} className="aspect-square w-full rounded-lg" />
-        ))}
-      </div>
+    <div
+      role="status"
+      className="flex min-h-48 items-center justify-center gap-2 text-sm text-muted-foreground"
+    >
+      <Loader2 className="size-4 animate-spin" /> Cargando imágenes…
     </div>
   );
 }
