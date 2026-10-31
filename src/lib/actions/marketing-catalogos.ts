@@ -26,6 +26,7 @@ import {
   validarPaginas,
   escalaDe,
   normalizarFiltros,
+  ordenGenerosDelCatalogo,
   type Borrador,
   type FiltrosCatalogo,
 } from "@/lib/marketing-catalogo";
@@ -528,7 +529,8 @@ export async function aplicarSincronizacion(generacionId: string): Promise<Actio
     const actual = await borradorBase(catalogoId, f.base_version);
     if (!actual) return { success: false, msg: "La versión que se sincroniza ya no existe" };
     const { al, fresco } = JSON.parse(f.resultado) as { al: string; fresco: Borrador };
-    const { borrador, informe } = sincronizarBorrador(actual, fresco, al);
+    const filtrosSincronizacion = normalizarFiltros(JSON.parse(f.filtros));
+    const { borrador, informe } = sincronizarBorrador(actual, fresco, al, ordenGenerosDelCatalogo(filtrosSincronizacion.tipo));
     if (borrador.paginas.every((p) => p.tipo !== "producto")) return { success: false, msg: "La sincronización dejaría el catálogo sin productos; no se aplicó" };
 
     // Los filtros del catálogo pasan a ser los de la sincronización (lo demás —portada, separadores, orden— se conserva).

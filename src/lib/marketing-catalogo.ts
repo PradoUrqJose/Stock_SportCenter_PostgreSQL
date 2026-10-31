@@ -23,6 +23,23 @@ export type ProductoCat = {
   precio: number;
 };
 
+/** Niños: de los más pequeños a los mayores; los demás catálogos se ordenan por marca. */
+export function ordenGenerosDelCatalogo(tipo: string): readonly string[] | undefined {
+  return tipo === "ninos" ? ["INFANTE", "PRESCO", "JUNIOR"] : undefined;
+}
+
+/** Orden compartido por la generación y la inserción de productos al sincronizar. */
+export function comparadorProductos(ordenGeneros: readonly string[] = []) {
+  const prioridades = new Map(ordenGeneros.map((g, i) => [g.toUpperCase(), i]));
+  const prioridad = (p: ProductoCat) => prioridades.get(p.genero?.toUpperCase() ?? "") ?? prioridades.size;
+  return (a: ProductoCat, b: ProductoCat): number =>
+    prioridad(a) - prioridad(b) ||
+    a.marca.localeCompare(b.marca) ||
+    a.modelo.localeCompare(b.modelo) ||
+    a.cod.localeCompare(b.cod) ||
+    (a.genero ?? "").localeCompare(b.genero ?? "");
+}
+
 /** Una zapatilla sobre el diseño de su marca. `ajuste` es la posición corregida en el editor. */
 export type PaginaProducto = {
   id: string;
@@ -658,16 +675,7 @@ export function construirBorrador(
     });
   }
 
-  const prioridadGenero = new Map((ordenGeneros ?? []).map((genero, i) => [genero.toUpperCase(), i]));
-  const prioridad = (genero: string | null | undefined) => prioridadGenero.get(genero?.toUpperCase() ?? "") ?? prioridadGenero.size;
-  productos.sort(
-    (a, b) =>
-      (prioridadGenero.size > 0 ? prioridad(a.genero) - prioridad(b.genero) : 0) ||
-      a.marca.localeCompare(b.marca) ||
-      a.modelo.localeCompare(b.modelo) ||
-      a.cod.localeCompare(b.cod) ||
-      (a.genero ?? "").localeCompare(b.genero ?? "")
-  );
+  productos.sort(comparadorProductos(ordenGeneros));
 
   const paginas: PaginaProducto[] = productos.map((p, i) => ({
     id: `p${i + 1}`,

@@ -2,11 +2,12 @@
 // versión) y los datos frescos que dio el ERP, y devuelve el borrador con el stock y los precios al día. Se conserva
 // todo lo que Marketing ya trabajó (posición de las zapatillas, plantillas, orden, páginas fijas, quitadas a mano).
 //   · Producto que sigue en el ERP → se actualizan sus tallas y su precio.
-//   · Producto nuevo (entra por stock o por los filtros) → se agrega en el lugar que le toca dentro de su marca.
+//   · Producto nuevo (entra por stock o por los filtros) → se agrega en su grupo de edad (en Niños) y marca.
 //   · Producto que ya no tiene stock o ya no cumple los filtros → se quita, queda en «Quitadas» (restaurable) y SIEMPRE
 //     se informa. Si vuelve a tener stock, su página regresa con la posición que tenía.
 // Un producto se identifica por código + género (un mismo código puede tener una página por género).
 import type { Borrador, PaginaCat, PaginaProducto, ProductoCat, ResumenGeneracion } from "./marketing-catalogo";
+import { comparadorProductos } from "./marketing-catalogo";
 
 export type ProductoResumen = { cod: string; marca: string; modelo: string; genero: string };
 
@@ -34,11 +35,11 @@ export type InformeSincronizacion = {
 export const claveProducto = (p: { cod: string; genero?: string }) => `${p.cod}|${(p.genero ?? "").toUpperCase()}`;
 const resumen = (p: ProductoCat): ProductoResumen => ({ cod: p.cod, marca: p.marca, modelo: p.modelo, genero: p.genero ?? "" });
 
-/** Como se ordenan las páginas al generar: marca, modelo, código y género. */
-const comparar = (a: ProductoCat, b: ProductoCat) =>
-  a.marca.localeCompare(b.marca) || a.modelo.localeCompare(b.modelo) || a.cod.localeCompare(b.cod) || (a.genero ?? "").localeCompare(b.genero ?? "");
-
-export function sincronizarBorrador(actual: Borrador, fresco: Borrador, al: string): { borrador: Borrador; informe: InformeSincronizacion } {
+export function sincronizarBorrador(actual: Borrador, fresco: Borrador, al: string, ordenGeneros?: readonly string[]): { borrador: Borrador; informe: InformeSincronizacion } {
+  const comparar = comparadorProductos(ordenGeneros);
+  const prioridades = new Map((ordenGeneros ?? []).map((g, i) => [g.toUpperCase(), i]));
+  const generoDe = (p: ProductoCat) => p.genero?.toUpperCase() ?? "";
+  const prioridad = (p: ProductoCat) => prioridades.get(generoDe(p)) ?? prioridades.size;
   const frescos = new Map(fresco.productos.map((p) => [claveProducto(p), p]));
   // Plantilla que el ERP le asignaría a cada producto nuevo (la de su marca).
   const plantillaFresca = new Map<string, string>();
@@ -146,18 +147,26 @@ export function sincronizarBorrador(actual: Borrador, fresco: Borrador, al: stri
     nuevos.push(resumen(f));
   }
 
-  // Cada página que entra (nueva o reactivada) va donde le toca por marca, modelo, código y género.
+  // Cada página que entra va en su grupo de edad (si aplica) y después por marca, modelo y código.
+  // Las páginas existentes conservan el orden que Marketing haya editado.
   const insertar = (pg: PaginaProducto) => {
     const p = productos[pg.prod];
     let destino = -1;
     let ultimaMarca = -1;
     let primeraMayor = -1;
     let ultimaProducto = -1;
+    let ultimaGenero = -1;
+    let primerGeneroMayor = -1;
     for (let i = 0; i < paginas.length; i++) {
       const q = paginas[i];
       if (q.tipo !== "producto") continue;
       const pq = productos[q.prod];
       ultimaProducto = i;
+      if (prioridades.size > 0 && generoDe(pq) !== generoDe(p)) {
+        if (primerGeneroMayor === -1 && prioridad(pq) > prioridad(p)) primerGeneroMayor = i;
+        continue;
+      }
+      ultimaGenero = i;
       if (pq.marca === p.marca) {
         if (comparar(pq, p) > 0) {
           destino = i;
@@ -166,7 +175,11 @@ export function sincronizarBorrador(actual: Borrador, fresco: Borrador, al: stri
         ultimaMarca = i;
       } else if (primeraMayor === -1 && pq.marca.localeCompare(p.marca) > 0) primeraMayor = i;
     }
-    if (destino === -1) destino = ultimaMarca !== -1 ? ultimaMarca + 1 : primeraMayor !== -1 ? primeraMayor : ultimaProducto !== -1 ? ultimaProducto + 1 : paginas.length;
+    if (destino === -1) destino = ultimaMarca !== -1 ? ultimaMarca + 1
+      : primeraMayor !== -1 ? primeraMayor
+      : ultimaGenero !== -1 ? ultimaGenero + 1
+      : primerGeneroMayor !== -1 ? primerGeneroMayor
+      : ultimaProducto !== -1 ? ultimaProducto + 1 : paginas.length;
     paginas.splice(destino, 0, pg);
   };
   const reactivados = reactivar.map((pg) => resumen(productos[pg.prod]));

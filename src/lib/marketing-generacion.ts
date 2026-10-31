@@ -15,6 +15,7 @@ import {
   construirBorrador,
   escalaDe,
   normalizarFiltros,
+  ordenGenerosDelCatalogo,
   plantillaDeMarca,
   tipoEfectivo,
   type Borrador,
@@ -124,7 +125,7 @@ async function borradorDeErp(id: string, filtros: FiltrosCatalogo, origen?: stri
     min: filtros.precio_min,
     max: filtros.precio_max,
     tallas: filtros.tallas,
-  }, filtros.tipo === "ninos" ? ["JUNIOR", "PRESCO", "INFANTE"] : undefined);
+  }, ordenGenerosDelCatalogo(filtros.tipo));
   const conPropia = new Set(plantillas.filter((p) => p.activa && p.marca !== MARCA_GENERICA).map((p) => p.marca));
   const genericas: Record<string, number> = {};
   for (const pg of sinFijas.paginas) {
@@ -221,7 +222,7 @@ export async function ejecutarSincronizacion(id: string, origen?: string): Promi
     const actual = await borradorBase(base_catalogo_id, base_version);
     if (!actual) return await terminar(id, "error", "La versión que se iba a sincronizar ya no existe", base_catalogo_id);
     const al = armado.consultadoAl;
-    const { informe } = sincronizarBorrador(actual, fresco, al);
+    const { informe } = sincronizarBorrador(actual, fresco, al, ordenGenerosDelCatalogo(filtros.tipo));
     await db.execute({ sql: "UPDATE mk_generaciones SET resultado = ? WHERE id = ?", args: [JSON.stringify({ al, fresco, informe }), id] });
     await terminar(
       id,
