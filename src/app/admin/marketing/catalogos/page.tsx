@@ -9,6 +9,7 @@ import { tiposCatalogo } from "@/lib/marketing-tipos";
 import { EliminarCatalogo } from "@/components/admin/marketing/acciones-catalogo";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { marcasDeMarketing } from "@/lib/marketing-opciones";
 
 type Fila = {
   id: string;
@@ -22,7 +23,7 @@ type Fila = {
 export default async function CatalogosPage() {
   await requireMarketing();
   await cerrarGeneracionesAbandonadas();
-  const marcas = (await db.execute("SELECT marca FROM productos WHERE marca IS NOT NULL GROUP BY 1 ORDER BY COUNT(*) DESC, 1")).rows.map((r) => r.marca as string);
+  const marcas = await marcasDeMarketing();
   const tipos = await tiposCatalogo();
 
   const r = await db.execute(

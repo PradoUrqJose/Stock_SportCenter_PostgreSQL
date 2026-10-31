@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Montserrat } from "next/font/google";
 import { ChevronLeft } from "lucide-react";
-import { db } from "@/lib/db";
+import { marcasDeMarketing } from "@/lib/marketing-opciones";
 import { IMAGENES_BASE, ORIGEN_IMAGENES, requireMarketing } from "@/lib/marketing";
 import { enlacesDeContacto, fijasGestion, plantillasGestion } from "@/lib/marketing-catalogos-datos";
 import { tiposCatalogo } from "@/lib/marketing-tipos";
@@ -19,7 +19,7 @@ export default async function DisenosPage() {
     plantillasGestion(),
     fijasGestion(),
     enlacesDeContacto(),
-    db.execute("SELECT marca FROM productos WHERE marca IS NOT NULL GROUP BY 1 ORDER BY COUNT(*) DESC, 1"),
+    marcasDeMarketing(),
     tiposCatalogo(),
   ]);
 
@@ -29,7 +29,7 @@ export default async function DisenosPage() {
         <ChevronLeft className="h-3.5 w-3.5" /> Catálogos
       </Link>
       <h1 className="mb-4 text-xl font-semibold text-foreground">Diseños</h1>
-      <BibliotecaDisenos base={IMAGENES_BASE} plantillas={plantillas} fijas={fijas} marcas={marcas.rows.map((r) => r.marca as string)} enlaces={enlaces} fuente={montserrat.style.fontFamily} tipos={tipos.map((t) => ({ id: t.id, nombre: t.nombre }))} />
+      <BibliotecaDisenos base={IMAGENES_BASE} plantillas={plantillas} fijas={fijas} marcas={marcas} enlaces={enlaces} fuente={montserrat.style.fontFamily} tipos={tipos.map((t) => ({ id: t.id, nombre: t.nombre }))} />
     </div>
   );
 }

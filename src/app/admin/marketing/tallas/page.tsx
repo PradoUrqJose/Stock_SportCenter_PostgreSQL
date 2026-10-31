@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { db } from "@/lib/db";
+import { marcasDeMarketing } from "@/lib/marketing-opciones";
 import { requireMarketing } from "@/lib/marketing";
 import { GestorTallas } from "@/components/admin/marketing/gestor-tallas";
 import { equivalenciasFaltantes, tablasDeTallas } from "@/lib/marketing-tallas-datos";
@@ -11,10 +11,10 @@ export default async function TallasPage() {
   await requireMarketing();
   const [tablas, marcasLocales] = await Promise.all([
     tablasDeTallas(),
-    db.execute("SELECT DISTINCT marca FROM productos WHERE marca IS NOT NULL AND marca <> '' ORDER BY 1"),
+    marcasDeMarketing(),
   ]);
   const faltantes = await equivalenciasFaltantes(indexarTallas(tablas));
-  const marcas = [...new Set([...marcasLocales.rows.map((r) => r.marca as string), ...tablas.map((t) => t.marca)])].sort();
+  const marcas = marcasLocales.sort();
 
   return (
     <div className="p-4 md:p-8">
