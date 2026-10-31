@@ -1,109 +1,90 @@
-// Consulta del catálogo al ERP (SOLO servidor). El trabajo real lo hace api/catalogo.py:
-//  - en Vercel se llama por HTTP a /api/catalogo (mismo proyecto), con el secreto compartido, igual que la sincronización;
-//  - en tu Mac se ejecuta el mismo archivo como script y se lee su JSON (`next dev` no conoce api/*.py).
-// Sin filtro de marca se pide TODO en una sola consulta (completa por construcción); solo si no cabe en el tiempo se reparte
-// por marca y en paralelo, y entonces el catálogo lo avisa (ver `planificarConsultas`). El ERP tarda más que proporcional a
-// las filas y las funciones de Vercel duran hasta 300 s (Hobby con Fluid Compute).
-// Las credenciales ERP_USUARIO / ERP_CLAVE las toma del entorno o del .env.local.
+// Transporte único para todos los filtros: el ERP aporta sus códigos; STOCK solo estima los volúmenes.
 import { db } from "@/lib/db";
-import { planificarConsultas, valorMarcaErp, type ConsultaErp, type FiltrosCatalogo, type ItemErp } from "./marketing-catalogo";
+import { randomUUID } from "node:crypto";
+import type { FiltrosCatalogo, ItemErp } from "./marketing-catalogo";
+import { opcionesErp, ordenEjecucionErp, planificarConsultas, prepararConteosErp, type ConteoErp } from "./marketing-erp-plan";
+import { ejecutarLotesErp, PLAZO_ERP_MS, respuestaErp, validarIntegridadErp } from "./marketing-erp-control";
 
-/** Consultas simultáneas al ERP: probado con tres a la vez con el mismo usuario, sin cortar sesiones. */
-const EN_PARALELO = 3;
-/** Un poco menos que los 300 s de la función de Vercel, para responder con un error claro y no con un corte. */
-const ESPERA_HTTP_MS = 290_000;
-
-/**
- * A dónde se llama a la función /api/catalogo (mismo proyecto). `origen` es el host desde el que el usuario usa el sistema
- * (`Host` de su petición): siempre es un dominio del sistema y no el de los catálogos públicos (que por seguridad solo sirve
- * /<enlace>). NO se usa VERCEL_PROJECT_PRODUCTION_URL: es el dominio personalizado más corto y hoy es el de los catálogos.
- */
 function urlCatalogoErp(origen?: string): string | null {
-  if (process.env.ERP_CATALOGO_URL) return process.env.ERP_CATALOGO_URL; // pruebas locales de la ruta HTTP
+  if (process.env.ERP_CATALOGO_URL) return process.env.ERP_CATALOGO_URL;
   if (!process.env.VERCEL) return null;
-  // VERCEL_URL es la URL de ESTE despliegue y Vercel la protege con su login; solo sirve si no hay otro origen.
   const host = origen && origen !== process.env.CATALOGOS_HOST ? origen : (process.env.VERCEL_URL ?? origen);
   return `https://${host}/api/catalogo`;
 }
 
-/** Lo que sabe el sistema (STOCK) para repartir la consulta: productos con stock por marca y género, y todas las marcas y géneros que conoce. */
-async function conocerLocal(f: FiltrosCatalogo) {
-  const condiciones = ["stock_total > 0", "marca IS NOT NULL"];
-  const args: unknown[] = [];
-  for (const [columna, valores] of [["categoria", f.categorias], ["grupo", f.grupos], ["genero", f.generos], ["marca", f.marcas]] as const) {
-    if (valores.length > 0) {
-      condiciones.push(`${columna} = ANY(?)`);
-      args.push(valores);
-    }
-  }
-  const [conteos, marcas, generos] = await Promise.all([
-    db.execute({ sql: `SELECT marca, genero, COUNT(*)::int AS n FROM productos WHERE ${condiciones.join(" AND ")} GROUP BY 1, 2`, args: args as never[] }),
-    db.execute("SELECT DISTINCT marca FROM productos WHERE marca IS NOT NULL AND marca <> ''"),
-    db.execute("SELECT DISTINCT genero FROM productos WHERE genero IS NOT NULL AND genero <> ''"),
-  ]);
-  return {
-    conteos: conteos.rows.map((x) => ({ marca: x.marca as string, genero: x.genero as string, n: x.n as number })),
-    universoMarcas: marcas.rows.map((x) => x.marca as string),
-    universoGeneros: generos.rows.map((x) => x.genero as string),
-  };
+async function conocerLocal(): Promise<ConteoErp[]> {
+  // Fecha, stock mínimo y almacenes pueden reducir el resultado: los conteos son una orientación superior,
+  // nunca una prueba de que en el ERP no existen otros productos u opciones.
+  const r = await db.execute(`SELECT COALESCE(marca, '') AS marca, COALESCE(genero, '') AS genero,
+    COALESCE(grupo, '') AS grupo, COALESCE(categoria, '') AS categoria, COUNT(*)::int AS n
+    FROM productos WHERE stock_total > 0 GROUP BY 1, 2, 3, 4`);
+  return r.rows as ConteoErp[];
 }
 
-async function pedirAlErp(f: FiltrosCatalogo, c: ConsultaErp, origen?: string): Promise<ItemErp[]> {
-  // El ERP acepta varios valores separados por coma en cada filtro (comprobado con marca, grupo, género y categoría).
-  const filtros = {
-    almacen: f.almacenes.join(","),
-    grupo: f.grupos.join(","),
-    // El filtro de marca del ERP pide el nombre sin espacios («NEW BALANCE» → «NEWBALANCE»); con espacio no devuelve nada.
-    marca: c.marcas.map(valorMarcaErp).join(","),
-    genero: c.generos.join(","),
-    categoria: f.categorias.join(","),
-    fecha_minima_ingreso: f.fecha_minima_ingreso ? f.fecha_minima_ingreso.split("-").reverse().join("/") : "",
-    stock_mayor_a: String(f.stock_minimo ?? 1),
-  };
-
+async function llamarErp(filtros: object, signal: AbortSignal, origen?: string): Promise<unknown> {
   const url = urlCatalogoErp(origen);
   if (url) {
     const secreto = process.env.SYNC_SECRET;
-    if (!secreto) throw new Error("Falta SYNC_SECRET en las variables de entorno.");
+    if (!secreto) throw new Error("Falta SYNC_SECRET en las variables de entorno");
     const res = await fetch(url, {
-      method: "POST",
-      headers: { "X-Sync-Secret": secreto, "Content-Type": "application/json" },
-      body: JSON.stringify(filtros),
-      cache: "no-store",
-      signal: AbortSignal.timeout(ESPERA_HTTP_MS),
-    }).catch((e: unknown) => {
-      throw new Error(e instanceof Error && e.name === "TimeoutError" ? "El ERP tardó demasiado en responder; vuelve a intentarlo" : "No se pudo llamar al ERP");
+      method: "POST", headers: { "X-Sync-Secret": secreto, "Content-Type": "application/json" },
+      body: JSON.stringify(filtros), cache: "no-store", signal,
     });
-    const cuerpo = (await res.json().catch(() => ({}))) as { items?: ItemErp[]; error?: string };
-    if (!res.ok) throw new Error(cuerpo.error ?? `El ERP respondió ${res.status}`);
-    return cuerpo.items ?? [];
+    const cuerpo: unknown = await res.json().catch(() => { throw new Error("El ERP devolvió una respuesta que no es JSON; se canceló la consulta"); });
+    if (!res.ok) {
+      const mensaje = cuerpo && typeof cuerpo === "object" && "error" in cuerpo ? String(cuerpo.error) : `El ERP respondió ${res.status}`;
+      throw new Error(mensaje);
+    }
+    return cuerpo;
   }
-
   const { execFile } = await import("node:child_process");
   const { promisify } = await import("node:util");
   const { join } = await import("node:path");
-  const { stdout } = await promisify(execFile)(
-    process.env.PYTHON_BIN ?? "python3",
-    [join(process.cwd(), "api", "catalogo.py"), JSON.stringify(filtros)],
-    { maxBuffer: 128 * 1024 * 1024, timeout: 290_000 }
-  );
-  return (JSON.parse(stdout) as { items?: ItemErp[] }).items ?? [];
+  let stdout: string;
+  try {
+    ({ stdout } = await promisify(execFile)(process.env.PYTHON_BIN ?? "python3", [join(process.cwd(), "api", "catalogo.py"), JSON.stringify(filtros)], { maxBuffer: 128 * 1024 * 1024, timeout: PLAZO_ERP_MS, signal }));
+  } catch (error) {
+    if (signal.aborted) throw signal.reason;
+    const detalle = error as { stderr?: string };
+    if (/ReadTimeout|read timeout|TimeoutError/.test(detalle.stderr ?? "")) throw new Error("El ERP agotó el tiempo de respuesta; vuelve a intentarlo o reduce la selección");
+    throw new Error("No se pudo obtener una respuesta válida del ERP; no se modificó el catálogo");
+  }
+  let cuerpo: unknown;
+  try { cuerpo = JSON.parse(stdout); }
+  catch { throw new Error("El ERP devolvió una respuesta que no es JSON; se canceló la consulta"); }
+  if (cuerpo && typeof cuerpo === "object" && "error" in cuerpo && typeof cuerpo.error === "string") throw new Error(cuerpo.error);
+  return cuerpo;
 }
 
 export async function consultarCatalogoErp(f: FiltrosCatalogo, origen?: string): Promise<{ items: ItemErp[]; parcial: boolean }> {
-  // Los conteos del sistema solo sirven para estimar el tiempo y, si hace falta, repartir el trabajo.
-  const local = await conocerLocal(f);
-  const plan = planificarConsultas(local.conteos, { generosFiltro: f.generos, universoMarcas: local.universoMarcas, universoGeneros: local.universoGeneros, marcasPedidas: f.marcas });
-  const trabajos: ConsultaErp[] = plan.consultas;
-
-  const resultados: ItemErp[][] = new Array(trabajos.length);
-  let siguiente = 0;
-  const trabajador = async () => {
-    while (siguiente < trabajos.length) {
-      const i = siguiente++;
-      resultados[i] = await pedirAlErp(f, trabajos[i], origen);
+  const consultaId = randomUUID();
+  const inicio = performance.now();
+  const [conteos, datosOpciones] = await Promise.all([conocerLocal(), llamarErp({ operacion: "opciones" }, AbortSignal.timeout(35_000), origen)]);
+  const opciones = opcionesErp(datosOpciones);
+  const plan = planificarConsultas(conteos, f, opciones);
+  const orden = ordenEjecucionErp(prepararConteosErp(conteos, opciones), plan.consultas);
+  console.info("[marketing:erp]", JSON.stringify({ consultaId, evento: "inicio", lotes: plan.consultas.length, paralelo: Math.min(3, plan.consultas.length), parcial: false, estimadas: plan.estimadas, plan_ms: Math.round(performance.now() - inicio) }));
+  const resultados = await ejecutarLotesErp(orden, async (i, signal) => {
+    const c = plan.consultas[i];
+    const inicioLote = performance.now();
+    try {
+      const respuesta = respuestaErp(await llamarErp({
+        almacen: f.almacenes.join(","), grupo: c.grupos.join(","), marca: c.marcas.join(","), genero: c.generos.join(","), categoria: c.categorias.join(","),
+        fecha_minima_ingreso: f.fecha_minima_ingreso ? f.fecha_minima_ingreso.split("-").reverse().join("/") : "", stock_mayor_a: String(f.stock_minimo ?? 1),
+      }, signal, origen));
+      console.info("[marketing:erp]", JSON.stringify({ consultaId, evento: "lote", lote: i + 1, filas: respuesta.items.length, total_ms: Math.round(performance.now() - inicioLote), tiempos: respuesta.tiempos }));
+      return respuesta.items;
+    } catch (error) {
+      console.error("[marketing:erp]", JSON.stringify({ consultaId, evento: "error", lote: i + 1, total_ms: Math.round(performance.now() - inicioLote) }));
+      throw error;
     }
-  };
-  await Promise.all(Array.from({ length: Math.min(EN_PARALELO, trabajos.length) }, trabajador));
-  return { items: resultados.flat(), parcial: plan.parcial };
+  }, { plazoMs: Math.max(1, PLAZO_ERP_MS - (performance.now() - inicio)) });
+  const items = resultados.flat();
+  try { validarIntegridadErp(items); }
+  catch (error) {
+    console.error("[marketing:erp]", JSON.stringify({ consultaId, evento: "integridad_invalida", filas: items.length, total_ms: Math.round(performance.now() - inicio) }));
+    throw error;
+  }
+  console.info("[marketing:erp]", JSON.stringify({ consultaId, evento: "fin", filas: items.length, total_ms: Math.round(performance.now() - inicio) }));
+  return { items, parcial: false };
 }

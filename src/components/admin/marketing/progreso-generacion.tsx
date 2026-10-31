@@ -9,13 +9,13 @@ import { estadoGeneracion, type EstadoGeneracion } from "@/lib/actions/marketing
 import { cn } from "@/lib/utils";
 
 const ETAPAS: { id: EstadoGeneracion["etapa"]; texto: string; nota: string }[] = [
-  { id: "erp", texto: "Consultando el ERP", nota: "Es lo que más tarda: ~30 s con 1.000 productos y más con catálogos grandes" },
+  { id: "erp", texto: "Consultando el ERP", nota: "El tiempo depende de la cantidad de productos y de la respuesta del ERP" },
   { id: "armando", texto: "Armando las páginas", nota: "Una por producto y género, ordenadas por marca" },
   { id: "guardando", texto: "Guardando el catálogo", nota: "" },
 ];
 
 const ETAPAS_SINCRONIZAR: typeof ETAPAS = [
-  { id: "erp", texto: "Consultando el ERP", nota: "Es lo que más tarda: ~30 s con 1.000 productos y más con catálogos grandes" },
+  { id: "erp", texto: "Consultando el ERP", nota: "El tiempo depende de la cantidad de productos y de la respuesta del ERP" },
   { id: "armando", texto: "Armando los datos frescos", nota: "Tallas y precios de hoy" },
   { id: "guardando", texto: "Comparando con tu catálogo", nota: "" },
 ];

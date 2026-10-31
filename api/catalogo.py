@@ -30,7 +30,9 @@ equivalencia fija que se agrega en otra capa; este módulo no toca el PDF.
 import json
 import os
 import sys
+from math import isfinite
 from http.server import BaseHTTPRequestHandler
+from time import perf_counter
 
 import requests
 from bs4 import BeautifulSoup
@@ -89,6 +91,20 @@ def texto(td) -> str:
     return td.get_text(strip=True).replace("​", "").strip()
 
 
+def opciones_catalogo(s: requests.Session) -> dict:
+    """Códigos oficiales del mismo formulario que usa el ERP, sin inferirlos desde STOCK."""
+    r = s.post(CARGADOR_URL, data={"m": "PO", "f": "POVEXCA"}, timeout=30)
+    r.raise_for_status()
+    soup = BeautifulSoup(r.text, "html.parser")
+    opciones = {}
+    for dimension, campo in (("marcas", "marca"), ("generos", "genero"), ("grupos", "grupo"), ("categorias", "categoria")):
+        select = soup.find("select", id=lambda valor: valor and valor.endswith(f"_dd_{campo}"))
+        if select is None or not select.find_all("option"):
+            raise RuntimeError(f"No se pudo verificar el filtro {dimension} del ERP; no se generó el catálogo")
+        opciones[dimension] = [{"valor": o.get("value", ""), "nombre": texto(o)} for o in select.find_all("option")]
+    return opciones
+
+
 # --------------------------------------------------------------------------- #
 # Catálogo (PO/POVEXCA) — POST prepara el resultado en la sesión, GET lo trae
 # --------------------------------------------------------------------------- #
@@ -134,7 +150,7 @@ def _slug(texto_col: str) -> str:
     return texto_col.strip().lower().replace(" ", "_").replace(".", "").replace("/", "_")
 
 
-def cargar_excel(s: requests.Session, **filtros) -> str:
+def cargar_excel(s: requests.Session, *, _tiempos: dict | None = None, **filtros) -> str:
     """POST a cargador.aspx (deja el resultado listo en la sesión) + GET al
     endpoint global que lo devuelve como HTML con <table>."""
     params = {**_PARAMS_FIJOS, **filtros}
@@ -145,30 +161,38 @@ def cargar_excel(s: requests.Session, **filtros) -> str:
         "Referer": f"{BASE}/Default.aspx",
         "Accept": "*/*",
     }
+    inicio = perf_counter()
     r = s.post(CARGADOR_URL, data=params, headers=headers, timeout=60)
     r.raise_for_status()
     data = r.json()
+    if _tiempos is not None:
+        _tiempos["preparar_ms"] = round((perf_counter() - inicio) * 1000)
     # Filtros sin ninguna fila (p. ej. una marca sin stock en esos almacenes): es un resultado vacío, no un error.
     if data.get("message") == "No se encontraron resultados":
         return ""
     if data.get("message") != "OK":
         raise RuntimeError(f"El ERP no devolvió OK al preparar el catálogo: {data}")
 
-    # El ERP tarda en proporción (más que lineal) a las filas: ~27 s para 900 filas; las funciones de Vercel duran hasta 300 s.
+    # Preparación y descarga tienen límites propios; el ejecutor impone además un plazo al conjunto de lotes.
+    inicio = perf_counter()
     r = s.get(EXCEL_URL, headers={"Referer": f"{BASE}/Default.aspx"}, timeout=280)
     r.raise_for_status()
-    return r.text
+    html = r.text
+    if _tiempos is not None:
+        _tiempos["descargar_ms"] = round((perf_counter() - inicio) * 1000)
+        _tiempos["bytes_html"] = len(r.content)
+    return html
 
 
 def parse_tabla_catalogo(html: str) -> list[dict]:
     soup = BeautifulSoup(html, "html.parser")
     tabla = soup.find("table", id="testTable")
     if not tabla:
-        return []
+        raise RuntimeError("El ERP no devolvió la tabla de stock; la sesión puede haber vencido")
 
     filas = tabla.find_all("tr")
     if len(filas) < 3:
-        return []
+        raise RuntimeError("La tabla de stock del ERP llegó incompleta")
 
     encabezado_fijo = [texto(td) for td in filas[0].find_all(["th", "td"])]
     try:
@@ -179,6 +203,8 @@ def parse_tabla_catalogo(html: str) -> list[dict]:
     campos_antes = encabezado_fijo[:idx_tallas]  # NUMERO, IMAGEN, MARCA, ...
     campos_despues = encabezado_fijo[idx_tallas + 1:]  # STOCK, P. COMPRA, ...
     tallas_labels = [texto(td) for td in filas[1].find_all(["th", "td"])]
+    if not {"CODIGO UNIVERSAL", "MARCA", "GENERO"}.issubset(campos_antes) or "STOCK" not in campos_despues or "P. VENTA" not in campos_despues or not tallas_labels or len(set(tallas_labels)) != len(tallas_labels):
+        raise RuntimeError("Las columnas de stock del ERP cambiaron; se canceló la consulta")
 
     n_antes, n_tallas, n_despues = len(campos_antes), len(tallas_labels), len(campos_despues)
     esperado = n_antes + n_tallas + n_despues
@@ -186,9 +212,12 @@ def parse_tabla_catalogo(html: str) -> list[dict]:
     out = []
     for fila in filas[2:]:
         celdas = fila.find_all(["td", "th"])
+        es_producto = bool(celdas) and texto(celdas[0]).isdigit()
         if len(celdas) != esperado:
+            if es_producto:
+                raise RuntimeError("Una fila de producto del ERP tiene columnas incompletas; se canceló la consulta")
             continue  # fila de totales/pie u otra cosa que no calza con el layout
-        if not texto(celdas[0]).isdigit():
+        if not es_producto:
             continue
 
         item: dict = {}
@@ -199,18 +228,25 @@ def parse_tabla_catalogo(html: str) -> list[dict]:
             else:
                 item[_ALIAS_FIJOS.get(etiqueta, _slug(etiqueta))] = texto(celda) or None
 
-        tallas: dict[str, int] = {}
+        tallas: dict[str, int | float] = {}
         for talla, celda in zip(tallas_labels, celdas[n_antes:n_antes + n_tallas]):
             v = texto(celda)
             if v:
-                tallas[talla] = int(v) if v.isdigit() else v
+                if not _es_numero(v):
+                    raise RuntimeError("El ERP devolvió una cantidad por talla no válida; se canceló la consulta")
+                cantidad = float(v.replace(",", ""))
+                tallas[talla] = int(cantidad) if cantidad.is_integer() else cantidad
         item["tallas"] = tallas
 
         for etiqueta, celda in zip(campos_despues, celdas[n_antes + n_tallas:]):
             v = texto(celda)
+            if etiqueta in _ALIAS_FINALES and v and not _es_numero(v):
+                raise RuntimeError("El ERP devolvió un stock o precio no válido; se canceló la consulta")
             item[_ALIAS_FINALES.get(etiqueta, _slug(etiqueta))] = float(v.replace(",", "")) if _es_numero(v) else (v or None)
 
         out.append(item)
+        if not item.get("cod_universal"):
+            raise RuntimeError("El ERP devolvió un producto sin código; se canceló la consulta")
     return out
 
 
@@ -218,8 +254,7 @@ def _es_numero(v: str) -> bool:
     if not v:
         return False
     try:
-        float(v.replace(",", ""))
-        return True
+        return isfinite(float(v.replace(",", "")))
     except ValueError:
         return False
 
@@ -239,9 +274,11 @@ def scrapear_catalogo(
     codigo_universal: str = "",
     stock_mayor_a: str = "1",
     fecha_minima_ingreso: str = "",
+    _tiempos: dict | None = None,
 ) -> list[dict]:
     html = cargar_excel(
         s,
+        _tiempos=_tiempos,
         p_almacen=almacen,
         p_grupo=grupo,
         p_marca=marca,
@@ -262,7 +299,25 @@ def scrapear_catalogo(
         p_porcentaje_1_4_caja="",
         p_fecha_minima_ingreso=fecha_minima_ingreso,
     )
-    return parse_tabla_catalogo(html) if html else []
+    inicio = perf_counter()
+    items = parse_tabla_catalogo(html) if html else []
+    if _tiempos is not None:
+        _tiempos["parsear_ms"] = round((perf_counter() - inicio) * 1000)
+    return items
+
+
+def consultar_catalogo(filtros: dict) -> dict:
+    """Mismo resultado en local y Vercel, con tiempos sin credenciales ni datos de productos."""
+    inicio = perf_counter()
+    tiempos = {"descargar_ms": 0, "bytes_html": 0}
+    with crear_sesion() as s:
+        login(s)
+        tiempos["login_ms"] = round((perf_counter() - inicio) * 1000)
+        if filtros.get("operacion") == "opciones":
+            return {"opciones": opciones_catalogo(s), "tiempos": tiempos}
+        items = scrapear_catalogo(s, **filtros, _tiempos=tiempos)
+    tiempos["total_ms"] = round((perf_counter() - inicio) * 1000)
+    return {"items": items, "tiempos": tiempos}
 
 
 # --------------------------------------------------------------------------- #
@@ -290,15 +345,18 @@ class handler(BaseHTTPRequestHandler):
             self._json(400, {"error": "Body inválido, se esperaba JSON"})
             return
 
-        if "almacen" not in filtros:
+        if not isinstance(filtros, dict):
+            self._json(400, {"error": "Se esperaba un objeto de filtros"})
+            return
+
+        if "almacen" not in filtros and filtros.get("operacion") != "opciones":
             self._json(400, {"error": "Falta 'almacen' en los filtros"})
             return
 
         try:
-            s = crear_sesion()
-            login(s)
-            items = scrapear_catalogo(s, **filtros)
-            self._json(200, {"items": items})
+            self._json(200, consultar_catalogo(filtros))
+        except requests.Timeout:
+            self._json(504, {"error": "El ERP agotó el tiempo de respuesta; vuelve a intentarlo o reduce la selección"})
         except Exception as e:  # noqa: BLE001 — se reporta tal cual al caller
             self._json(500, {"error": str(e)})
 
@@ -320,13 +378,16 @@ def _main_json() -> None:
                     os.environ.setdefault(clave.strip(), valor.strip().strip('"').strip("'"))
 
     filtros = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {}
-    if "almacen" not in filtros:
+    if "almacen" not in filtros and filtros.get("operacion") != "opciones":
         raise SystemExit("Uso: python3 api/catalogo.py '{\"almacen\": \"T01,...\", \"marca\": \"ADIDAS\", ...}'")
 
-    s = crear_sesion()
-    login(s)
-    items = scrapear_catalogo(s, **filtros)
-    json.dump({"items": items}, sys.stdout, ensure_ascii=False)
+    try:
+        respuesta = consultar_catalogo(filtros)
+    except requests.Timeout:
+        respuesta = {"error": "El ERP agotó el tiempo de respuesta; vuelve a intentarlo o reduce la selección"}
+    except Exception as e:
+        respuesta = {"error": str(e)}
+    json.dump(respuesta, sys.stdout, ensure_ascii=False)
 
 
 if __name__ == "__main__":

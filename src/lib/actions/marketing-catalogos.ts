@@ -5,6 +5,7 @@ import { revalidatePath, updateTag } from "next/cache";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import { db } from "@/lib/db";
+import { claveConsultaErp } from "@/lib/marketing-erp-plan";
 import { rateLimit } from "@/lib/rate-limit";
 import { IMAGENES_BASE, enlacesCatalogo, sesionMarketing } from "@/lib/marketing";
 import { borradorDeVersion, enlacesDeContacto, plantillasPorId, sincronizarVersiones, zonasDeBiblioteca } from "@/lib/marketing-catalogos-datos";
@@ -21,7 +22,6 @@ import {
   ALMACENES,
   armarSnapshot,
   CLAVE_PRODUCTOS,
-  claveConsultaErp,
   conZonasClicables,
   validarPaginas,
   escalaDe,
@@ -62,12 +62,13 @@ type EntradaFiltros = {
 
 /** Valida los filtros que llegan del navegador (nunca se confía en ellos) y los deja en su forma guardada. */
 async function filtrosDeEntrada(input: EntradaFiltros): Promise<{ filtros: FiltrosCatalogo } | { error: string }> {
-  const almacenes = valoresFiltro(input.almacenes)?.filter((a): a is (typeof ALMACENES)[number] => (ALMACENES as readonly string[]).includes(a));
+  const almacenes = valoresFiltro(input.almacenes);
   const grupos = valoresFiltro(input.grupos);
   const marcas = valoresFiltro(input.marcas);
   const generos = valoresFiltro(input.generos);
   const categorias = valoresFiltro(input.categorias);
   if (!almacenes || almacenes.length === 0) return { error: "Elige al menos un almacén" };
+  if (almacenes.some((a) => !(ALMACENES as readonly string[]).includes(a))) return { error: "La selección contiene un almacén no válido" };
   if (!grupos || !marcas || !generos || !categorias) return { error: "Filtro con caracteres no válidos" };
 
   const tallas = valoresTalla(input.tallas ?? []);
@@ -82,6 +83,7 @@ async function filtrosDeEntrada(input: EntradaFiltros): Promise<{ filtros: Filtr
   const stock_minimo = stockMinimoFiltro(input.stock_minimo);
   if (fecha_minima_ingreso === undefined) return { error: "La fecha mínima de ingreso no es válida" };
   if (stock_minimo === undefined) return { error: "El stock mínimo debe ser un entero mayor o igual a 1" };
+  if (input.solo_unicos === true && stock_minimo !== 1) return { error: "Para solo únicos, el stock mínimo debe ser 1" };
 
   // Plantillas elegidas por marca: solo se aceptan pares con formato de marca e id (el resto lo valida la generación).
   const plantillas: Record<string, string> = {};
@@ -179,10 +181,13 @@ export async function iniciarGeneracion(input: {
       ...(orden.length > 0 ? { orden } : {}),
     };
     const id = randomUUID();
-    await db.execute({
-      sql: "INSERT INTO mk_generaciones (id, titulo, filtros, created_by) VALUES (?, ?, ?, ?)",
-      args: [id, titulo, JSON.stringify(filtros), sesion.id],
-    });
+    const creada = await db.batch([
+      { sql: "SELECT pg_advisory_xact_lock(hashtext('mk-generacion-activa'))" },
+      { sql: `INSERT INTO mk_generaciones (id, titulo, filtros, created_by) SELECT ?, ?, ?, ?
+              WHERE NOT EXISTS (SELECT 1 FROM mk_generaciones WHERE estado = 'en_curso' AND modo <> 'precarga') RETURNING id`,
+        args: [id, titulo, JSON.stringify(filtros), sesion.id] },
+    ], "write");
+    if (!creada[1].rows.length) return { success: false, msg: "Ya hay una consulta al ERP en curso; espera a que termine" };
     const origen = await origenDeLaPeticion();
     after(() => ejecutarGeneracion(id, origen));
     revalidatePath("/admin/marketing/catalogos");
@@ -481,11 +486,14 @@ export async function iniciarSincronizacion(input: EntradaFiltros & { catalogoId
     }
 
     const id = randomUUID();
-    await db.execute({
-      sql: `INSERT INTO mk_generaciones (id, titulo, filtros, created_by, modo, base_catalogo_id, base_version)
-            VALUES (?, ?, ?, ?, 'sincronizar', ?, ?)`,
-      args: [id, c.rows[0].titulo as string, JSON.stringify(base.filtros), sesion.id, input.catalogoId, version],
-    });
+    const creada = await db.batch([
+      { sql: "SELECT pg_advisory_xact_lock(hashtext('mk-generacion-activa'))" },
+      { sql: `INSERT INTO mk_generaciones (id, titulo, filtros, created_by, modo, base_catalogo_id, base_version)
+              SELECT ?, ?, ?, ?, 'sincronizar', ?, ?
+              WHERE NOT EXISTS (SELECT 1 FROM mk_generaciones WHERE estado = 'en_curso' AND modo <> 'precarga') RETURNING id`,
+        args: [id, c.rows[0].titulo as string, JSON.stringify(base.filtros), sesion.id, input.catalogoId, version] },
+    ], "write");
+    if (!creada[1].rows.length) return { success: false, msg: "Ya hay una consulta al ERP en curso; espera a que termine" };
     const origen = await origenDeLaPeticion();
     after(() => ejecutarSincronizacion(id, origen));
     return { success: true, msg: "Consultando el ERP", data: { id } };
@@ -575,14 +583,17 @@ export async function precargarErp(input: { almacenes: string[]; grupos: string[
     // Las precargas viejas ya no sirven: fuera.
     await db.execute("DELETE FROM mk_generaciones WHERE modo = 'precarga' AND created_at::timestamp < now_text()::timestamp - make_interval(mins => 60)");
     const clave = claveConsultaErp(base.filtros);
-    const previa = await db.execute({
-      sql: `SELECT 1 FROM mk_generaciones WHERE modo = 'precarga' AND filtros = ? AND estado <> 'error'
-            AND created_at::timestamp > now_text()::timestamp - make_interval(mins => 10) LIMIT 1`,
-      args: [clave],
-    });
-    if (previa.rows.length > 0) return { success: true, msg: "Ya hay una consulta al ERP con estos filtros" };
     const id = randomUUID();
-    await db.execute({ sql: "INSERT INTO mk_generaciones (id, titulo, filtros, modo) VALUES (?, 'Precarga del ERP', ?, 'precarga')", args: [id, clave] });
+    // El bloqueo se toma antes del INSERT, dentro de la misma transacción. Dos peticiones concurrentes
+    // no pueden observar ambas «no existe» y lanzar dos precargas para la misma clave.
+    const creada = await db.batch([
+      { sql: "SELECT pg_advisory_xact_lock(hashtext(?))", args: [`mk-erp:${clave}`] },
+      { sql: `INSERT INTO mk_generaciones (id, titulo, filtros, modo)
+              SELECT ?, 'Precarga del ERP', ?, 'precarga'
+              WHERE NOT EXISTS (SELECT 1 FROM mk_generaciones WHERE modo = 'precarga' AND filtros = ? AND estado <> 'error'
+                AND created_at::timestamp > now_text()::timestamp - make_interval(mins => 10)) RETURNING id`, args: [id, clave, clave] },
+    ], "write");
+    if (!creada[1].rows.length) return { success: true, msg: "Ya hay una consulta al ERP con estos filtros" };
     const origen = await origenDeLaPeticion();
     after(() => ejecutarPrecarga(id, origen));
     return { success: true, msg: "Consultando el ERP por adelantado" };

@@ -6,10 +6,11 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { consultarCatalogoErp } from "@/lib/marketing-erp";
+import { claveConsultaErp } from "@/lib/marketing-erp-plan";
+import { esperarPrecarga, respuestaErp, validarIntegridadErp } from "@/lib/marketing-erp-control";
 import type { ItemErp } from "@/lib/marketing-catalogo";
 import {
   MARCA_GENERICA,
-  claveConsultaErp,
   conFijasAutomaticas,
   construirBorrador,
   escalaDe,
@@ -47,24 +48,25 @@ type ConsultaEnMemoria = { items: ItemErp[]; parcial: boolean; al: string };
 
 /**
  * La consulta al ERP con estos filtros que otra petición hizo por adelantado (ver `ejecutarPrecarga`): si ya terminó, se usa; si
- * sigue en curso, se ESPERA a que termine (no se repite la consulta); si no hay ninguna vigente o falló, devuelve null.
+ * sigue en curso, se espera a que termine. Solo la ausencia de una precarga permite consultar; un fallo se comunica.
  */
 async function consultaPrecargada(filtros: FiltrosCatalogo): Promise<ConsultaEnMemoria | null> {
   const clave = claveConsultaErp(filtros);
-  const limite = Date.now() + 200_000;
-  for (;;) {
+  return esperarPrecarga(async () => {
     const r = await db.execute({
-      sql: `SELECT estado, resultado FROM mk_generaciones
+      sql: `SELECT estado, resultado, mensaje FROM mk_generaciones
             WHERE modo = 'precarga' AND filtros = ? AND created_at::timestamp > now_text()::timestamp - make_interval(mins => ?)
             ORDER BY created_at DESC LIMIT 1`,
       args: [clave, MINUTOS_PRECARGA],
     });
-    if (r.rows.length === 0) return null;
-    const f = r.rows[0] as { estado: string; resultado: string | null };
-    if (f.estado === "listo" && f.resultado) return JSON.parse(f.resultado) as ConsultaEnMemoria;
-    if (f.estado === "error" || Date.now() > limite) return null;
-    await new Promise((res) => setTimeout(res, 1000));
-  }
+    return r.rows.length ? r.rows[0] as { estado: string; resultado: string | null; mensaje: string | null } : null;
+  }, (json) => {
+    const val = JSON.parse(json) as ConsultaEnMemoria;
+    respuestaErp(val);
+    validarIntegridadErp(val.items);
+    if (val.parcial || !val.al || !Number.isFinite(Date.parse(val.al))) throw new Error("La consulta previa no es completa y vigente; vuelve a intentarlo");
+    return val;
+  });
 }
 
 /**
