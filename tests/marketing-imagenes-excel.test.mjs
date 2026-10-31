@@ -100,3 +100,16 @@ test("se exporta exactamente la selección filtrada y también se admite un resu
   assert.equal(vacio.worksheets[0].rowCount, 1);
   assert.equal(vacio.getWorksheet("Información").getCell("B3").value, 0);
 });
+
+
+test("el Excel distingue la fecha del stock de la verificación vigente de imágenes", async () => {
+  const libro = new ExcelJS.Workbook();
+  await libro.xlsx.load(await excelProductosSinImagen([], {
+    ...consulta,
+    imagenesVerificadasAl: "2026-10-31T17:40:00Z",
+  }));
+  const info = libro.getWorksheet("Información");
+  assert(info.getCell("B1").text.includes("23:07"));
+  assert.equal(info.getCell("A6").value, "Imágenes comprobadas en R2");
+  assert(info.getCell("B6").text.includes("12:40:00"));
+});

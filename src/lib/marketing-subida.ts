@@ -12,7 +12,7 @@
 //   5. registrar versión y enlace en mk_imagenes (Neon)
 import sharp from "sharp";
 import { db } from "@/lib/db";
-import { r2Subir } from "@/lib/r2";
+import { ErrorCondicionR2, r2ConsultarObjeto, r2Subir } from "@/lib/r2";
 import { claveDerivado, codigoImagen } from "@/lib/marketing-rutas-imagen";
 import { urlPublicaOriginal } from "@/lib/marketing";
 import { LADO_IMAGEN } from "@/lib/marketing-codigos";
@@ -40,6 +40,7 @@ export async function guardarImagen(
   modo: "nueva" | "reemplazo",
   userId: string
 ): Promise<ResultadoSubida> {
+  cod = codigoImagen(cod);
   // 1. Validación (el navegador ya estandariza, pero la API no confía en él).
   let meta: sharp.Metadata;
   try {
@@ -58,19 +59,25 @@ export async function guardarImagen(
     throw new ErrorSubida("La imagen no tiene fondo transparente", 422);
   }
 
-  const actual = await db.execute({
+  const [actual, objeto] = await Promise.all([db.execute({
     sql: "SELECT version FROM mk_imagenes WHERE cod_universal = ?",
     args: [cod],
-  });
-  const existe = actual.rows.length > 0;
+  }), r2ConsultarObjeto(`${cod}.png`)]);
+  const existe = objeto !== null && objeto.bytes > 0;
   if (modo === "nueva" && existe) throw new ErrorSubida(`${cod} ya existe; usa «Reemplazar»`, 409);
   if (modo === "reemplazo" && !existe) throw new ErrorSubida(`${cod} no existe todavía`, 404);
-  const version = existe ? (actual.rows[0].version as number) + 1 : 1;
+  const version = actual.rows.length ? (actual.rows[0].version as number) + 1 : 1;
 
   // Sin historial remoto: se conserva solo la imagen vigente por código.
 
   // 3–4. Original y derivados, en R2.
-  await r2Subir(`${codigoImagen(cod)}.png`, png, "image/png", CACHE_ORIGINAL);
+  try {
+    await r2Subir(`${cod}.png`, png, "image/png", CACHE_ORIGINAL,
+      objeto ? { ifMatch: objeto.etag } : { ifNoneMatch: "*" });
+  } catch (e) {
+    if (e instanceof ErrorCondicionR2) throw new ErrorSubida(e.message, 409);
+    throw e;
+  }
   const derivados = await Promise.all(
     ANCHOS_DERIVADOS.map(async (w) => ({
       w,

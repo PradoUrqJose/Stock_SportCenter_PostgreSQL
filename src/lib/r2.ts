@@ -75,7 +75,8 @@ export async function r2Subir(
   clave: string,
   cuerpo: Buffer | Uint8Array,
   contentType: string,
-  cacheControl: string
+  cacheControl: string,
+  condicion?: { ifNoneMatch?: string; ifMatch?: string },
 ): Promise<void> {
   const c = contexto();
   const res = await c.aws.fetch(urlObjeto(c, clave), {
@@ -86,10 +87,28 @@ export async function r2Subir(
       "Content-Type": contentType,
       "Cache-Control": cacheControl,
       "Content-Length": String(cuerpo.byteLength),
+      ...(condicion?.ifNoneMatch ? { "If-None-Match": condicion.ifNoneMatch } : {}),
+      ...(condicion?.ifMatch ? { "If-Match": condicion.ifMatch } : {}),
     },
     cache: "no-store",
   });
+  if (res.status === 412) throw new ErrorCondicionR2("La imagen cambió en R2; actualiza la pantalla antes de volver a subirla");
   await verificar(res, "PUT", clave);
+}
+
+export class ErrorCondicionR2 extends Error {}
+
+/** HEAD firmado: no confunde un error de red/permisos con una ausencia. */
+export async function r2ConsultarObjeto(clave: string) {
+  const c = contexto();
+  const res = await c.aws.fetch(urlObjeto(c, clave), {
+    method: "HEAD", cache: "no-store", signal: AbortSignal.timeout(15_000),
+  });
+  if (res.status === 404) return null;
+  await verificar(res, "HEAD", clave);
+  const etag = res.headers.get("etag");
+  if (!etag) throw new Error("R2 no devolvió la revisión del objeto");
+  return { etag, bytes: Number(res.headers.get("content-length")) };
 }
 
 /** Copia un objeto dentro del mismo bucket. Devuelve false si el origen no existe. */

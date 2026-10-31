@@ -3,7 +3,7 @@ import type { ProductoRevisionImagen } from "./marketing-imagenes-pendientes";
 
 export async function excelProductosSinImagen(
   productos: readonly ProductoRevisionImagen[],
-  consulta: { fecha: string | null; almacenes: string[] },
+  consulta: { fecha: string | null; almacenes: string[]; imagenesVerificadasAl?: string },
 ): Promise<Buffer> {
   const libro = new ExcelJS.Workbook();
   libro.creator = "Sport Center";
@@ -77,6 +77,10 @@ export async function excelProductosSinImagen(
       "Stock por revisar",
       "El ERP repite una ficha del código y edad. No se suman cantidades ambiguas.",
     ],
+  ]);
+  if (consulta.imagenesVerificadasAl) info.addRow([
+    "Imágenes comprobadas en R2",
+    new Intl.DateTimeFormat("es-PE", { timeZone: "America/Lima", hourCycle: "h23", dateStyle: "medium", timeStyle: "medium" }).format(new Date(consulta.imagenesVerificadasAl)),
   ]);
   info.getColumn(1).font = { bold: true };
   info.getColumn(2).alignment = { wrapText: true };

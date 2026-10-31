@@ -7,6 +7,7 @@ import { tiposCatalogo } from "@/lib/marketing-tipos";
 import { AsistenteCatalogo } from "@/components/admin/marketing/asistente-catalogo";
 import { preconnect } from "react-dom";
 import { ProgresoGeneracion } from "@/components/admin/marketing/progreso-generacion";
+import { inventarioImagenesVigente } from "@/lib/marketing-inventario-imagenes";
 
 // Tipografía del diseño (la misma del catálogo): el editor de posiciones del texto la usa para mostrar el ejemplo real.
 const montserrat = Montserrat({ subsets: ["latin"], weight: "900", display: "swap" });
@@ -39,9 +40,9 @@ export default async function NuevoCatalogoPage({ searchParams }: { searchParams
     plantillasGestion(),
     fijasGestion(),
     // Zapatilla de ejemplo para acomodar su posición: una conocida si existe y, si no, la primera imagen.
-    db.execute("SELECT cod_universal, version FROM mk_imagenes ORDER BY (cod_universal = 'IG6410') DESC, cod_universal LIMIT 1"),
+    inventarioImagenesVigente(),
   ]);
-  const fila = ejemplo.rows[0];
+  const cod = ejemplo.versiones.has("IG6410") ? "IG6410" : ejemplo.versiones.keys().next().value;
 
   return (
     <div className="p-4 md:p-8">
@@ -53,7 +54,7 @@ export default async function NuevoCatalogoPage({ searchParams }: { searchParams
           base: IMAGENES_BASE,
           plantillas,
           fijas,
-          ejemplo: fila ? { cod: fila.cod_universal as string, v: fila.version as number } : null,
+          ejemplo: cod ? { cod, v: ejemplo.versiones.get(cod)! } : null,
           tipos,
           fuente: montserrat.style.fontFamily,
           opciones,

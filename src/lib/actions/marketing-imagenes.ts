@@ -1,8 +1,9 @@
 "use server";
 
-import { db } from "@/lib/db";
 import { sesionMarketing } from "@/lib/marketing";
 import { codigoValido, normalizarCodigo } from "@/lib/marketing-codigos";
+import { inventarioImagenesVigente } from "@/lib/marketing-inventario-imagenes";
+import { versionImagenDisponible } from "@/lib/marketing-inventario-imagenes-control";
 import type { ActionResult } from "@/types";
 
 const MAX_CODIGOS = 1000;
@@ -15,9 +16,10 @@ export async function consultarCodigosExistentes(codigos: string[]): Promise<Act
   const validos = [...new Set(codigos.map(normalizarCodigo).filter(codigoValido))];
   if (validos.length === 0) return { success: true, msg: "", data: [] };
 
-  const r = await db.execute({
-    sql: "SELECT cod_universal FROM mk_imagenes WHERE cod_universal = ANY(?)",
-    args: [validos],
-  });
-  return { success: true, msg: "", data: r.rows.map((x) => x.cod_universal as string) };
+  try {
+    const { versiones } = await inventarioImagenesVigente();
+    return { success: true, msg: "", data: validos.filter((c) => versionImagenDisponible(c, versiones) > 0) };
+  } catch {
+    return { success: false, msg: "No se pudo comprobar R2. Vuelve a intentarlo antes de subir imágenes." };
+  }
 }

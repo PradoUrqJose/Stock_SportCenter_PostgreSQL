@@ -89,12 +89,14 @@ export function ProductosSinImagen({
   pendientes,
   total,
   consultadoAl,
+  imagenesVerificadasAl,
   almacenes,
   consulta,
 }: {
   pendientes: ProductoRevisionImagen[];
   total: number;
   consultadoAl: string | null;
+  imagenesVerificadasAl: string;
   almacenes: string[];
   consulta: EstadoRevisionImagen | null;
 }) {
@@ -511,6 +513,10 @@ export function ProductosSinImagen({
               </dd>
             </div>
             <div>
+              <dt className="text-xs text-muted-foreground">Imágenes comprobadas en R2</dt>
+              <dd className="mt-1 font-medium">{fechaStock(imagenesVerificadasAl)} (Lima)</dd>
+            </div>
+            <div>
               <dt className="text-xs text-muted-foreground">Almacenes</dt>
               <dd className="mt-1 text-xs leading-relaxed">
                 {almacenes.join(", ")}
@@ -519,9 +525,10 @@ export function ProductosSinImagen({
           </dl>
           <div className="space-y-2 border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground">
             <p>
-              Buscar, filtrar y exportar utiliza la última consulta guardada.
-              Los archivos originales se comprueban directamente en R2 al abrir
-              o actualizar esta pantalla.
+              El stock usa la última consulta guardada del ERP. Las imágenes
+              se comprueban directamente en R2 al abrir, cada minuto y al volver
+              a esta ventana. «Actualizar imágenes» vuelve a comprobarlas sin
+              consultar el ERP.
             </p>
             <p>
               Una imagen resuelve todas las edades y tallas de un código. Se

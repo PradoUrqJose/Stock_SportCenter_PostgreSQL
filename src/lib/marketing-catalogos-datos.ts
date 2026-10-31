@@ -1,6 +1,8 @@
 // Lecturas de servidor compartidas por las acciones de catálogos y las páginas
 // del editor: plantillas y versiones de imagen al día.
 import { db } from "@/lib/db";
+import { inventarioImagenesVigente } from "@/lib/marketing-inventario-imagenes";
+import { versionImagenDisponible } from "@/lib/marketing-inventario-imagenes-control";
 import type { Borrador, Enlaces, FijaBiblioteca, PlantillaLista, PlantillaSnap, Snapshot, ZonaEnlace } from "@/lib/marketing-catalogo";
 
 type PlantillaFila = { id: string; ancho: number; alto: number; fondo_key: string; zonas: string };
@@ -25,16 +27,12 @@ export async function plantillasPorId(ids?: string[]): Promise<Record<string, Pl
 export async function sincronizarVersiones(b: Borrador): Promise<Borrador> {
   const codigos = [...new Set(b.productos.map((p) => p.cod))];
   if (codigos.length === 0) return b;
-  const r = await db.execute({
-    sql: "SELECT cod_universal, version FROM mk_imagenes WHERE cod_universal = ANY(?)",
-    args: [codigos],
-  });
-  const vigente = new Map(r.rows.map((f) => [f.cod_universal as string, f.version as number]));
+  const { versiones } = await inventarioImagenesVigente();
   return {
     ...b,
     productos: b.productos.map((p) => {
-      const v = vigente.get(p.cod);
-      return v !== undefined && v !== p.v ? { ...p, v } : p;
+      const v = versionImagenDisponible(p.cod, versiones);
+      return v !== p.v ? { ...p, v } : p;
     }),
   };
 }

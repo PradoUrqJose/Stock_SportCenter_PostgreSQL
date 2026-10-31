@@ -12,6 +12,7 @@ import { ImagenCard } from "@/components/admin/marketing/imagen-card";
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { inventarioImagenesVigente } from "@/lib/marketing-inventario-imagenes";
 
 const POR_PAGINA = 48;
 
@@ -54,6 +55,7 @@ export default async function ImagenesPage({
   const q = primero(sp.q).trim().slice(0, 60);
   const pagina = Math.max(1, parseInt(primero(sp.pagina), 10) || 1);
   const like = patronLike(q);
+  const inventario = await inventarioImagenesVigente();
 
   // productos tiene una fila por (cod_universal, genero): se colapsa a una por código.
   const result = await db.execute({
@@ -65,10 +67,11 @@ export default async function ImagenesPage({
             FROM productos
             GROUP BY UPPER(cod_universal)
           ) p ON p.cod = m.cod_universal
-          WHERE ? = '' OR m.cod_universal LIKE ? OR p.marca ILIKE ? OR p.modelo ILIKE ?
+          WHERE m.cod_universal = ANY(?)
+            AND (? = '' OR m.cod_universal LIKE ? OR p.marca ILIKE ? OR p.modelo ILIKE ?)
           ORDER BY m.cod_universal
           LIMIT ? OFFSET ?`,
-    args: [q, like, like, like, POR_PAGINA, (pagina - 1) * POR_PAGINA],
+    args: [[...inventario.versiones.keys()], q, like, like, like, POR_PAGINA, (pagina - 1) * POR_PAGINA],
   });
   const filas = result.rows as unknown as Fila[];
 

@@ -61,7 +61,7 @@ export function SubirImagenes() {
 
   async function marcarExistentes(ids: number[], codigos: string[]) {
     const r = await consultarCodigosExistentes(codigos);
-    if (!r.success) return;
+    if (!r.success) { setAviso(r.msg); return; }
     const existentes = new Set(r.data);
     setItems((prev) =>
       prev.map((i) => (ids.includes(i.id) ? { ...i, existe: existentes.has(i.codigo) } : i))

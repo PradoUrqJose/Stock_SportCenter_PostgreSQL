@@ -26,6 +26,8 @@ import { sincronizarBorrador } from "@/lib/marketing-sincronizar";
 import { convertirProductos, textoAviso } from "@/lib/marketing-tallas";
 import { indiceDeTallas } from "@/lib/marketing-tallas-datos";
 import { borradorDeVersion, fijasDeBiblioteca, plantillasGestion } from "@/lib/marketing-catalogos-datos";
+import { inventarioImagenesVigente } from "@/lib/marketing-inventario-imagenes";
+import { versionImagenDisponible } from "@/lib/marketing-inventario-imagenes-control";
 
 /** El ERP tiene un tope de 4 min; pasado este tiempo una generación en curso se da por perdida. */
 export const MINUTOS_ABANDONO = 6;
@@ -110,14 +112,8 @@ async function borradorDeErp(id: string, filtros: FiltrosCatalogo, origen?: stri
 
   await etapa(id, "armando");
   const codigos = [...new Set(items.map((i) => i.cod_universal?.trim().toUpperCase()).filter((c): c is string => Boolean(c)))];
-  const versiones = new Map<string, number>();
-  if (codigos.length > 0) {
-    const r = await db.execute({
-      sql: "SELECT cod_universal, version FROM mk_imagenes WHERE cod_universal = ANY(?)",
-      args: [codigos],
-    });
-    for (const f of r.rows) versiones.set(f.cod_universal as string, f.version as number);
-  }
+  const inventario = await inventarioImagenesVigente();
+  const versiones = new Map(codigos.map((c) => [c, versionImagenDisponible(c, inventario.versiones)]));
 
   // Cada marca usa la plantilla elegida (o su predeterminada); sin la suya, la genérica; si tampoco
   // hay genérica, el producto no entra y se avisa en el resumen.

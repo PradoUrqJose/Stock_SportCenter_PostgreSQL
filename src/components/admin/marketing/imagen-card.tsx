@@ -72,7 +72,7 @@ export function ImagenCard({ codigo, urlMiniatura, urlOriginal, version, detalle
         </div>
         <div className="px-2.5 py-2">
           <p className="font-mono text-xs font-medium text-foreground">{codigo}</p>
-          <p className="truncate text-xs text-muted-foreground">{detalle ?? "Sin producto en el ERP"}</p>
+          <p className="truncate text-xs text-muted-foreground">{detalle ?? "Sin descripción guardada"}</p>
         </div>
       </button>
 
@@ -81,7 +81,7 @@ export function ImagenCard({ codigo, urlMiniatura, urlOriginal, version, detalle
           <DialogHeader>
             <DialogTitle className="font-mono">{codigo}</DialogTitle>
             <DialogDescription>
-              {detalle ?? "Sin producto en el ERP"} · versión {version}
+              {detalle ?? "Sin descripción guardada"} · versión {version}
             </DialogDescription>
           </DialogHeader>
           {open && (

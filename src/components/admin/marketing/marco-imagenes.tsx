@@ -1,9 +1,10 @@
 "use client";
 
 import Link, { useLinkStatus } from "next/link";
-import { createContext, useContext, useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
-import { ImageOff, Images, Loader2 } from "lucide-react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { ImageOff, Images, Loader2, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { SubirImagenes } from "./subir-imagenes";
 import { cn } from "@/lib/utils";
 
@@ -33,8 +34,27 @@ function IndicadorNavegacion() {
 /** Encabezado y pestañas persistentes: las cargas de rutas solo reemplazan el contenido. */
 export function MarcoImagenes({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [actualizando, startTransition] = useTransition();
+  const ultimoIntento = useRef(0);
   const [vista, setVista] = useState<VistaPendientes>("tabla");
   const contexto = useMemo(() => ({ vista, setVista }), [vista]);
+  useEffect(() => {
+    const refrescar = () => {
+      if (document.visibilityState !== "visible" || document.querySelector('[role="dialog"]')) return;
+      if (Date.now() - ultimoIntento.current < 15_000) return;
+      ultimoIntento.current = Date.now();
+      startTransition(() => router.refresh());
+    };
+    const timer = setInterval(refrescar, 60_000);
+    window.addEventListener("focus", refrescar);
+    document.addEventListener("visibilitychange", refrescar);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", refrescar);
+      document.removeEventListener("visibilitychange", refrescar);
+    };
+  }, [router]);
   return (
     <VistaContext.Provider value={contexto}>
       <section
@@ -83,6 +103,21 @@ export function MarcoImagenes({ children }: { children: React.ReactNode }) {
               <IndicadorNavegacion />
             </Link>
           ))}
+          <Button
+            className="my-auto ml-auto"
+            size="sm"
+            variant="ghost"
+            aria-label="Comprobar imágenes en R2"
+            title="Se comprueban automáticamente cada minuto y al volver a esta ventana"
+            disabled={actualizando}
+            onClick={() => {
+              ultimoIntento.current = Date.now();
+              startTransition(() => router.refresh());
+            }}
+          >
+            <RefreshCw className={cn("size-3.5", actualizando && "animate-spin")} />
+            <span className="hidden sm:inline">Actualizar imágenes</span>
+          </Button>
         </nav>
         <div id="contenido-imagenes">{children}</div>
       </section>

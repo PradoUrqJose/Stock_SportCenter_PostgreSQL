@@ -12,6 +12,7 @@ export default async function SinImagenPage() {
       pendientes={revision.pendientes}
       total={revision.productos.length}
       consultadoAl={revision.consultadoAl}
+      imagenesVerificadasAl={revision.imagenesVerificadasAl}
       almacenes={revision.almacenes}
       consulta={revision.consulta}
     />

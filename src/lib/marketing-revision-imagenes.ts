@@ -5,11 +5,10 @@ import { ALMACENES, normalizarFiltros } from "@/lib/marketing-catalogo";
 import { consultarProductosParaImagenesErp } from "@/lib/marketing-erp";
 import {
   productosRevisionImagen,
-  codigosImagenesR2,
   sinImagenRegistrada,
   type ProductoRevisionImagen,
 } from "@/lib/marketing-imagenes-pendientes";
-import { r2ListarOriginales } from "@/lib/r2";
+import { inventarioImagenesVigente } from "@/lib/marketing-inventario-imagenes";
 
 export type EstadoRevisionImagen = {
   id: string;
@@ -22,13 +21,14 @@ const CADUCIDAD_MS = 6 * 60_000;
 export async function revisionImagenesConPendientes() {
   const [revision, imagenes] = await Promise.all([
     datosRevisionImagenes(),
-    r2ListarOriginales(),
+    inventarioImagenesVigente(),
   ]);
   return {
     ...revision,
+    imagenesVerificadasAl: imagenes.verificadoAl,
     pendientes: sinImagenRegistrada(
       revision.productos,
-      codigosImagenesR2(imagenes),
+      [...imagenes.versiones.keys()],
     ),
   };
 }
