@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -107,6 +107,9 @@ export function ProductosSinImagen({
   const [pagina, setPagina] = useState(1);
   const [seleccionado, setSeleccionado] =
     useState<ProductoRevisionImagen | null>(null);
+  const selectorImagen = useRef<HTMLInputElement>(null);
+  const productoPorSubir = useRef<ProductoRevisionImagen | null>(null);
+  const [archivoElegido, setArchivoElegido] = useState<File | null>(null);
   const [estado, setEstado] = useState(consulta);
   const [iniciando, setIniciando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -195,12 +198,29 @@ export function ProductosSinImagen({
     if (valor) exportacion.set(clave, valor);
   const urlExcel = `/api/marketing/imagenes/pendientes/exportar?${exportacion}`;
   const seleccionar = (producto: ProductoRevisionImagen) => {
-    setSubida(null);
-    setSeleccionado(producto);
+    productoPorSubir.current = producto;
+    selectorImagen.current?.click();
   };
 
   return (
     <div className="space-y-4">
+      <input
+        ref={selectorImagen}
+        type="file"
+        accept="image/png,image/webp"
+        aria-label="Imagen del producto"
+        className="hidden"
+        onChange={(e) => {
+          const archivo = e.target.files?.[0];
+          e.target.value = "";
+          const producto = productoPorSubir.current;
+          productoPorSubir.current = null;
+          if (!archivo || !producto) return;
+          setSubida(null);
+          setArchivoElegido(archivo);
+          setSeleccionado(producto);
+        }}
+      />
       <div className="flex flex-wrap items-center gap-4 xl:flex-nowrap">
         <div className="min-w-0 xl:max-w-xs xl:flex-1">
           <h2 className="text-base font-semibold">Pendientes de imagen</h2>
@@ -545,7 +565,7 @@ export function ProductosSinImagen({
       <Dialog
         open={!!seleccionado}
         onOpenChange={(open) => {
-          if (!open) setSeleccionado(null);
+          if (!open) { setSeleccionado(null); setArchivoElegido(null); }
         }}
       >
         <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
@@ -563,9 +583,11 @@ export function ProductosSinImagen({
               codigo={seleccionado.codigo}
               modo="nueva"
               urlActual=""
+              archivoInicial={archivoElegido ?? undefined}
               onHecho={() => {
                 setSubida(seleccionado.codigo);
                 setSeleccionado(null);
+                setArchivoElegido(null);
               }}
             />
           )}

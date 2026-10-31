@@ -21,28 +21,41 @@ type Props = {
   refrescar?: boolean;
   /** «nueva» = el producto aún no tiene imagen (no hay «Actual» que mostrar); por defecto se reemplaza la vigente. */
   modo?: "reemplazo" | "nueva";
+  /** Archivo elegido antes de abrir la vista previa. Se procesa al montar. */
+  archivoInicial?: File;
 };
 
-export function ReemplazarImagen({ codigo, urlActual, onHecho, refrescar = true, modo = "reemplazo" }: Props) {
+export function ReemplazarImagen({ codigo, urlActual, onHecho, refrescar = true, modo = "reemplazo", archivoInicial }: Props) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [fase, setFase] = useState<"reposo" | "procesando" | "vista" | "subiendo">("reposo");
+  const [archivo, setArchivo] = useState<File | null>(archivoInicial ?? null);
+  const [fase, setFase] = useState<"reposo" | "procesando" | "vista" | "subiendo">(archivoInicial ? "procesando" : "reposo");
   const [nueva, setNueva] = useState<ImagenEstandarizada | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Libera la vista previa al descartar o desmontar.
   useEffect(() => () => { if (nueva) URL.revokeObjectURL(nueva.vistaPrevia); }, [nueva]);
 
-  async function elegir(archivo: File) {
-    setError(null);
-    setFase("procesando");
-    try {
-      setNueva(await estandarizarImagen(archivo));
+  useEffect(() => {
+    if (!archivo) return;
+    let vigente = true;
+    estandarizarImagen(archivo).then((imagen) => {
+      if (!vigente) { URL.revokeObjectURL(imagen.vistaPrevia); return; }
+      setNueva(imagen);
       setFase("vista");
-    } catch (e) {
+    }).catch((e: unknown) => {
+      if (!vigente) return;
       setError(e instanceof Error ? e.message : "No se pudo procesar la imagen");
       setFase("reposo");
-    }
+    });
+    return () => { vigente = false; };
+  }, [archivo]);
+
+  function elegir(archivo: File) {
+    setError(null);
+    setNueva(null);
+    setFase("procesando");
+    setArchivo(archivo);
   }
 
   async function confirmar() {
@@ -60,6 +73,7 @@ export function ReemplazarImagen({ codigo, urlActual, onHecho, refrescar = true,
   }
 
   function descartar() {
+    setArchivo(null);
     setNueva(null);
     setError(null);
     setFase("reposo");
