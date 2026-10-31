@@ -76,7 +76,7 @@ export default function PanelPdf({ entrada, alCerrar }: { entrada: EntradaPdf; a
       setResultado(
         e instanceof PdfCancelado || c.signal.aborted
           ? { ok: false, texto: "Cancelado." }
-          : { ok: false, texto: "No se pudo armar el PDF. Revisa tu conexión e inténtalo otra vez, o prueba con menos páginas.", detalle: e instanceof Error ? e.message : String(e) }
+          : { ok: false, texto: "No se pudo completar el PDF. Inténtalo otra vez; si persiste, comparte el detalle del error.", detalle: e instanceof Error ? e.message : String(e) }
       );
       if (!(e instanceof PdfCancelado)) console.error(e);
     } finally {

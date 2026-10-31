@@ -9,7 +9,7 @@
 //  - los textos son texto real (buscable, con Montserrat Black incrustada), no imágenes;
 //  - las páginas de imagen (portadas, términos…) se guardan una vez aunque se repitan
 //    (existen solo en WebP: se pasan a JPEG en el navegador).
-// Las imágenes las lee el navegador desde R2 con CORS (regla del bucket para GET/HEAD).
+// Lee las imágenes desde R2; si falla la lectura directa, usa el respaldo del propio sitio.
 import type { jsPDF } from "jspdf";
 import type {
   PaginaCat,
@@ -19,6 +19,8 @@ import type {
 } from "./marketing-catalogo";
 import { ajustar, ALTO_LINEA } from "./marketing-texto";
 import { urlDerivado } from "./marketing-rutas-imagen";
+import { bytesDe, ErrorLectura, PdfCancelado } from "./marketing-pdf-lectura";
+export { PdfCancelado } from "./marketing-pdf-lectura";
 
 /** Ancho de página en el PDF (pt). El alto sale de la proporción de cada diseño. */
 const ANCHO_PT = 1500;
@@ -79,66 +81,11 @@ export function estimarMb(
 }
 
 // ---------- utilidades ----------
-export class PdfCancelado extends Error {
-  constructor() {
-    super("PDF cancelado");
-  }
-}
-
 function revisar(senal?: AbortSignal) {
   if (senal?.aborted) throw new PdfCancelado();
 }
 
-/** Una lectura que no tiene sentido repetir (por ejemplo, la imagen no existe: HTTP 404). */
-class ErrorLectura extends Error {
-  constructor(
-    mensaje: string,
-    readonly estado: number,
-  ) {
-    super(mensaje);
-  }
-}
-
 const mensajeDe = (e: unknown) => (e instanceof Error ? e.message : String(e));
-const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const corto = (url: string) => url.replace(/^https?:\/\/[^/]+\//, "");
-
-// Las imágenes se piden con `cache: "reload"`: la pantalla ya pudo haberlas cargado con un <img>, que no envía
-// `Origin` y guarda la respuesta SIN la cabecera CORS; Chrome reutilizaría esa copia y bloquearía la lectura
-// (probado: la portada mostrada en el visor fallaba con el fetch normal).
-// Ante un corte de red o un error del servidor se reintenta (3 intentos); un 404 no se repite.
-async function bytesDe(
-  url: string,
-  senal?: AbortSignal,
-  recargar = true,
-): Promise<Uint8Array> {
-  let ultimo = "";
-  for (let intento = 0; intento < 3; intento++) {
-    revisar(senal);
-    try {
-      const r = await fetch(url, {
-        signal: senal,
-        cache: recargar ? "reload" : "default",
-      });
-      if (r.ok) return new Uint8Array(await r.arrayBuffer());
-      ultimo = `HTTP ${r.status}`;
-      if (r.status !== 429 && r.status < 500)
-        throw new ErrorLectura(
-          `No se pudo leer ${corto(url)} (${ultimo})`,
-          r.status,
-        );
-    } catch (e) {
-      if (senal?.aborted) throw new PdfCancelado();
-      if (e instanceof ErrorLectura) throw e;
-      ultimo =
-        mensajeDe(e) === "Failed to fetch"
-          ? "sin conexión o sin permiso CORS del navegador"
-          : mensajeDe(e);
-    }
-    await esperar(400 * (intento + 1));
-  }
-  throw new ErrorLectura(`No se pudo leer ${corto(url)} (${ultimo})`, 0);
-}
 
 function aBase64(bytes: Uint8Array): string {
   let bin = "";

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { RUTA_IMAGEN_PDF } from "@/lib/marketing-pdf-imagen";
 
 const COOKIE_NAME = "session-token";
 
@@ -9,8 +10,8 @@ function getSecret() {
 
 // Dominio de los catálogos para clientes (catalogos.sportcenterpe.com; en local
 // catalogos.localhost:3000). Es el MISMO despliegue que el sistema, así que este
-// host solo puede mostrar catálogos: cualquier otra ruta (/admin, /login, /api…)
-// responde 404 sin llegar a ella. La cookie de sesión es host-only, de modo que
+// host solo muestra catálogos y su respaldo público de imágenes del PDF. Cualquier
+// otra ruta (/admin, /login, otras API…) responde 404. La cookie de sesión es host-only, de modo que
 // tampoco viaja a este host.
 const HOST_CATALOGOS = /^catalogos\./i;
 const SLUG = /^\/([A-Za-z0-9_-]{8,64})\/?$/;
@@ -21,6 +22,10 @@ function responderCatalogos(req: NextRequest): NextResponse {
 
   // Recursos del propio framework que necesita la página (JS, fuentes, HMR en desarrollo).
   if (pathname.startsWith("/_next/")) return NextResponse.next();
+
+  // Única API pública en este host: respaldo de imágenes del PDF (valida las claves).
+  if (pathname === RUTA_IMAGEN_PDF && (req.method === "GET" || req.method === "HEAD"))
+    return NextResponse.next();
 
   const m = SLUG.exec(pathname);
   if (m) {
