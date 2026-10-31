@@ -71,6 +71,15 @@ export function productosRevisionImagen(
     .sort((a, b) => a.codigo.localeCompare(b.codigo));
 }
 
+/** Solo originales utilizables por las rutas de catálogo; no derivados, carpetas ni vacíos. */
+export function codigosImagenesR2(claves: readonly string[]) {
+  return claves.flatMap((clave) => {
+    if (clave.includes("/") || !clave.endsWith(".png")) return [];
+    const codigo = codigoRevisionImagen(clave.slice(0, -4));
+    return codigo && clave === `${codigo}.png` ? [codigo] : [];
+  });
+}
+
 export function sinImagenRegistrada(
   productos: readonly ProductoRevisionImagen[],
   codigosConImagen: readonly string[],

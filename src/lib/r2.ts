@@ -9,6 +9,7 @@
 //   R2_SECRET_ACCESS_KEY  /  limitado al bucket
 //   R2_BUCKET             stock-sc-catalogo
 import { AwsClient } from "aws4fetch";
+import { listarClavesR2 } from "./r2-listado";
 
 type Ctx = { aws: AwsClient; endpoint: string; bucket: string };
 let ctx: Ctx | null = null;
@@ -38,6 +39,25 @@ export function r2Configurado(): boolean {
       process.env.R2_ACCESS_KEY_ID &&
       process.env.R2_SECRET_ACCESS_KEY
   );
+}
+
+/** Inventario vigente de originales: pocas páginas, sin descargar miles de PNG. */
+export async function r2ListarOriginales(): Promise<string[]> {
+  const c = contexto();
+  return listarClavesR2(async (token) => {
+    const url = new URL(`${c.endpoint}/${c.bucket}`);
+    url.searchParams.set("list-type", "2");
+    url.searchParams.set("delimiter", "/");
+    url.searchParams.set("encoding-type", "url");
+    url.searchParams.set("max-keys", "1000");
+    if (token) url.searchParams.set("continuation-token", token);
+    const res = await c.aws.fetch(url.toString(), {
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+    await verificar(res, "LIST", "originales");
+    return res.text();
+  });
 }
 
 // Las claves solo contienen [A-Za-z0-9._/-] (ver marketing-codigos.ts).

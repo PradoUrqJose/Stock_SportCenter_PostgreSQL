@@ -5,9 +5,11 @@ import { ALMACENES, normalizarFiltros } from "@/lib/marketing-catalogo";
 import { consultarProductosParaImagenesErp } from "@/lib/marketing-erp";
 import {
   productosRevisionImagen,
+  codigosImagenesR2,
   sinImagenRegistrada,
   type ProductoRevisionImagen,
 } from "@/lib/marketing-imagenes-pendientes";
+import { r2ListarOriginales } from "@/lib/r2";
 
 export type EstadoRevisionImagen = {
   id: string;
@@ -20,13 +22,13 @@ const CADUCIDAD_MS = 6 * 60_000;
 export async function revisionImagenesConPendientes() {
   const [revision, imagenes] = await Promise.all([
     datosRevisionImagenes(),
-    db.execute("SELECT cod_universal FROM mk_imagenes WHERE version > 0"),
+    r2ListarOriginales(),
   ]);
   return {
     ...revision,
     pendientes: sinImagenRegistrada(
       revision.productos,
-      imagenes.rows.map((r) => r.cod_universal as string),
+      codigosImagenesR2(imagenes),
     ),
   };
 }

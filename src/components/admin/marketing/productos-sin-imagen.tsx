@@ -421,7 +421,7 @@ export function ProductosSinImagen({
               <p className="text-sm font-medium">
                 {pendientes.length
                   ? "Ningún producto coincide con esos filtros"
-                  : "Todos los productos de esta consulta tienen imagen registrada"}
+                  : "Todos los productos de esta consulta tienen imagen en R2"}
               </p>
               <p className="text-xs text-muted-foreground">
                 {pendientes.length
@@ -520,8 +520,8 @@ export function ProductosSinImagen({
           <div className="space-y-2 border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground">
             <p>
               Buscar, filtrar y exportar utiliza la última consulta guardada.
-              Las imágenes registradas se comprueban al abrir o actualizar esta
-              pantalla.
+              Los archivos originales se comprueban directamente en R2 al abrir
+              o actualizar esta pantalla.
             </p>
             <p>
               Una imagen resuelve todas las edades y tallas de un código. Se

@@ -8,7 +8,7 @@ La lista parte de una consulta directa de todos los productos con stock positivo
 
 Cada código universal ocupa una sola fila. Se reúnen sus marcas, modelos, categorías, colores y edades. La imagen es compartida por todas las edades y tallas. El alias `400497_07` se cruza con su archivo canónico `400497-07`.
 
-«Sin imagen» significa que el código no tiene una imagen con versión positiva registrada en `mk_imagenes`, el mismo registro usado para generar los catálogos. Las fotos externas del ERP no cuentan como imágenes preparadas. Esta pantalla no comprueba físicamente cada archivo de R2 ni diagnostica archivos rotos.
+«Sin imagen» significa que falta el PNG original no vacío del código en la raíz de R2. Se consulta el listado firmado completo de objetos (ListObjectsV2, con paginación y sin caché), sin descargar las fotos ni hacer miles de peticiones individuales. `mk_imagenes` es un índice que puede estar desactualizado: no prueba existencia ni ausencia. Los derivados y páginas fijas no cuentan. Si R2 falla o el listado está incompleto, la consulta falla en vez de presentar falsos pendientes. La pantalla y el Excel usan la misma comprobación. Las fotos externas del ERP no cuentan como imágenes preparadas; las fotos existentes en R2 sí cuentan aunque se hayan subido desde otro proyecto.
 
 ## Consulta y conservación del resultado
 
@@ -18,7 +18,7 @@ El resultado y su fecha quedan en `mk_revision_imagenes`. Solo existe una consul
 
 La revisión de imágenes valida las cantidades por talla pero admite identificar códigos con fichas repetidas: no necesita deducir cuál ficha es correcta para saber si falta la imagen. En esos códigos el stock se muestra como «Por revisar», sin sumar cantidades ambiguas. La generación de catálogos conserva su validación estricta de duplicados.
 
-Las imágenes registradas se vuelven a leer al cargar o refrescar la página. Tras una subida correcta, la pantalla se actualiza y retira ese código de pendientes. Subir una imagen reutiliza el proceso existente de normalización a PNG transparente de 1600×1600, centrado con margen mínimo de 8 %, y creación de derivados.
+Los archivos originales de R2 se vuelven a listar al cargar o refrescar la página. Tras una subida correcta, la pantalla se actualiza y retira ese código de pendientes. Subir una imagen reutiliza el proceso existente de normalización a PNG transparente de 1600×1600, centrado con margen mínimo de 8 %, y creación de derivados.
 
 ## Interfaz
 
@@ -44,3 +44,9 @@ En Chrome se comprobaron la consulta en segundo plano, conteos, paginación, fil
 En la revisión visual se verificaron el diálogo Información, las dos vistas y el cambio de pestañas con el encabezado visible durante la carga del contenido. La galería elegida seguía activa al volver a pendientes. El endpoint de exportación respondió HTTP 200 con el filtro CIRCA. La captura automática de la descarga del navegador agotó su espera; se validaron directamente los archivos reales de CIRCA (2 productos) y de toda la lista (520), abriéndolos de nuevo y comprobando sus filas y códigos. Esa validación no volvió a consultar el ERP.
 
 Evidencias locales: `/private/tmp/stock-sc-ui-imagenes-pruebas.log`, `/private/tmp/stock-sc-ui-imagenes-build.log`, `/private/tmp/stock-sc-ui-imagenes-tabla.png`, `/private/tmp/stock-sc-ui-imagenes-galeria.png`, `/private/tmp/stock-sc-ui-pendientes-CIRCA.xlsx` y `/private/tmp/stock-sc-ui-pendientes-todos.xlsx`. El cambio requiere migración y despliegue en producción; solo se aplicó la migración local.
+
+## Corrección del cruce con R2 (31 de octubre de 2026)
+
+La comprobación inicial con `mk_imagenes` produjo falsos pendientes porque el índice omitía subidas realizadas desde otro proyecto. La auditoría de lectura encontró 4.109 originales en R2 frente a 3.573 registros: 536 originales fuera del índice. De los 520 pendientes anteriores, 220 ya tenían archivo; quedan 300 pendientes reales y 3.033 productos con imagen del inventario de 3.333. `JQ1862.png` responde HTTP 200 (970.382 bytes) y ya no aparece como pendiente. El listado completo necesitó cinco páginas y la auditoría tardó unos cinco segundos; no se volvió a consultar el ERP. No se modificaron archivos de R2 ni el índice de imágenes de la base de datos.
+
+Se añadieron pruebas de paginación de más de mil objetos, tokens opacos, códigos con espacios, originales vacíos, carpetas y derivados, XML malformado, páginas repetidas y fallos de red. Ningún fallo de listado se convierte en una lista de supuestas ausencias. Evidencia: `/private/tmp/stock-sc-auditoria-imagenes-r2.json` y `/private/tmp/stock-sc-jq1862-corregido.png`.
