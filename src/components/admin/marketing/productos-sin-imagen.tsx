@@ -199,14 +199,41 @@ export function ProductosSinImagen({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-center gap-4 xl:flex-nowrap">
+        <div className="min-w-0 xl:max-w-xs xl:flex-1">
           <h2 className="text-base font-semibold">Pendientes de imagen</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             Encuentra los productos con stock que todavía necesitan una imagen.
           </p>
         </div>
-        <div className="flex items-center gap-1.5">
+        {consultadoAl && (
+          <div
+            className="order-last flex w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-xs xl:order-none xl:w-auto xl:shrink-0"
+            aria-label="Resumen de imágenes"
+          >
+            <span className="text-muted-foreground">
+              <strong className="mr-1 text-sm font-semibold tabular-nums text-foreground">
+                {numero(total)}
+              </strong>{" "}
+              con stock
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full bg-amber-500" />
+              <strong className="text-sm font-semibold tabular-nums">
+                {numero(pendientes.length)}
+              </strong>
+              <span className="text-muted-foreground">sin imagen</span>
+            </span>
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <span className="size-1.5 rounded-full bg-emerald-500" />
+              <strong className="text-sm font-semibold tabular-nums text-foreground">
+                {numero(conImagen)}
+              </strong>{" "}
+              con imagen<span className="ml-1 text-[10px]">({porcentaje}%)</span>
+            </span>
+          </div>
+        )}
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <Button
             size="sm"
             variant="ghost"
@@ -233,33 +260,6 @@ export function ProductosSinImagen({
         </div>
       </div>
 
-      {consultadoAl && (
-        <div
-          className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-xs"
-          aria-label="Resumen de imágenes"
-        >
-          <span className="text-muted-foreground">
-            <strong className="mr-1 text-sm font-semibold tabular-nums text-foreground">
-              {numero(total)}
-            </strong>{" "}
-            con stock
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="size-1.5 rounded-full bg-amber-500" />
-            <strong className="text-sm font-semibold tabular-nums">
-              {numero(pendientes.length)}
-            </strong>
-            <span className="text-muted-foreground">sin imagen</span>
-          </span>
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="size-1.5 rounded-full bg-emerald-500" />
-            <strong className="text-sm font-semibold tabular-nums text-foreground">
-              {numero(conImagen)}
-            </strong>{" "}
-            con imagen<span className="ml-1 text-[10px]">({porcentaje}%)</span>
-          </span>
-        </div>
-      )}
       {trabajando && (
         <p
           role="status"
