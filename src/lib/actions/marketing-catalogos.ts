@@ -42,6 +42,8 @@ async function origenDeLaPeticion(): Promise<string | undefined> {
 }
 
 type EntradaFiltros = {
+  sin_precios?: boolean;
+  plantilla_general?: string;
   tipo: string;
   almacenes: string[];
   grupos: string[];
@@ -97,7 +99,18 @@ async function filtrosDeEntrada(input: EntradaFiltros): Promise<{ filtros: Filtr
     return { error: "Elige un tipo de catálogo o al menos una marca, un grupo, un género o una categoría" };
   }
   const escala_talla = input.escala_talla === "peru" || input.escala_talla === "usa" ? input.escala_talla : undefined;
-  return { filtros: { tipo, almacenes, grupos, marcas, generos, categorias, tallas, precio_min, precio_max, fecha_minima_ingreso, stock_minimo, solo_unicos: input.solo_unicos === true, plantillas, ...(escala_talla ? { escala_talla } : {}) } };
+  let plantilla_general: string | undefined;
+  if (input.sin_precios === true) {
+    const id = input.plantilla_general;
+    if (id !== undefined && (typeof id !== "string" || (id !== "" && !/^[a-z0-9-]{1,80}$/.test(id)))) return { error: "Plantilla GENERAL no válida" };
+    const r = await db.execute({
+      sql: "SELECT id FROM mk_plantillas WHERE marca = '*' AND activa = 1 AND (? = '' OR id = ?) ORDER BY predeterminada DESC, id LIMIT 1",
+      args: [id ?? "", id ?? ""],
+    });
+    if (!r.rows.length) return { error: "Elige o sube una plantilla GENERAL activa para generar sin precios" };
+    plantilla_general = r.rows[0].id as string;
+  }
+  return { filtros: { tipo, almacenes, grupos, marcas, generos, categorias, tallas, precio_min, precio_max, fecha_minima_ingreso, stock_minimo, solo_unicos: input.solo_unicos === true, sin_precios: input.sin_precios === true, ...(plantilla_general ? { plantilla_general } : {}), plantillas, ...(escala_talla ? { escala_talla } : {}) } };
 }
 
 /**
@@ -106,6 +119,8 @@ async function filtrosDeEntrada(input: EntradaFiltros): Promise<{ filtros: Filtr
  * `estadoGeneracion`.
  */
 export async function iniciarGeneracion(input: {
+  sin_precios?: boolean;
+  plantilla_general?: string;
   titulo: string;
   tipo: string;
   almacenes: string[];
@@ -175,6 +190,8 @@ export async function iniciarGeneracion(input: {
       fecha_minima_ingreso: base.filtros.fecha_minima_ingreso,
       stock_minimo: base.filtros.stock_minimo,
       solo_unicos: base.filtros.solo_unicos,
+      sin_precios: base.filtros.sin_precios,
+      plantilla_general: base.filtros.plantilla_general,
       escala_talla,
       plantillas,
       ...(input.portada === undefined ? {} : { portada: input.portada }),

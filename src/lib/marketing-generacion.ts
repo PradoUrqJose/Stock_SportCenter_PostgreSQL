@@ -16,7 +16,8 @@ import {
   escalaDe,
   normalizarFiltros,
   ordenGenerosDelCatalogo,
-  plantillaDeMarca,
+  plantillaDelCatalogo,
+  plantillaGeneral,
   tipoEfectivo,
   type Borrador,
   type FijaBiblioteca,
@@ -103,6 +104,7 @@ export async function ejecutarPrecarga(id: string, origen?: string): Promise<voi
 async function borradorDeErp(id: string, filtros: FiltrosCatalogo, origen?: string): Promise<{ borrador: Borrador; consultadoAl: string } | { error: string }> {
   const plantillas = await plantillasGestion();
   if (!plantillas.some((p) => p.activa)) return { error: "No hay ninguna plantilla activa" };
+  if (filtros.sin_precios && !plantillaGeneral(plantillas, filtros.plantilla_general)) return { error: "Elige una plantilla GENERAL activa para generar sin precios" };
 
   await etapa(id, "erp");
   const previa = await consultaPrecargada(filtros);
@@ -117,10 +119,11 @@ async function borradorDeErp(id: string, filtros: FiltrosCatalogo, origen?: stri
 
   // Cada marca usa la plantilla elegida (o su predeterminada); sin la suya, la genérica; si tampoco
   // hay genérica, el producto no entra y se avisa en el resumen.
-  const sinFijas = construirBorrador(items, versiones, (marca) => plantillaDeMarca(marca, plantillas, filtros.plantillas), {
+  const sinFijas = construirBorrador(items, versiones, (marca) => plantillaDelCatalogo(marca, plantillas, filtros), {
     min: filtros.precio_min,
     max: filtros.precio_max,
     tallas: filtros.tallas,
+    sinPrecios: filtros.sin_precios,
   }, ordenGenerosDelCatalogo(filtros.tipo));
   const conPropia = new Set(plantillas.filter((p) => p.activa && p.marca !== MARCA_GENERICA).map((p) => p.marca));
   for (const p of sinFijas.productos) p.original = inventario.originales.has(p.cod === "400497_07" ? "400497-07" : p.cod);
@@ -128,7 +131,7 @@ async function borradorDeErp(id: string, filtros: FiltrosCatalogo, origen?: stri
   for (const pg of sinFijas.paginas) {
     if (pg.tipo !== "producto") continue;
     const marca = sinFijas.productos[pg.prod].marca;
-    if (!conPropia.has(marca)) genericas[marca || "(SIN MARCA)"] = (genericas[marca || "(SIN MARCA)"] ?? 0) + 1;
+    if (!filtros.sin_precios && !conPropia.has(marca)) genericas[marca || "(SIN MARCA)"] = (genericas[marca || "(SIN MARCA)"] ?? 0) + 1;
   }
   if (Object.keys(genericas).length > 0) sinFijas.resumen.con_generica = genericas;
   if (parcial) sinFijas.resumen.consulta_parcial = true;
@@ -138,7 +141,7 @@ async function borradorDeErp(id: string, filtros: FiltrosCatalogo, origen?: stri
       (r.fuera_de_precio ? `, ${r.fuera_de_precio} fuera del rango de precio` : "") +
       (r.fuera_de_talla ? `, ${r.fuera_de_talla} sin stock en las tallas elegidas (${filtros.tallas.join(", ")})` : "");
     const sinPl = r.sin_plantilla ? `, ${Object.values(r.sin_plantilla).reduce((a, b) => a + b, 0)} de marcas sin plantilla (${Object.keys(r.sin_plantilla).join(", ")})` : "";
-    return { error: `Ningún producto se puede mostrar: el ERP devolvió ${r.erp_items}, ${r.sin_stock} sin stock o precio${fuera}${sinPl}` };
+    return { error: `Ningún producto se puede mostrar: el ERP devolvió ${r.erp_items}, ${r.sin_stock} sin stock${filtros.sin_precios ? "" : " o precio"}${fuera}${sinPl}` };
   }
   return { borrador: sinFijas, consultadoAl: consulta.al };
 }

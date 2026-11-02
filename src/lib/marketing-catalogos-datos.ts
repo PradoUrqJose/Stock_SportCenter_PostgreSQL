@@ -62,6 +62,7 @@ export async function borradorDeVersion(
   return {
     borrador: {
       productos: snap.productos,
+      ...(snap.sin_precios ? { sin_precios: true } : {}),
       paginas: snap.paginas,
       quitadas: [],
       resumen: { ...resumen, paginas: snap.paginas.length },

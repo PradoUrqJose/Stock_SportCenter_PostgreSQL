@@ -13,12 +13,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { iniciarGeneracion } from "@/lib/actions/marketing-catalogos";
 import { guardarPosicionZapatilla } from "@/lib/actions/marketing-disenos";
-import { MARCA_GENERICA } from "@/lib/marketing-catalogo";
+import { MARCA_GENERICA, plantillaGeneral } from "@/lib/marketing-catalogo";
 import { cn } from "@/lib/utils";
 import { urlDerivado } from "@/lib/marketing-rutas-imagen";
 import type { DatosCatalogo, Recursos } from "./asistente-catalogo";
 import type { DocumentoCatalogo } from "./documento-catalogo";
 import { EditorTextoPlantilla } from "./editor-texto-plantilla";
+import { OpcionSinPrecios } from "./opcion-sin-precios";
 
 type Pos = { x: number; y: number; w: number };
 const iguales = (a: Pos, b: Pos) => a.x === b.x && a.y === b.y && a.w === b.w;
@@ -42,7 +43,8 @@ export function PasoFinal({
   const todasActivas = recursos.plantillas.filter((p) => p.activa);
   // Solo las plantillas de este catálogo (las de sus marcas); si aún no se conocen, las predeterminadas.
   const delCatalogo = documento.plantillas.map((d) => d.plantilla);
-  const activas = delCatalogo.length > 0 ? delCatalogo : todasActivas.filter((p) => p.predeterminada);
+  const general = plantillaGeneral(recursos.plantillas, datos.plantillaGeneral);
+  const activas = datos.sinPrecios ? (general ? [general] : []) : delCatalogo.length > 0 ? delCatalogo : todasActivas.filter((p) => p.predeterminada);
   const guardada = (id: string): Pos => {
     const z = recursos.plantillas.find((p) => p.id === id)?.zonas.zapatilla;
     return z ? { x: z.x, y: z.y, w: z.w } : { x: 0, y: 0, w: 1000 };
@@ -57,6 +59,7 @@ export function PasoFinal({
   const [ancho, setAncho] = useState(0);
   const lienzo = useRef<HTMLDivElement>(null);
   const arrastre = useRef<{ px: number; py: number; pos: Pos } | null>(null);
+  const seleccion = activas.some((p) => p.id === sel) ? sel : activas[0]?.id ?? "";
 
   useEffect(() => {
     const el = lienzo.current;
@@ -64,14 +67,14 @@ export function PasoFinal({
     const ro = new ResizeObserver(() => setAncho(el.clientWidth));
     ro.observe(el);
     return () => ro.disconnect();
-  }, [sel]);
+  }, [seleccion]);
 
-  const plantilla = activas.find((p) => p.id === sel);
-  const pos = cambios[sel] ?? guardada(sel);
-  const sucia = plantilla ? !iguales(pos, guardada(sel)) : false;
+  const plantilla = activas.find((p) => p.id === seleccion);
+  const pos = cambios[seleccion] ?? guardada(seleccion);
+  const sucia = plantilla ? !iguales(pos, guardada(seleccion)) : false;
   const k = plantilla && ancho ? ancho / plantilla.ancho : 0;
 
-  const poner = (p: Pos) => setCambios((c) => ({ ...c, [sel]: p }));
+  const poner = (p: Pos) => setCambios((c) => ({ ...c, [seleccion]: p }));
   const escalar = (w: number) => {
     const nuevo = Math.max(300, Math.min(1800, Math.round(w)));
     // Se escala desde el centro de la zapatilla.
@@ -80,9 +83,10 @@ export function PasoFinal({
 
   function guardar(): Promise<boolean> {
     if (!plantilla) return Promise.resolve(true);
-    const ids = aTodas ? todasActivas.map((p) => p.id) : [sel];
+    const aplicarATodas = aTodas && !datos.sinPrecios;
+    const ids = aplicarATodas ? todasActivas.map((p) => p.id) : [seleccion];
     return guardarPosicionZapatilla(ids, pos).then((r) => {
-      setMensaje({ ok: r.success, texto: r.success ? (aTodas ? "Posición guardada en todas las plantillas" : "Posición guardada en esta plantilla") : r.msg });
+      setMensaje({ ok: r.success, texto: r.success ? (aplicarATodas ? "Posición guardada en todas las plantillas" : "Posición guardada en esta plantilla") : r.msg });
       if (r.success) {
         setCambios({});
         router.refresh();
@@ -113,6 +117,8 @@ export function PasoFinal({
         stock_minimo: Number(datos.stockMinimo) || 1,
         solo_unicos: datos.soloUnicos,
         plantillas: datos.plantillas,
+        sin_precios: datos.sinPrecios,
+        plantilla_general: datos.sinPrecios ? general?.id : undefined,
         escala_talla: datos.escalaTalla,
         // Lo que se ve en el Preview es lo que se genera.
         portada: documento.portada ? documento.portada.id : null,
@@ -144,6 +150,8 @@ export function PasoFinal({
         <Label htmlFor="titulo">Título del catálogo</Label>
         <Input id="titulo" value={datos.titulo} onChange={(e) => cambiar({ titulo: e.target.value })} placeholder="Hombre — Octubre" maxLength={100} disabled={pendiente} autoFocus />
       </div>
+
+      <OpcionSinPrecios recursos={recursos} datos={datos} cambiar={cambiar} disabled={pendiente} />
 
       {activas.length === 0 || !ejemplo ? (
         <p className="mb-6 rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
@@ -196,8 +204,8 @@ export function PasoFinal({
                   <button
                     type="button"
                     onClick={() => setSel(p.id)}
-                    aria-pressed={sel === p.id}
-                    className={cn("block w-28 overflow-hidden rounded-lg border text-left transition-all duration-300", sel === p.id ? "border-foreground shadow-sm" : "border-border opacity-70 hover:opacity-100")}
+                    aria-pressed={seleccion === p.id}
+                    className={cn("block w-28 overflow-hidden rounded-lg border text-left transition-all duration-300", seleccion === p.id ? "border-foreground shadow-sm" : "border-border opacity-70 hover:opacity-100")}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={`${base}/${p.fondo}.webp`} alt="" loading="lazy" className="aspect-video w-full object-cover" />
@@ -232,19 +240,19 @@ export function PasoFinal({
               </Button>
             </div>
 
-            <label className="flex items-start gap-2 text-sm">
+            {!datos.sinPrecios && <label className="flex items-start gap-2 text-sm">
               <Checkbox checked={aTodas} onCheckedChange={(v) => setATodas(v === true)} className="mt-0.5" />
               <span>
                 Aplicar a todas las plantillas
                 <span className="block text-xs text-muted-foreground">Incluye las de otras marcas. Sirve cuando comparten la misma composición.</span>
               </span>
-            </label>
+            </label>}
 
             <div className="flex flex-wrap gap-2">
               <Button type="button" onClick={() => void guardar()} disabled={!sucia || pendiente}>
                 Guardar posición
               </Button>
-              <Button type="button" variant="outline" onClick={() => setCambios((c) => Object.fromEntries(Object.entries(c).filter(([id]) => id !== sel)))} disabled={!sucia || pendiente}>
+              <Button type="button" variant="outline" onClick={() => setCambios((c) => Object.fromEntries(Object.entries(c).filter(([id]) => id !== seleccion)))} disabled={!sucia || pendiente}>
                 <RotateCcw data-icon="inline-start" /> Deshacer
               </Button>
             </div>
@@ -254,14 +262,14 @@ export function PasoFinal({
       )}
 
       {editandoTexto && (() => {
-        const p = recursos.plantillas.find((x) => x.id === sel);
+        const p = recursos.plantillas.find((x) => x.id === seleccion);
         return p ? <EditorTextoPlantilla key={p.id} base={base} plantilla={p} fuente={recursos.fuente} alCerrar={() => setEditandoTexto(false)} /> : null;
       })()}
 
       {mensaje && <p className={cn("mb-4 text-sm", mensaje.ok ? "text-green-600 dark:text-green-400" : "text-destructive")}>{mensaje.texto}</p>}
 
       <div className="flex flex-wrap items-center gap-3 animate-in fade-in slide-in-from-bottom-3 fill-mode-both delay-200 duration-500">
-        <Button size="lg" onClick={generar} disabled={pendiente || datos.titulo.trim().length < 3}>
+        <Button size="lg" onClick={generar} disabled={pendiente || datos.titulo.trim().length < 3 || (datos.sinPrecios && !general)}>
           <Sparkles data-icon="inline-start" /> {pendiente ? "Iniciando…" : "Generar catálogo"}
         </Button>
         <p className="text-xs text-muted-foreground">Corre en segundo plano: verás el avance y puedes salir de la pantalla.</p>

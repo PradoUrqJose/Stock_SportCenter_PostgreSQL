@@ -15,6 +15,8 @@ type Props = {
   codigo: string;
   /** PNG original vigente, para mostrarlo como «Actual». */
   urlActual: string;
+  /** Miniatura ya cargada: se mantiene mientras llega el original. */
+  urlPrevia?: string;
   /** Se llama tras reemplazar con éxito, con la versión nueva de la imagen. */
   onHecho: (version: number) => void;
   /** Vuelve a leer la página del servidor tras reemplazar (por defecto sí). */
@@ -25,13 +27,14 @@ type Props = {
   archivoInicial?: File;
 };
 
-export function ReemplazarImagen({ codigo, urlActual, onHecho, refrescar = true, modo = "reemplazo", archivoInicial }: Props) {
+export function ReemplazarImagen({ codigo, urlActual, urlPrevia, onHecho, refrescar = true, modo = "reemplazo", archivoInicial }: Props) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [archivo, setArchivo] = useState<File | null>(archivoInicial ?? null);
   const [fase, setFase] = useState<"reposo" | "procesando" | "vista" | "subiendo">(archivoInicial ? "procesando" : "reposo");
   const [nueva, setNueva] = useState<ImagenEstandarizada | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [originalListo, setOriginalListo] = useState<string | null>(null);
 
   // Libera la vista previa al descartar o desmontar.
   useEffect(() => () => { if (nueva) URL.revokeObjectURL(nueva.vistaPrevia); }, [nueva]);
@@ -86,10 +89,19 @@ export function ReemplazarImagen({ codigo, urlActual, onHecho, refrescar = true,
       <div className={cn("grid gap-3", enVista && modo === "reemplazo" ? "grid-cols-2" : "grid-cols-1")}>
         {modo === "reemplazo" && (
         <figure className="space-y-1">
-          <div className={cn("mx-auto aspect-square w-full rounded-lg", AJEDREZ, !enVista && "max-w-[70vh]")}>
+          <div className={cn("relative mx-auto aspect-square w-full rounded-lg", AJEDREZ, !enVista && "max-w-[70vh]")}>
+            {urlPrevia && originalListo !== urlActual && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={urlPrevia} alt="" className="absolute inset-0 h-full w-full object-contain" />
+            )}
             {/* Original completo: aquí se revisa la calidad del recorte. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={urlActual} alt={`${codigo} actual`} className="h-full w-full object-contain" />
+            <img
+              src={urlActual} alt={`${codigo} actual`} decoding="async"
+              ref={(img) => { if (img?.complete && img.naturalWidth > 0) setOriginalListo(urlActual); }}
+              onLoad={(e) => { const img = e.currentTarget; img.decode().then(() => setOriginalListo(urlActual)).catch(() => undefined); }}
+              className={cn("relative h-full w-full object-contain", urlPrevia && originalListo !== urlActual && "opacity-0")}
+            />
           </div>
           {enVista && <figcaption className="text-center text-xs text-muted-foreground">Actual</figcaption>}
         </figure>

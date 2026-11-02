@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { MarcaAfectada } from "@/lib/actions/marketing-disenos";
-import { MARCA_GENERICA, type FijaBiblioteca, type TipoCatalogo } from "@/lib/marketing-catalogo";
+import { MARCA_GENERICA, plantillaGeneral, type FijaBiblioteca, type TipoCatalogo } from "@/lib/marketing-catalogo";
 import type { AvisoTallas } from "@/lib/marketing-tallas";
 import { cn } from "@/lib/utils";
 import type { DatosCatalogo, Recursos } from "./asistente-catalogo";
@@ -76,6 +76,7 @@ export function PasoPlantillas({
   const propias = (m: string) => activas.filter((p) => p.marca === m);
   const hayGenerica = propias(MARCA_GENERICA).length > 0;
   const elegida = (m: string) => {
+    if (datos.sinPrecios) return plantillaGeneral(plantillas, datos.plantillaGeneral)?.id ?? "";
     const l = propias(m);
     return (l.find((p) => p.id === datos.plantillas[m]) ?? l.find((p) => p.predeterminada) ?? l[0])?.id ?? "";
   };
@@ -134,7 +135,7 @@ export function PasoPlantillas({
             </div>
             <ul className="divide-y divide-border border-t border-border">
               {marcas.map((m, i) => {
-                const lista = propias(m.marca);
+                const lista = propias(datos.sinPrecios ? MARCA_GENERICA : m.marca);
                 const actual = lista.find((x) => x.id === elegida(m.marca));
                 return (
                   <li key={m.marca} className={cn(COLUMNAS, "py-2.5 animate-in fade-in slide-in-from-left-2 fill-mode-both duration-500")} style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
@@ -145,6 +146,7 @@ export function PasoPlantillas({
                         <select
                           className={cn(SELECT, "w-full max-w-xs")}
                           value={elegida(m.marca)}
+                          disabled={datos.sinPrecios}
                           onChange={(e) => cambiar({ plantillas: { ...datos.plantillas, [m.marca]: e.target.value } })}
                           aria-label={`Plantilla de ${m.marca}`}
                         >
@@ -168,6 +170,7 @@ export function PasoPlantillas({
                       variant="outline"
                       size="sm"
                       className="w-full"
+                      disabled={datos.sinPrecios}
                       onClick={() => setSubir({ clase: "plantilla", marca: m.marca })}
                       aria-label={lista.length > 0 ? `Subir otra plantilla de ${m.marca}` : `Subir plantilla de ${m.marca}`}
                     >

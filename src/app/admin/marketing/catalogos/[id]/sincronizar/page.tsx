@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { db } from "@/lib/db";
-import { requireMarketing } from "@/lib/marketing";
+import { IMAGENES_BASE, requireMarketing } from "@/lib/marketing";
+import { plantillasGestion } from "@/lib/marketing-catalogos-datos";
 import { ALMACENES_POR_DEFECTO, escalaDe, normalizarFiltros, textoFiltros } from "@/lib/marketing-catalogo";
 import type { InformeSincronizacion } from "@/lib/marketing-sincronizar";
 import { opcionesDeFiltros } from "@/lib/marketing-opciones";
@@ -94,13 +95,13 @@ export default async function SincronizarCatalogoPage({
   }
 
   // Sin consulta en curso: los filtros del catálogo, para editarlos como en el asistente.
-  const [opciones, tipos] = await Promise.all([opcionesDeFiltros(), tiposCatalogo({ soloActivos: true })]);
+  const [opciones, tipos, plantillas] = await Promise.all([opcionesDeFiltros(), tiposCatalogo({ soloActivos: true }), plantillasGestion()]);
   const f = normalizarFiltros(JSON.parse(cat.filtros));
   return (
     <div className="p-4 md:p-8">
       {cabecera}
       <AsistenteCatalogo
-        recursos={{ base: "", plantillas: [], fijas: [], ejemplo: null, tipos, fuente: "", opciones }}
+        recursos={{ base: IMAGENES_BASE, plantillas, fijas: [], ejemplo: null, tipos, fuente: "", opciones }}
         sincronizar={{
           catalogoId: id,
           version: versionBase,
@@ -108,6 +109,8 @@ export default async function SincronizarCatalogoPage({
           volverA,
           inicial: {
             tipo: f.tipo,
+            sinPrecios: f.sin_precios ?? false,
+            plantillaGeneral: f.plantilla_general ?? "",
             categorias: f.categorias,
             grupos: f.grupos,
             generos: f.generos,

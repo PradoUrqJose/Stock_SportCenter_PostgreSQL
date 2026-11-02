@@ -441,6 +441,7 @@ function textosProducto(
     ["precio", [`S/ ${Number(prod.precio).toFixed(2)}`], "", true],
   ];
   for (const [clave, partes, sep, centrado] of filas) {
+    if (clave === "precio" && prod.precio == null) continue;
     const zona = pl.zonas[clave];
     const { px, lineas } = ajustar(partes, zona, sep, medir);
     d.setFontSize(px * S).setTextColor(zona.color ?? "#e8e8e8");

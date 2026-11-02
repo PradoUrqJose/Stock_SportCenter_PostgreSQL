@@ -22,7 +22,8 @@ export type ProductoCat = {
   /** HOMBRE, MUJER, JUNIOR…: un mismo código puede tener una página por género (tallas distintas). */
   genero?: string;
   tallas: string[];
-  precio: number;
+  /** null = catálogo sin precios; el importe no se envía al visor público. */
+  precio: number | null;
 };
 
 /** Niños: de los más pequeños a los mayores; los demás catálogos se ordenan por marca. */
@@ -81,6 +82,7 @@ export type PlantillaSnap = {
 
 /** JSON inmutable que lee el visor público. */
 export type Snapshot = {
+  sin_precios?: boolean;
   titulo: string;
   /** Imagen JPEG de 1200×630 para la vista previa del enlace (ruta en el bucket); ausente en versiones antiguas. */
   og?: string;
@@ -96,6 +98,9 @@ export type Snapshot = {
 };
 
 export type FiltrosCatalogo = {
+  sin_precios?: boolean;
+  /** Plantilla genérica que se aplica a todas las marcas cuando no se muestran precios. */
+  plantilla_general?: string;
   /** Tipo de catálogo elegido (id de TIPOS_CATALOGO); "" = filtros a mano. */
   tipo: string;
   almacenes: string[];
@@ -281,6 +286,8 @@ export function normalizarFiltros(crudo: unknown): FiltrosCatalogo {
     stock_minimo: typeof o.stock_minimo === "number" && Number.isInteger(o.stock_minimo) && o.stock_minimo >= 1 ? o.stock_minimo : 1,
     solo_unicos: o.solo_unicos === true,
     ...(o.escala_talla === "peru" || o.escala_talla === "usa" ? { escala_talla: o.escala_talla } : {}),
+    sin_precios: o.sin_precios === true,
+    ...(typeof o.plantilla_general === "string" ? { plantilla_general: o.plantilla_general } : {}),
     plantillas:
       typeof o.plantillas === "object" && o.plantillas !== null
         ? Object.fromEntries(Object.entries(o.plantillas as Record<string, unknown>).filter(([, v]) => typeof v === "string") as [string, string][])
@@ -320,6 +327,16 @@ export function plantillaDeMarca(marca: string, todas: readonly PlantillaLista[]
     return lista.find((p) => p.id === elegidas[m]) ?? lista.find((p) => p.predeterminada) ?? lista[0] ?? null;
   };
   return (de(marca) ?? de(MARCA_GENERICA))?.id ?? null;
+}
+
+/** Elección explícita estricta: nunca sustituye una general borrada por otra sin avisar. */
+export function plantillaGeneral(todas: readonly PlantillaLista[], id?: string): PlantillaLista | null {
+  const disponibles = todas.filter((p) => p.activa && p.marca === MARCA_GENERICA);
+  return (id ? disponibles.find((p) => p.id === id) : disponibles.find((p) => p.predeterminada) ?? disponibles[0]) ?? null;
+}
+
+export function plantillaDelCatalogo(marca: string, todas: readonly PlantillaLista[], filtros: Pick<FiltrosCatalogo, "plantillas" | "sin_precios" | "plantilla_general">): string | null {
+  return filtros.sin_precios ? plantillaGeneral(todas, filtros.plantilla_general)?.id ?? null : plantillaDeMarca(marca, todas, filtros.plantillas);
 }
 
 /** Página fija de la biblioteca (mk_paginas_fijas), tal como la usan el editor y la generación. */
@@ -469,6 +486,7 @@ export function textoFiltros(f: FiltrosCatalogo, tipos: readonly { id: string; n
     f.generos.length > 0 && `Género: ${f.generos.join(", ")}`,
     f.tallas.length > 0 && `Talla: ${f.tallas.join(", ")}`,
     precio,
+    f.sin_precios && "Sin precios · plantilla GENERAL",
     f.solo_unicos && "Solo únicos (stock total = 1)",
     !f.solo_unicos && f.stock_minimo != null && f.stock_minimo > 1 && `Stock mínimo: ${f.stock_minimo}`,
     f.fecha_minima_ingreso && `Ingreso desde: ${f.fecha_minima_ingreso.split("-").reverse().join("/")}`,
@@ -524,6 +542,7 @@ export type ResumenSincronizacion = {
 };
 
 export type Borrador = {
+  sin_precios?: boolean;
   productos: ProductoCat[];
   paginas: PaginaCat[];
   /** Páginas que se sacaron en el editor o en la sincronización; se pueden restaurar. */
@@ -615,7 +634,7 @@ export function construirBorrador(
   items: ItemErp[],
   versiones: Map<string, number | string>,
   plantillaDe: (marca: string) => string | null,
-  precio_rango: { min: number | null; max: number | null; tallas?: readonly string[] } = { min: null, max: null },
+  precio_rango: { min: number | null; max: number | null; tallas?: readonly string[]; sinPrecios?: boolean } = { min: null, max: null },
   ordenGeneros?: readonly string[]
 ): Borrador {
   const tallasPedidas = new Set((precio_rango.tallas ?? []).map((t) => t.trim().toUpperCase()));
@@ -647,11 +666,11 @@ export function construirBorrador(
 
     const tallas = ordenarTallas(it.tallas ?? {});
     const precio = numero(it.precio_venta);
-    if (tallas.length === 0 || precio == null || precio <= 0) {
+    if (tallas.length === 0 || (!precio_rango.sinPrecios && (precio == null || precio <= 0))) {
       sinStock++;
       continue;
     }
-    if ((precio_rango.min != null && precio < precio_rango.min) || (precio_rango.max != null && precio > precio_rango.max)) {
+    if ((precio_rango.min != null || precio_rango.max != null) && (precio == null || precio <= 0 || (precio_rango.min != null && precio < precio_rango.min) || (precio_rango.max != null && precio > precio_rango.max))) {
       fueraDePrecio++;
       continue;
     }
@@ -675,7 +694,7 @@ export function construirBorrador(
       modelo: (it.modelo ?? "").trim().toUpperCase(),
       genero,
       tallas,
-      precio,
+      precio: precio_rango.sinPrecios ? null : precio,
     });
   }
 
@@ -690,6 +709,7 @@ export function construirBorrador(
 
   const totalSinPlantilla = Object.values(sinPlantilla).reduce((a, b) => a + b, 0);
   return {
+    ...(precio_rango.sinPrecios ? { sin_precios: true } : {}),
     productos,
     paginas,
     resumen: {
@@ -728,7 +748,8 @@ export function armarSnapshot(
     let n = nuevoIndice.get(p.prod);
     if (n === undefined) {
       n = productos.length;
-      productos.push(borrador.productos[p.prod]);
+      const producto = borrador.productos[p.prod];
+      productos.push(borrador.sin_precios ? { ...producto, precio: null } : producto);
       nuevoIndice.set(p.prod, n);
     }
     usadas.add(p.plantilla);
@@ -736,6 +757,7 @@ export function armarSnapshot(
   });
   return {
     titulo,
+    ...(borrador.sin_precios ? { sin_precios: true } : {}),
     generado: new Date().toISOString(),
     ...(borrador.stock_al ? { stock_al: borrador.stock_al } : {}),
     imagenes_base: imagenesBase,

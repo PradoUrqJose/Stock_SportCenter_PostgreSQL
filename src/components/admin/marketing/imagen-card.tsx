@@ -11,6 +11,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { AJEDREZ, ReemplazarImagen } from "./reemplazar-imagen";
+import { precargarImagen } from "@/lib/precarga-imagen";
 
 type Props = {
   codigo: string;
@@ -46,6 +47,9 @@ export function ImagenCard({ codigo, urlMiniatura, urlOriginal, detalle, priorid
       <button
         type="button"
         onClick={() => setOpen(true)}
+        onPointerEnter={() => precargarImagen(urlOriginal)}
+        onFocus={() => precargarImagen(urlOriginal)}
+        onPointerDown={() => precargarImagen(urlOriginal)}
         className="group overflow-hidden rounded-lg border border-border bg-card text-left transition-shadow hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
       >
         <div className={cn("relative aspect-square", AJEDREZ)}>
@@ -85,7 +89,7 @@ export function ImagenCard({ codigo, urlMiniatura, urlOriginal, detalle, priorid
             </DialogDescription>
           </DialogHeader>
           {open && (
-            <ReemplazarImagen codigo={codigo} urlActual={urlOriginal} onHecho={() => setOpen(false)} />
+            <ReemplazarImagen codigo={codigo} urlActual={urlOriginal} urlPrevia={loaded && src !== urlOriginal ? src : undefined} onHecho={() => setOpen(false)} />
           )}
         </DialogContent>
       </Dialog>

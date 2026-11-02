@@ -26,6 +26,7 @@ import { ajustar, type Medir, type TextoAjustado } from "@/lib/marketing-texto";
 import { BotonPdf } from "./boton-pdf";
 import { cn } from "@/lib/utils";
 import { urlDerivado } from "@/lib/marketing-rutas-imagen";
+import { decodificarAlMontar } from "@/lib/precarga-imagen";
 
 const ANCHO_MAX = 1400;
 
@@ -54,12 +55,13 @@ function obtenerObservador() {
     (entradas) => {
       for (const e of entradas) avisos.get(e.target)?.(e.isIntersecting);
     },
-    { rootMargin: "150% 0px" }
+    // Unas cinco páginas horizontales por delante y por detrás, sin montar el catálogo entero.
+    { rootMargin: "300% 0px" }
   );
   return observador;
 }
-function useCerca(ref: React.RefObject<HTMLElement | null>): boolean {
-  const [cerca, setCerca] = useState(false);
+function useCerca(ref: React.RefObject<HTMLElement | null>, inicial: boolean): boolean {
+  const [cerca, setCerca] = useState(inicial);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -129,7 +131,7 @@ function ContenidoProducto({
   return (
     <div className="absolute left-0 top-0 origin-top-left" style={{ width: pl.ancho, height: pl.alto, transform: `scale(${k})` }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={`${c.base}/${pl.fondo}.webp`} alt="" decoding="async" className="absolute inset-0 select-none" style={{ width: pl.ancho, height: pl.alto }} draggable={false} />
+      <img ref={decodificarAlMontar} src={`${c.base}/${pl.fondo}.webp`} alt="" decoding="async" className="absolute inset-0 select-none" style={{ width: pl.ancho, height: pl.alto }} draggable={false} />
       {prod.v === 0 ? (
         // Producto sin imagen en R2: en el editor se marca dónde falta (y se sube desde ahí); a los clientes les llega la zona vacía.
         editable && (
@@ -145,6 +147,7 @@ function ContenidoProducto({
       ) : (
       // eslint-disable-next-line @next/next/no-img-element
       <img
+        ref={decodificarAlMontar}
         src={urlZapatilla(c.base, prod, necesario)}
         alt={prod.modelo}
         decoding="async"
@@ -199,7 +202,7 @@ function ContenidoProducto({
       )}
       {txt(z.codigo, t.codigo)}
       {txt(z.tallas, t.tallas, true)}
-      {txt(z.precio, t.precio, true)}
+      {prod.precio != null && txt(z.precio, t.precio, true)}
       <div className="absolute bottom-1.5 right-2 rounded-full bg-black/40 px-1.5 text-[11px] text-white/60">
         {i + 1} / {c.total}
         {prod.genero ? ` · ${prod.genero}` : ""}
@@ -213,7 +216,7 @@ function ContenidoFija({ i, pag }: { i: number; pag: PaginaFija }) {
   return (
     <>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={`${c.base}/${pag.imagen}.webp`} alt="" decoding="async" draggable={false} className="absolute inset-0 h-full w-full select-none object-contain" />
+      <img ref={decodificarAlMontar} src={`${c.base}/${pag.imagen}.webp`} alt="" decoding="async" draggable={false} className="absolute inset-0 h-full w-full select-none object-contain" />
       {/* Zonas clicables (WhatsApp, redes…): invisibles; el área táctil se agranda unos píxeles para el dedo. */}
       {pag.zonas?.map((z, k) => (
         <a
@@ -253,7 +256,7 @@ export const PaginaShell = memo(function PaginaShell({
   alAjustar?: (id: string, a: Ajuste) => void;
 }) {
   const ref = useRef<HTMLElement>(null);
-  const cerca = useCerca(ref);
+  const cerca = useCerca(ref, i < 2);
   const edicion: Edicion | undefined =
     editable && alSeleccionar && alAjustar ? { editable: true, alSeleccionar, alAjustar } : undefined;
 
@@ -351,7 +354,7 @@ export function useContextoVisor(base: string, fuente: string, total: number) {
           r = {
             codigo: ajustar([prod.cod], pl.zonas.codigo, "", util.medir),
             tallas: ajustar(prod.tallas.length ? prod.tallas : ["—"], pl.zonas.tallas, " · ", util.medir),
-            precio: ajustar([`S/ ${Number(prod.precio).toFixed(2)}`], pl.zonas.precio, "", util.medir),
+            precio: prod.precio == null ? { px: 0, lineas: [] } : ajustar([`S/ ${Number(prod.precio).toFixed(2)}`], pl.zonas.precio, "", util.medir),
           };
           util.cache.set(clave, r);
         }

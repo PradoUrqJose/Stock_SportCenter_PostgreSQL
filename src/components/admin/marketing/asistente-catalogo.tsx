@@ -20,6 +20,8 @@ import { ALMACENES, ALMACENES_POR_DEFECTO, type FijaBiblioteca, type PlantillaLi
 import { cn } from "@/lib/utils";
 import { documentoDelCatalogo, ordenConPortada, ordenConSeparador } from "./documento-catalogo";
 import { PasoPlantillas } from "./paso-plantillas";
+import { OpcionSinPrecios } from "./opcion-sin-precios";
+import { plantillaGeneral } from "@/lib/marketing-catalogo";
 import { PasoFinal } from "./paso-final";
 import { crearTipo } from "@/lib/actions/marketing-tipos";
 import { tallasSinEquivalencia } from "@/lib/actions/marketing-tallas";
@@ -43,6 +45,8 @@ export type Recursos = {
 };
 
 export type DatosCatalogo = {
+  sinPrecios: boolean;
+  plantillaGeneral: string;
   titulo: string;
   tituloSugerido: string;
   tipo: string;
@@ -124,6 +128,8 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
   const [consultando, setConsultando] = useState(false);
   const [errorErp, setErrorErp] = useState<string | null>(null);
   const [datos, setDatos] = useState<DatosCatalogo>({
+    sinPrecios: false,
+    plantillaGeneral: "",
     titulo: "",
     tituloSugerido: "",
     tipo: "",
@@ -243,6 +249,8 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
       stock_minimo: Number(datos.stockMinimo) || 1,
       solo_unicos: datos.soloUnicos,
       plantillas: datos.plantillas,
+      sin_precios: datos.sinPrecios,
+      plantilla_general: datos.plantillaGeneral || undefined,
       escala_talla: datos.escalaTalla,
     });
     if (r.success && r.data) {
@@ -385,7 +393,7 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
                   <Link href={sincronizar.volverA} className={cn(buttonVariants({ variant: "ghost" }))}>
                     Cancelar
                   </Link>
-                  <Button onClick={() => void consultarErp()} disabled={!puedeAvanzar || consultando}>
+                  <Button onClick={() => void consultarErp()} disabled={!puedeAvanzar || consultando || (datos.sinPrecios && !plantillaGeneral(recursos.plantillas, datos.plantillaGeneral))}>
                     {consultando ? "Consultando…" : "Consultar el ERP"} <ChevronRight data-icon="inline-end" />
                   </Button>
                 </div>
@@ -481,6 +489,8 @@ export function AsistenteCatalogo({ recursos, sincronizar }: { recursos: Recurso
                   <Input type="number" inputMode="decimal" min={0} value={datos.precioMax} onChange={(e) => cambiar({ precioMax: e.target.value })} placeholder="Hasta" className="w-32" aria-label="Precio hasta" />
                 </div>
               </fieldset>
+
+              {sincronizar && <OpcionSinPrecios recursos={recursos} datos={datos} cambiar={cambiar} disabled={consultando} />}
 
               <fieldset className={cn("space-y-3", ENTRA)} style={entrada(3)}>
                 <legend className="mb-1 text-sm font-medium">Filtros del ERP</legend>

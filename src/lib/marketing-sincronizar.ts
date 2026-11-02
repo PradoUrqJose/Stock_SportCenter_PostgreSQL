@@ -92,7 +92,7 @@ export function sincronizarBorrador(actual: Borrador, fresco: Borrador, al: stri
     else if (activosProd.has(i)) sinCambios++;
     // Si el catálogo es de antes de los géneros, el producto lo toma del ERP (no cuenta como cambio).
     // También la imagen vigente: un producto que no tenía imagen puede haberla recibido desde entonces.
-    productos[i] = { ...p, tallas: f.tallas, precio: f.precio, marca: f.marca, modelo: f.modelo, genero: f.genero, v: f.v };
+    productos[i] = { ...p, tallas: f.tallas, precio: f.precio, marca: f.marca, modelo: f.modelo, genero: f.genero, v: f.v, original: f.original };
   }
 
   // 2. Los que ya no están en el ERP salen de las páginas (quedan en «Quitadas» con su motivo).
@@ -192,11 +192,19 @@ export function sincronizarBorrador(actual: Borrador, fresco: Borrador, al: stri
   delete base.sin_plantilla;
   delete base.con_generica;
   const resumenNuevo: ResumenGeneracion = { ...base, ...fresco.resumen, ...(actual.resumen.fijas !== undefined ? { fijas: actual.resumen.fijas } : {}), paginas: paginas.length };
+  const general = fresco.sin_precios ? fresco.paginas.find((p) => p.tipo === "producto") : undefined;
+  const cambiaModo = Boolean(actual.sin_precios) !== Boolean(fresco.sin_precios);
+  const presentar = (pg: PaginaCat): PaginaCat => {
+    if (pg.tipo !== "producto") return pg;
+    const id = general?.tipo === "producto" ? general.plantilla : cambiaModo ? plantillaFresca.get(claveProducto(productos[pg.prod])) : undefined;
+    return id && id !== pg.plantilla ? { ...pg, plantilla: id } : pg;
+  };
   const borrador: Borrador = {
     ...actual,
-    productos,
-    paginas,
-    quitadas,
+    sin_precios: fresco.sin_precios,
+    productos: fresco.sin_precios ? productos.map((p) => ({ ...p, precio: null })) : productos,
+    paginas: paginas.map(presentar),
+    quitadas: quitadas.map(presentar),
     resumen: resumenNuevo,
     stock_al: al,
     sincronizacion: { al, actualizados, nuevos: nuevos.length, quitados: quitados.length, reactivados: reactivados.length },

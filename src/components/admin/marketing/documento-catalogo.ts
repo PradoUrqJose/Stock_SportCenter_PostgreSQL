@@ -1,7 +1,7 @@
 // Arma el «documento» de un catálogo a partir de sus filtros (lógica pura): qué plantilla usa cada marca,
 // qué portada lleva, qué separadores se eligieron y qué cierres se ponen solos. Lo usan el paso Plantillas,
 // el Preview y el paso final del asistente, para mostrar solo lo que corresponde a esos filtros.
-import { CLAVE_PRODUCTOS, MARCA_GENERICA, claveDeMarca, esClaveProductos, fijasAplicables, marcaDeClave, plantillaDeMarca, portadaDelTipo, type FijaBiblioteca, type PlantillaLista } from "@/lib/marketing-catalogo";
+import { CLAVE_PRODUCTOS, MARCA_GENERICA, claveDeMarca, esClaveProductos, fijasAplicables, marcaDeClave, plantillaDelCatalogo, portadaDelTipo, type FijaBiblioteca, type PlantillaLista } from "@/lib/marketing-catalogo";
 import type { MarcaAfectada } from "@/lib/actions/marketing-disenos";
 
 export type FijaGestion = FijaBiblioteca & { activa: boolean; /** Zonas clicables (solo su cantidad importa aquí). */ zonas?: readonly unknown[] };
@@ -151,7 +151,7 @@ export function ordenConSeparador(orden: readonly string[], id: string, marcado:
 }
 
 export function documentoDelCatalogo(
-  filtros: { tipo: string; plantillas: Record<string, string>; portada?: string | null; separadores?: string[]; orden?: string[] },
+  filtros: { tipo: string; plantillas: Record<string, string>; sinPrecios?: boolean; plantillaGeneral?: string; portada?: string | null; separadores?: string[]; orden?: string[] },
   plantillas: readonly PlantillaLista[],
   fijas: readonly FijaGestion[],
   marcasCatalogo: readonly MarcaAfectada[] | null
@@ -166,7 +166,7 @@ export function documentoDelCatalogo(
   const porPlantilla = new Map<string, { plantilla: PlantillaLista; marcas: string[]; productos: number }>();
   const sinPlantilla: MarcaAfectada[] = [];
   for (const m of marcas) {
-    const id = plantillaDeMarca(m.marca, plantillas, filtros.plantillas);
+    const id = plantillaDelCatalogo(m.marca, plantillas, { plantillas: filtros.plantillas, sin_precios: filtros.sinPrecios, plantilla_general: filtros.plantillaGeneral });
     const plantilla = id ? activas.find((p) => p.id === id) : undefined;
     if (!plantilla) {
       sinPlantilla.push(m);
