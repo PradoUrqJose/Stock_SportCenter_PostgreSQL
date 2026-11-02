@@ -47,10 +47,20 @@ type Ctx = {
 };
 export const VisorCtx = createContext<Ctx | null>(null);
 
-// ---------- un solo IntersectionObserver para todas las páginas ----------
+// ---------- dos observadores compartidos: montaje cercano y precarga adelantada ----------
 let observador: IntersectionObserver | null = null;
+let observadorPrecarga: IntersectionObserver | null = null;
 const avisos = new WeakMap<Element, (cerca: boolean) => void>();
-function obtenerObservador() {
+const avisosPrecarga = new WeakMap<Element, (cerca: boolean) => void>();
+function obtenerObservador(precarga: boolean) {
+  if (precarga) {
+    observadorPrecarga ??= new IntersectionObserver(
+      (entradas) => { for (const e of entradas) avisosPrecarga.get(e.target)?.(e.isIntersecting); },
+      // Las miniaturas se piden mucho antes de montar el contenido completo.
+      { rootMargin: "300% 0px 900% 0px" }
+    );
+    return observadorPrecarga;
+  }
   observador ??= new IntersectionObserver(
     (entradas) => {
       for (const e of entradas) avisos.get(e.target)?.(e.isIntersecting);
@@ -60,19 +70,20 @@ function obtenerObservador() {
   );
   return observador;
 }
-function useCerca(ref: React.RefObject<HTMLElement | null>, inicial: boolean): boolean {
+function useCerca(ref: React.RefObject<HTMLElement | null>, inicial: boolean, precarga = false): boolean {
   const [cerca, setCerca] = useState(inicial);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const o = obtenerObservador();
-    avisos.set(el, setCerca);
+    const o = obtenerObservador(precarga);
+    const mapa = precarga ? avisosPrecarga : avisos;
+    mapa.set(el, setCerca);
     o.observe(el);
     return () => {
       o.unobserve(el);
-      avisos.delete(el);
+      mapa.delete(el);
     };
-  }, [ref]);
+  }, [ref, precarga]);
   return cerca;
 }
 
@@ -86,6 +97,19 @@ export function transformacion(a: Ajuste): string {
 function urlZapatilla(base: string, p: ProductoCat, necesario: number): string {
   const ancho = necesario > 700 ? 1200 : 600;
   return urlDerivado(base, ancho, p.cod, p.v, p.original);
+}
+
+/** Sólo imágenes ligeras y fondos próximos; no monta textos ni controles del editor. */
+function PrecargaPagina({ pag, prod, pl }: { pag: PaginaCat; prod?: ProductoCat; pl?: PlantillaSnap }) {
+  const c = useContext(VisorCtx)!;
+  const urls = pag.tipo === "fija" ? [`${c.base}/${pag.imagen}.webp`] : pl ? [
+    `${c.base}/${pl.fondo}.webp`,
+    ...(prod && prod.v !== 0 ? [urlDerivado(c.base, 600, prod.cod, prod.v, prod.original)] : []),
+  ] : [];
+  return <div hidden aria-hidden="true">{urls.map((url) => (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img key={url} src={url} alt="" loading="eager" decoding="async" fetchPriority="low" ref={decodificarAlMontar} />
+  ))}</div>;
 }
 
 type Edicion = {
@@ -108,6 +132,7 @@ function ContenidoProducto({
   edicion?: Edicion;
 }) {
   const c = useContext(VisorCtx)!;
+  const [imagenLista, setImagenLista] = useState<string | null>(null);
   const arrastre = useRef<{ x: number; y: number; a: Ajuste; el: HTMLImageElement; ultimo?: Ajuste } | null>(null);
   if (c.ancho === 0) return null; // aún no se midió el ancho de la pantalla
   const k = c.ancho / pl.ancho;
@@ -115,6 +140,8 @@ function ContenidoProducto({
   const t = c.textos(prod, pl, pag.plantilla);
   const a = pag.ajuste ?? IDENTIDAD;
   const necesario = z.zapatilla.w * k * c.dpr;
+  const imagen = urlZapatilla(c.base, prod, necesario);
+  const miniatura = urlDerivado(c.base, 600, prod.cod, prod.v, prod.original);
   const editable = edicion?.editable ?? false;
 
   const txt = (zona: Zona, r: TextoAjustado, centro?: boolean) => (
@@ -145,14 +172,20 @@ function ContenidoProducto({
           </div>
         )
       ) : (
-      // eslint-disable-next-line @next/next/no-img-element
+      <>
+      {miniatura !== imagen && imagenLista !== imagen && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={miniatura} alt="" decoding="async" draggable={false} className="absolute select-none pointer-events-none"
+          style={{ left: z.zapatilla.x, top: z.zapatilla.y, width: z.zapatilla.w, height: z.zapatilla.h, transform: transformacion(a), transformOrigin: "50% 50%" }} />
+      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        ref={decodificarAlMontar}
-        src={urlZapatilla(c.base, prod, necesario)}
+        ref={(img) => { if (img) img.decode().then(() => setImagenLista(imagen)).catch(() => undefined); }}
+        src={imagen}
         alt={prod.modelo}
         decoding="async"
         draggable={false}
-        className={cn("absolute select-none", editable && "cursor-grab touch-none active:cursor-grabbing")}
+        className={cn("absolute select-none", editable && "cursor-grab touch-none active:cursor-grabbing", miniatura !== imagen && imagenLista !== imagen && "opacity-0")}
         style={{
           left: z.zapatilla.x,
           top: z.zapatilla.y,
@@ -199,6 +232,7 @@ function ContenidoProducto({
         }
         onPointerCancel={editable ? () => (arrastre.current = null) : undefined}
       />
+      </>
       )}
       {txt(z.codigo, t.codigo)}
       {txt(z.tallas, t.tallas, true)}
@@ -257,6 +291,7 @@ export const PaginaShell = memo(function PaginaShell({
 }) {
   const ref = useRef<HTMLElement>(null);
   const cerca = useCerca(ref, i < 2);
+  const anticipar = useCerca(ref, i < 2, true);
   const edicion: Edicion | undefined =
     editable && alSeleccionar && alAjustar ? { editable: true, alSeleccionar, alAjustar } : undefined;
 
@@ -276,6 +311,7 @@ export const PaginaShell = memo(function PaginaShell({
       aria-label={`Página ${i + 1}: ${etiqueta}`}
       onPointerDown={editable && alSeleccionar ? () => alSeleccionar(pag.id) : undefined}
     >
+      {anticipar && <PrecargaPagina pag={pag} prod={prod} pl={pl} />}
       {cerca &&
         (pag.tipo === "fija" ? (
           <ContenidoFija i={i} pag={pag} />
