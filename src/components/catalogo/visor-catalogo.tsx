@@ -48,34 +48,36 @@ type Ctx = {
 export const VisorCtx = createContext<Ctx | null>(null);
 
 // ---------- dos observadores compartidos: montaje cercano y precarga adelantada ----------
-let observador: IntersectionObserver | null = null;
-let observadorPrecarga: IntersectionObserver | null = null;
+const observadores = new WeakMap<Element | Document, { cercano: IntersectionObserver; precarga: IntersectionObserver }>();
 const avisos = new WeakMap<Element, (cerca: boolean) => void>();
 const avisosPrecarga = new WeakMap<Element, (cerca: boolean) => void>();
-function obtenerObservador(precarga: boolean) {
-  if (precarga) {
-    observadorPrecarga ??= new IntersectionObserver(
+function obtenerObservador(el: HTMLElement, precarga: boolean) {
+  // En el editor se desplaza el main del layout, no la ventana. Un root null
+  // queda recortado por ese main y pierde todo el margen de anticipación.
+  const root = el.closest("[data-catalogo-scroll]");
+  const clave = root ?? el.ownerDocument;
+  let par = observadores.get(clave);
+  if (!par) {
+    const anticipado = new IntersectionObserver(
       (entradas) => { for (const e of entradas) avisosPrecarga.get(e.target)?.(e.isIntersecting); },
       // Las miniaturas se piden mucho antes de montar el contenido completo.
-      { rootMargin: "300% 0px 900% 0px" }
+      { root, rootMargin: "300% 0px 900% 0px" }
     );
-    return observadorPrecarga;
+    const cercano = new IntersectionObserver(
+      (entradas) => { for (const e of entradas) avisos.get(e.target)?.(e.isIntersecting); },
+      { root, rootMargin: "300% 0px" }
+    );
+    par = { cercano, precarga: anticipado };
+    observadores.set(clave, par);
   }
-  observador ??= new IntersectionObserver(
-    (entradas) => {
-      for (const e of entradas) avisos.get(e.target)?.(e.isIntersecting);
-    },
-    // Unas cinco páginas horizontales por delante y por detrás, sin montar el catálogo entero.
-    { rootMargin: "300% 0px" }
-  );
-  return observador;
+  return precarga ? par.precarga : par.cercano;
 }
 function useCerca(ref: React.RefObject<HTMLElement | null>, inicial: boolean, precarga = false): boolean {
   const [cerca, setCerca] = useState(inicial);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const o = obtenerObservador(precarga);
+    const o = obtenerObservador(el, precarga);
     const mapa = precarga ? avisosPrecarga : avisos;
     mapa.set(el, setCerca);
     o.observe(el);

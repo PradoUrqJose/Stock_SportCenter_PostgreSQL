@@ -32,7 +32,7 @@ export function SidebarShell({ sidebar, children }: Props) {
 
   // El editor de catálogos ocupa toda la pantalla, sin menú lateral (como el enlace de los clientes).
   if (/^\/admin\/marketing\/catalogos\/[^/]+\/editar\/?$/.test(pathname)) {
-    return <main className="h-screen overflow-auto bg-[#16181d]">{children}</main>;
+    return <main data-catalogo-scroll className="h-screen overflow-auto bg-[#16181d]">{children}</main>;
   }
 
   return (
