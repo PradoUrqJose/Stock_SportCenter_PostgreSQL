@@ -50,11 +50,11 @@ export function urlPublicaOriginal(codUniversal: string): string {
  */
 export function urlImagenOriginal(
   codUniversal: string,
-  version: number,
+  version: number | string,
   imagenUrl?: string | null
 ): string {
   const url = imagenUrl?.replace(/\/400497_07\.png(?=\?|$)/, '/400497-07.png');
-  return `${url || urlPublicaOriginal(codUniversal)}?v=${version}`;
+  return `${url || urlPublicaOriginal(codUniversal)}?v=${encodeURIComponent(version)}`;
 }
 
 /**
@@ -62,7 +62,7 @@ export function urlImagenOriginal(
  * scripts/marketing_generar_derivados.py; la revisión va en la consulta.
  * Si un derivado aún no existe, quien lo muestra debe caer al original.
  */
-export function urlImagenMiniatura(codUniversal: string, version: number): string {
+export function urlImagenMiniatura(codUniversal: string, version: number | string): string {
   return urlDerivado(R2_PUBLIC_URL, 600, codUniversal, version);
 }
 

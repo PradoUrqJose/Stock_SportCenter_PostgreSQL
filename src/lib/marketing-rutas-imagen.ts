@@ -7,6 +7,7 @@ export function claveDerivado(ancho: 600 | 1200, codigo: string): string {
   return `derivados/w${ancho}/${codigoImagen(codigo)}.webp`;
 }
 
-export function urlDerivado(base: string, ancho: 600 | 1200, codigo: string, revision: number): string {
-  return `${base.replace(/\/+$/, "")}/derivados/w${ancho}/${encodeURIComponent(codigoImagen(codigo))}.webp?v=${revision}`;
+export function urlDerivado(base: string, ancho: 600 | 1200, codigo: string, revision: number | string, original = false): string {
+  const ruta = original ? `${encodeURIComponent(codigoImagen(codigo))}.png` : `derivados/w${ancho}/${encodeURIComponent(codigoImagen(codigo))}.webp`;
+  return `${base.replace(/\/+$/, "")}/${ruta}?v=${encodeURIComponent(revision)}`;
 }

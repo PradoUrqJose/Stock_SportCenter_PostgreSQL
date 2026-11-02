@@ -13,12 +13,15 @@ import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { inventarioImagenesVigente } from "@/lib/marketing-inventario-imagenes";
+import { indiceImagenesConfigurado, paginaIndiceImagenes } from "@/lib/indice-imagenes";
+import { codigoValido } from "@/lib/marketing-codigos";
 
 const POR_PAGINA = 48;
 
 type Fila = {
   cod_universal: string;
-  version: number;
+  version: number | string;
+  miniatura?: boolean;
   imagen_url: string | null;
   marca: string | null;
   modelo: string | null;
@@ -55,31 +58,61 @@ export default async function ImagenesPage({
   const q = primero(sp.q).trim().slice(0, 60);
   const pagina = Math.max(1, parseInt(primero(sp.pagina), 10) || 1);
   const like = patronLike(q);
-  const inventario = await inventarioImagenesVigente();
+  let filas: Fila[];
+  let total: number;
+  let indiceDesactualizado = false;
+  if (indiceImagenesConfigurado()) {
+    let candidatos: string[] | undefined;
+    if (q) {
+      const encontrados = await db.execute({
+        sql: "SELECT DISTINCT UPPER(cod_universal) AS cod FROM productos WHERE marca ILIKE ? OR modelo ILIKE ?",
+        args: [like, like],
+      });
+      candidatos = encontrados.rows.map((p) => String(p.cod).trim().replace(/^400497_07$/, "400497-07")).filter(codigoValido);
+    }
+    const indice = await paginaIndiceImagenes(POR_PAGINA, (pagina - 1) * POR_PAGINA, candidatos, q);
+    total = indice.total;
+    indiceDesactualizado = indice.stale;
+    const detalles = indice.items.length ? await db.execute({
+      sql: `SELECT UPPER(cod_universal) AS cod, MIN(marca) AS marca, MIN(modelo) AS modelo
+            FROM productos WHERE UPPER(cod_universal) = ANY(?) GROUP BY UPPER(cod_universal)`,
+      args: [indice.items.map((i) => i.code)],
+    }) : { rows: [] };
+    const porCodigo = new Map(detalles.rows.map((p) => [String(p.cod), p]));
+    filas = indice.items.map((i) => ({ cod_universal: i.code, version: i.etag,
+      imagen_url: null, miniatura: i.thumbnail600, total,
+      marca: porCodigo.get(i.code)?.marca as string | null ?? null,
+      modelo: porCodigo.get(i.code)?.modelo as string | null ?? null,
+    }));
+  } else {
+    const inventario = await inventarioImagenesVigente();
 
-  // productos tiene una fila por (cod_universal, genero): se colapsa a una por código.
-  const result = await db.execute({
-    sql: `SELECT m.cod_universal, m.version, m.imagen_url, p.marca, p.modelo,
-                 COUNT(*) OVER () AS total
-          FROM mk_imagenes m
-          LEFT JOIN (
-            SELECT UPPER(cod_universal) AS cod, MIN(marca) AS marca, MIN(modelo) AS modelo
-            FROM productos
-            GROUP BY UPPER(cod_universal)
-          ) p ON p.cod = m.cod_universal
-          WHERE m.cod_universal = ANY(?)
-            AND (? = '' OR m.cod_universal LIKE ? OR p.marca ILIKE ? OR p.modelo ILIKE ?)
-          ORDER BY m.cod_universal
-          LIMIT ? OFFSET ?`,
-    args: [[...inventario.versiones.keys()], q, like, like, like, POR_PAGINA, (pagina - 1) * POR_PAGINA],
-  });
-  const filas = result.rows as unknown as Fila[];
+    // productos tiene una fila por (cod_universal, genero): se colapsa a una por código.
+    const result = await db.execute({
+      sql: `SELECT m.cod_universal, m.version, m.imagen_url, p.marca, p.modelo,
+                   COUNT(*) OVER () AS total
+            FROM mk_imagenes m
+            LEFT JOIN (
+              SELECT UPPER(cod_universal) AS cod, MIN(marca) AS marca, MIN(modelo) AS modelo
+              FROM productos
+              GROUP BY UPPER(cod_universal)
+            ) p ON p.cod = m.cod_universal
+            WHERE m.cod_universal = ANY(?)
+              AND (? = '' OR m.cod_universal LIKE ? OR p.marca ILIKE ? OR p.modelo ILIKE ?)
+            ORDER BY m.cod_universal
+            LIMIT ? OFFSET ?`,
+      args: [[...inventario.versiones.keys()], q, like, like, like, POR_PAGINA, (pagina - 1) * POR_PAGINA],
+    });
+    filas = result.rows as unknown as Fila[];
 
-  const total = filas[0]?.total ?? 0;
+    total = filas[0]?.total ?? 0;
+  }
+
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
 
   return (
     <div className="space-y-5">
+      {indiceDesactualizado && <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">La última comprobación del inventario está desactualizada. Se muestran las imágenes conocidas; las ausencias no se pueden confirmar hasta actualizar el índice.</p>}
       <p className="text-sm text-muted-foreground">
         {q
           ? `${total.toLocaleString("en-US")} resultados para “${q}”.`
@@ -127,7 +160,7 @@ export default async function ImagenesPage({
                 key={`${f.cod_universal}-${f.version}`}
                 codigo={f.cod_universal}
                 version={f.version}
-                urlMiniatura={urlImagenMiniatura(f.cod_universal, f.version)}
+                urlMiniatura={f.miniatura === false ? urlImagenOriginal(f.cod_universal, f.version) : urlImagenMiniatura(f.cod_universal, f.version)}
                 urlOriginal={urlImagenOriginal(
                   f.cod_universal,
                   f.version,

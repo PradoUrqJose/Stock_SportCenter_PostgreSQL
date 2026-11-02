@@ -13,8 +13,10 @@ export type Ajuste = { dx: number; dy: number; s: number };
 /** Lo que el visor necesita de un producto. NUNCA cantidades ni precio de compra. */
 export type ProductoCat = {
   cod: string;
-  /** Versión de la imagen (mk_imagenes.version): entra en el nombre del WebP. */
-  v: number;
+  /** ETag de R2; las revisiones numéricas antiguas siguen siendo compatibles. 0 = sin imagen. */
+  v: number | string;
+  /** El derivado aún no corresponde al original actual: usar el PNG. */
+  original?: boolean;
   marca: string;
   modelo: string;
   /** HOMBRE, MUJER, JUNIOR…: un mismo código puede tener una página por género (tallas distintas). */
@@ -611,7 +613,7 @@ function numero(v: number | string | null | undefined): number | null {
  */
 export function construirBorrador(
   items: ItemErp[],
-  versiones: Map<string, number>,
+  versiones: Map<string, number | string>,
   plantillaDe: (marca: string) => string | null,
   precio_rango: { min: number | null; max: number | null; tallas?: readonly string[] } = { min: null, max: null },
   ordenGeneros?: readonly string[]

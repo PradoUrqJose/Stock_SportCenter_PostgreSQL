@@ -1,5 +1,7 @@
 # Productos sin imagen
 
+Actualización del índice: cuando está configurado `IMAGE_INDEX_URL`, las referencias de este documento al listado por apertura se sustituyen por la API del [índice compartido](../services/indice-imagenes/README.md). No se consulta `mk_imagenes` para inferir presencia. Las imágenes se actualizan mediante eventos de R2 y notificación directa tras subir; la reconciliación completa se ejecuta fuera de la pantalla. La propagación de cambios externos es asíncrona. Los fallos o la caducidad del índice no se interpretan como productos sin imagen.
+
 Ruta: `/admin/marketing/imagenes/sin-imagen`, accesible desde Marketing y desde la galería de imágenes. Requiere los permisos de Marketing.
 
 ## Cobertura y criterio

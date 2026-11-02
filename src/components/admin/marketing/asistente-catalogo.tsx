@@ -34,7 +34,7 @@ export type Recursos = {
   plantillas: PlantillaLista[];
   fijas: (FijaBiblioteca & { activa: boolean })[];
   /** Zapatilla de ejemplo para acomodar su posición en la plantilla. */
-  ejemplo: { cod: string; v: number } | null;
+  ejemplo: { cod: string; v: number | string; original?: boolean } | null;
   /** Tipos de catálogo activos (de fábrica y personalizados). */
   tipos: TipoCatalogo[];
   /** Familia de la tipografía del diseño (Montserrat Black), para el editor de posiciones del texto. */

@@ -164,7 +164,7 @@ export function PasoFinal({
                   <img src={`${base}/${plantilla.fondo}.webp`} alt="" draggable={false} className="absolute inset-0 h-full w-full" />
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={urlDerivado(base, 1200, ejemplo.cod, ejemplo.v)}
+                    src={urlDerivado(base, 1200, ejemplo.cod, ejemplo.v, ejemplo.original)}
                     alt="Zapatilla de ejemplo"
                     draggable={false}
                     className="absolute cursor-grab touch-none active:cursor-grabbing"

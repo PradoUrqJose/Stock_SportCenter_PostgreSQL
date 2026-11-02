@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "stock-sc-indice-imagenes",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-02",
+  "workers_dev": true,
+  "r2_buckets": [{"binding": "IMAGES", "bucket_name": "stock-sc-catalogo"}],
+  "d1_databases": [{"binding": "DB", "database_name": "stock-sc-indice-imagenes", "database_id": "e17406c6-1f5f-43a8-a2d5-e197ac77dda5"}],
+  "queues": {"consumers": [{"queue": "stock-sc-imagenes-cambios", "max_batch_size": 10, "max_batch_timeout": 1, "max_retries": 5, "max_concurrency": 1, "dead_letter_queue": "stock-sc-imagenes-errores"}]},
+  "triggers": {"crons": ["0 */6 * * *"]},
+  "observability": {"enabled": true}
+}

@@ -27,12 +27,13 @@ export async function plantillasPorId(ids?: string[]): Promise<Record<string, Pl
 export async function sincronizarVersiones(b: Borrador): Promise<Borrador> {
   const codigos = [...new Set(b.productos.map((p) => p.cod))];
   if (codigos.length === 0) return b;
-  const { versiones } = await inventarioImagenesVigente();
+  const { versiones, originales } = await inventarioImagenesVigente();
   return {
     ...b,
     productos: b.productos.map((p) => {
       const v = versionImagenDisponible(p.cod, versiones);
-      return v !== p.v ? { ...p, v } : p;
+      const original = originales.has(p.cod === "400497_07" ? "400497-07" : p.cod);
+      return v !== p.v || original !== p.original ? { ...p, v, original } : p;
     }),
   };
 }

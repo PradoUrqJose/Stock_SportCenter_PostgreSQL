@@ -241,7 +241,7 @@ export async function generarPdf(
     // Versión 0 = el producto aún no tiene imagen: la página sale sin zapatilla (no hay nada que pedir).
     const promesa = (prod.v === 0
       ? Promise.resolve(null)
-      : bytesDe(urlDerivado(e.base, 1200, prod.cod, prod.v), senal)
+      : bytesDe(urlDerivado(e.base, 1200, prod.cod, prod.v, prod.original), senal)
     ).catch((err) => {
       // Si la imagen de un producto no existe (404) no se cae todo el PDF: la página sale sin zapatilla y se avisa al final.
       if (err instanceof ErrorLectura && err.estado === 404) return null;

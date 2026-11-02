@@ -54,7 +54,7 @@ export default async function NuevoCatalogoPage({ searchParams }: { searchParams
           base: IMAGENES_BASE,
           plantillas,
           fijas,
-          ejemplo: cod ? { cod, v: ejemplo.versiones.get(cod)! } : null,
+          ejemplo: cod ? { cod, v: ejemplo.versiones.get(cod)!, original: ejemplo.originales.has(cod) } : null,
           tipos,
           fuente: montserrat.style.fontFamily,
           opciones,

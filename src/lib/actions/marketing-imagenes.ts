@@ -18,7 +18,7 @@ export async function consultarCodigosExistentes(codigos: string[]): Promise<Act
 
   try {
     const { versiones } = await inventarioImagenesVigente();
-    return { success: true, msg: "", data: validos.filter((c) => versionImagenDisponible(c, versiones) > 0) };
+    return { success: true, msg: "", data: validos.filter((c) => versionImagenDisponible(c, versiones) !== 0) };
   } catch {
     return { success: false, msg: "No se pudo comprobar R2. Vuelve a intentarlo antes de subir imágenes." };
   }

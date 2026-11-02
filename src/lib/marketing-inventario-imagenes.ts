@@ -4,9 +4,14 @@ import { codigoValido } from "@/lib/marketing-codigos";
 import { codigosImagenesR2 } from "@/lib/marketing-imagenes-pendientes";
 import { reconciliarIndiceImagenes } from "@/lib/marketing-inventario-imagenes-control";
 import { urlPublicaOriginal } from "@/lib/marketing";
+import { indiceImagenesConfigurado, leerIndiceImagenes } from "@/lib/indice-imagenes";
 
 /** Sin caché entre consultas: también reconoce cargas realizadas fuera de STOCK. */
 export async function inventarioImagenesVigente() {
+  if (indiceImagenesConfigurado()) {
+    const indice = await leerIndiceImagenes();
+    return { versiones: new Map<string, number | string>(indice.items.map((i) => [i.code, i.etag])), originales: new Set(indice.items.filter((i) => !i.thumbnail1200).map((i) => i.code)), registradas: 0, verificadoAl: indice.checkedAt };
+  }
   const codigos = codigosImagenesR2(await r2ListarOriginales()).filter(codigoValido);
   const resultado = await reconciliarIndiceImagenes(codigos, {
     leer: async (lista) => {
@@ -30,5 +35,5 @@ export async function inventarioImagenesVigente() {
       return r.rows.map((f) => ({ codigo: f.cod_universal as string, version: f.version as number }));
     },
   });
-  return { ...resultado, verificadoAl: new Date().toISOString() };
+  return { ...resultado, originales: new Set<string>(), verificadoAl: new Date().toISOString() };
 }

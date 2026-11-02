@@ -16,6 +16,7 @@ import { ErrorCondicionR2, r2ConsultarObjeto, r2Subir } from "@/lib/r2";
 import { claveDerivado, codigoImagen } from "@/lib/marketing-rutas-imagen";
 import { urlPublicaOriginal } from "@/lib/marketing";
 import { LADO_IMAGEN } from "@/lib/marketing-codigos";
+import { refrescarIndiceImagenes } from "@/lib/indice-imagenes";
 
 export class ErrorSubida extends Error {
   constructor(message: string, readonly status: number) {
@@ -106,5 +107,7 @@ export async function guardarImagen(
     args: [cod, version, imagen_url, userId],
   });
 
+  // La cola de R2 también lo reintentará; una foto guardada no se reporta como perdida.
+  await refrescarIndiceImagenes(cod).catch((e) => console.error("[marketing] actualización del índice pendiente:", e.message));
   return { cod_universal: cod, version, imagen_url, reemplazo: existe };
 }

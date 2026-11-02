@@ -23,7 +23,7 @@ export async function reconciliarIndiceImagenes(codigosR2: readonly string[], in
 }
 
 /** La ausencia actual en R2 elimina la imagen del borrador aunque exista una fila antigua. */
-export function versionImagenDisponible(codigo: string, versiones: ReadonlyMap<string, number>) {
+export function versionImagenDisponible(codigo: string, versiones: ReadonlyMap<string, number | string>) {
   const normal = codigo.trim().toUpperCase();
   return versiones.get(normal === "400497_07" ? "400497-07" : normal) ?? 0;
 }

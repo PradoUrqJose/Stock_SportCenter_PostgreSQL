@@ -1,5 +1,7 @@
 # Imágenes vigentes en R2
 
+Actualización: con `IMAGE_INDEX_URL` configurado se usa el [índice compartido de Cloudflare](../services/indice-imagenes/README.md), actualizado por eventos. Su ETag sustituye la revisión numérica en las consultas de caché; las revisiones numéricas existentes siguen siendo compatibles. Si un derivado es anterior al PNG, se muestra el PNG vigente hasta regenerarlo. No se modifica el sincronizador del ERP.
+
 La aplicación conserva una imagen transparente por código en la raíz y dos derivados:
 
 ```

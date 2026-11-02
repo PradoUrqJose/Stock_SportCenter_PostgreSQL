@@ -123,6 +123,7 @@ async function borradorDeErp(id: string, filtros: FiltrosCatalogo, origen?: stri
     tallas: filtros.tallas,
   }, ordenGenerosDelCatalogo(filtros.tipo));
   const conPropia = new Set(plantillas.filter((p) => p.activa && p.marca !== MARCA_GENERICA).map((p) => p.marca));
+  for (const p of sinFijas.productos) p.original = inventario.originales.has(p.cod === "400497_07" ? "400497-07" : p.cod);
   const genericas: Record<string, number> = {};
   for (const pg of sinFijas.paginas) {
     if (pg.tipo !== "producto") continue;

@@ -18,13 +18,13 @@ type Props = {
   urlMiniatura: string;
   /** PNG original: respaldo si el derivado no existe, y vista ampliada. */
   urlOriginal: string;
-  version: number;
+  version: number | string;
   detalle: string | null;
   /** Primeras de la página: se piden ya y con prioridad en vez de diferidas. */
   prioridad?: boolean;
 };
 
-export function ImagenCard({ codigo, urlMiniatura, urlOriginal, version, detalle, prioridad }: Props) {
+export function ImagenCard({ codigo, urlMiniatura, urlOriginal, detalle, prioridad }: Props) {
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [src, setSrc] = useState(urlMiniatura);
@@ -81,7 +81,7 @@ export function ImagenCard({ codigo, urlMiniatura, urlOriginal, version, detalle
           <DialogHeader>
             <DialogTitle className="font-mono">{codigo}</DialogTitle>
             <DialogDescription>
-              {detalle ?? "Sin descripción guardada"} · versión {version}
+              {detalle ?? "Sin descripción guardada"}
             </DialogDescription>
           </DialogHeader>
           {open && (

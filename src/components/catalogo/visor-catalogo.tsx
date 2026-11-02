@@ -83,7 +83,7 @@ export function transformacion(a: Ajuste): string {
 
 function urlZapatilla(base: string, p: ProductoCat, necesario: number): string {
   const ancho = necesario > 700 ? 1200 : 600;
-  return urlDerivado(base, ancho, p.cod, p.v);
+  return urlDerivado(base, ancho, p.cod, p.v, p.original);
 }
 
 type Edicion = {

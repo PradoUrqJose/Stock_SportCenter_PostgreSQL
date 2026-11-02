@@ -47,7 +47,7 @@ export default async function CatalogoDetallePage({ params }: { params: Promise<
   const v = await db.execute({
     // `sin_imagen`: productos de esa versión publicada cuya imagen faltaba (versión de imagen 0): su zapatilla sale vacía.
     sql: `SELECT v.version, v.paginas, v.publicado_at, u.nombre, (v.borrador IS NOT NULL) AS con_cambios,
-                 (SELECT COUNT(DISTINCT e->>'cod')::int FROM jsonb_array_elements(v.snapshot::jsonb->'productos') e WHERE (e->>'v')::int = 0) AS sin_imagen
+                 (SELECT COUNT(DISTINCT e->>'cod')::int FROM jsonb_array_elements(v.snapshot::jsonb->'productos') e WHERE e->>'v' = '0') AS sin_imagen
           FROM mk_catalogo_versiones v LEFT JOIN users u ON u.id = v.publicado_por
           WHERE v.catalogo_id = ? ORDER BY v.version DESC`,
     args: [id],
